@@ -9,10 +9,13 @@ import {
   ChevronDown,
   Check,
   PackageCheck,
-  X
+  X,
+  RefreshCw,
+  Globe
 } from "lucide-react";
 import { Role, UserSession } from "@/types/orderflow";
 import { cn } from "@/lib/utils";
+import { SyncWooCommerceDialog } from "@/components/sync-woocommerce-dialog";
 
 interface TopBarProps {
   title: string;
@@ -53,6 +56,7 @@ export function TopBar({
 }: TopBarProps) {
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shadow-subtle gap-4">
@@ -138,15 +142,21 @@ export function TopBar({
           </div>
         </div>
 
-        {/* Reset Demo Data Button */}
+        {/* Sync Website Orders Button */}
+        <button
+          onClick={() => setSyncDialogOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs shrink-0"
+          title="Sync & Import Orders from supercollections.in"
+        >
+          <Globe className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+          <span className="hidden sm:inline">Sync Website</span>
+        </button>
+
+        {/* Refresh Live Data Button */}
         {onResetData && (
           <button
-            onClick={() => {
-              if (confirm("Reset all orders and demo data back to clean initial state?")) {
-                onResetData();
-              }
-            }}
-            title="Reset to fresh demo dataset"
+            onClick={() => onResetData()}
+            title="Refresh orders from live database"
             className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
           >
             <RotateCcw className="w-4 h-4" />
@@ -238,6 +248,11 @@ export function TopBar({
           )}
         </div>
       </div>
+
+      <SyncWooCommerceDialog
+        isOpen={syncDialogOpen}
+        onClose={() => setSyncDialogOpen(false)}
+      />
     </header>
   );
 }

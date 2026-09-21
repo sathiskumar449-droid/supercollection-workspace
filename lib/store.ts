@@ -26,7 +26,12 @@ function notifyListeners() {
 
 // Initializer
 export function initStore(): Order[] {
+  const isLive = isSupabaseConfigured();
+
   if (typeof window === "undefined") {
+    if (isLive) {
+      return globalOrders;
+    }
     if (globalOrders.length === 0) {
       globalOrders = generateMockOrders();
     }
@@ -34,39 +39,43 @@ export function initStore(): Order[] {
   }
 
   try {
-    const cachedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
-    if (cachedOrders) {
-      const parsed = JSON.parse(cachedOrders);
-      let needsSave = false;
-      globalOrders = parsed.map((o: Order) => {
-        if (o.dispatch && (o.dispatch.courierStatus === ("DELIVERED" as any) || o.dispatch.courierStatus === ("DISPATCHED" as any))) {
-          needsSave = true;
-          return {
-            ...o,
-            dispatch: {
-              ...o.dispatch,
-              courierStatus: "SHIPPED" as CourierStatus,
-            },
-          };
+    // When connected to live Supabase, purge any legacy demo mock data
+    if (isLive) {
+      const cachedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
+      if (cachedOrders) {
+        try {
+          const parsed = JSON.parse(cachedOrders);
+          const hasMock = Array.isArray(parsed) && parsed.some((o: any) =>
+            o.id?.startsWith("order-") ||
+            (typeof o.orderNumber === "string" && /^OF-9\d{3}$/.test(o.orderNumber))
+          );
+          if (hasMock) {
+            localStorage.removeItem(STORAGE_KEY_ORDERS);
+            globalOrders = [];
+          } else {
+            globalOrders = parsed;
+          }
+        } catch {
+          localStorage.removeItem(STORAGE_KEY_ORDERS);
+          globalOrders = [];
         }
-        if (o.dispatch && o.dispatch.courierStatus !== "SHIPPED" && o.dispatch.courierStatus !== "PENDING") {
-          needsSave = true;
-          return {
-            ...o,
-            dispatch: {
-              ...o.dispatch,
-              courierStatus: "PENDING" as CourierStatus,
-            },
-          };
+      } else {
+        globalOrders = [];
+      }
+      localStorage.setItem("orderflow_live_mode", "connected");
+    } else {
+      const cachedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
+      if (cachedOrders) {
+        try {
+          globalOrders = JSON.parse(cachedOrders);
+        } catch {
+          globalOrders = generateMockOrders();
+          localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(globalOrders));
         }
-        return o;
-      });
-      if (needsSave) {
+      } else {
+        globalOrders = generateMockOrders();
         localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(globalOrders));
       }
-    } else {
-      globalOrders = generateMockOrders();
-      localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(globalOrders));
     }
 
     const cachedUser = localStorage.getItem(STORAGE_KEY_USER);
@@ -75,17 +84,17 @@ export function initStore(): Order[] {
     }
 
     // Connect to Supabase when configured
-    if (!supabaseInitialized && isSupabaseConfigured()) {
+    if (!supabaseInitialized && isLive) {
       supabaseInitialized = true;
       fetchSupabaseOrders().then((remoteOrders) => {
-        if (remoteOrders && remoteOrders.length > 0) {
+        if (remoteOrders !== null) {
           persistOrders(remoteOrders);
         }
       });
 
       subscribeToSupabaseRealtime(() => {
         fetchSupabaseOrders().then((remoteOrders) => {
-          if (remoteOrders && remoteOrders.length > 0) {
+          if (remoteOrders !== null) {
             persistOrders(remoteOrders);
           }
         });
@@ -93,7 +102,7 @@ export function initStore(): Order[] {
     }
   } catch (err) {
     console.error("Error reading from localStorage:", err);
-    globalOrders = generateMockOrders();
+    globalOrders = isLive ? [] : generateMockOrders();
   }
 
   return globalOrders;
@@ -158,8 +167,25 @@ export const orderflowStore = {
   },
 
   resetData() {
-    const fresh = generateMockOrders();
-    persistOrders(fresh);
+    if (isSupabaseConfigured()) {
+      localStorage.removeItem(STORAGE_KEY_ORDERS);
+      localStorage.setItem("orderflow_live_mode", "connected");
+      globalOrders = [];
+      notifyListeners();
+      this.refreshFromSupabase();
+    } else {
+      const fresh = generateMockOrders();
+      persistOrders(fresh);
+    }
+  },
+
+  async refreshFromSupabase() {
+    if (isSupabaseConfigured()) {
+      const remoteOrders = await fetchSupabaseOrders();
+      if (remoteOrders !== null) {
+        persistOrders(remoteOrders);
+      }
+    }
   },
 
   // 1. Update Order Status
