@@ -95,9 +95,15 @@ export async function POST(req: NextRequest) {
 
       // 4. Initial Dispatch record
       if (order) {
+        const { data: stCourier } = await supabase
+          .from("couriers")
+          .select("id")
+          .eq("code", "ST_COURIER")
+          .maybeSingle();
+
         await supabase.from("dispatches").upsert({
           order_id: order.id,
-          courier_id: "3c36c1e9-4e4b-4b21-a3f2-1a2b3c4d5e6f", // ST Courier default
+          courier_id: stCourier?.id || null,
           courier_status: "PENDING",
         }, { onConflict: "order_id" });
 

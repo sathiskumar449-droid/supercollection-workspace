@@ -91,8 +91,15 @@ export async function POST(req: NextRequest) {
           }))
         );
 
+        const { data: stCourier } = await supabase
+          .from("couriers")
+          .select("id")
+          .eq("code", "ST_COURIER")
+          .maybeSingle();
+
         await supabase.from("dispatches").upsert({
           order_id: order.id,
+          courier_id: stCourier?.id || null,
           courier_status: "PENDING",
         }, { onConflict: "order_id" });
 

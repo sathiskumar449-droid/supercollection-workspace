@@ -133,7 +133,7 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE TABLE IF NOT EXISTS dispatches (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID UNIQUE NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    courier_id UUID NOT NULL REFERENCES couriers(id) ON DELETE RESTRICT,
+    courier_id UUID REFERENCES couriers(id) ON DELETE SET NULL,
     llr_number VARCHAR(64),
     courier_status courier_status NOT NULL DEFAULT 'PENDING',
     dispatched_at TIMESTAMPTZ,
