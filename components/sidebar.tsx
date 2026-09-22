@@ -205,16 +205,13 @@ export function Sidebar({
       <div className="p-2 border-t border-slate-100 bg-slate-50/70 flex flex-col items-center text-center">
         <div className="relative mb-1">
           <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-800 font-bold text-xs flex items-center justify-center border border-orange-200 shadow-xs">
-            {user.name.split(" ").map((n) => n[0]).join("")}
+            {user.role === "ADMIN" ? "AD" : user.name.split(" ").map((n) => n[0]).join("")}
           </div>
           {user.online && (
             <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-white" />
           )}
         </div>
-        <span className="font-semibold text-[10px] text-slate-800 truncate max-w-[80px] block leading-tight">
-          {user.name.split(" ")[0]}
-        </span>
-        <span className="text-[8px] font-bold text-orange-700 px-1 py-0.5 bg-orange-50 rounded border border-orange-200/60 inline-block mt-0.5 uppercase tracking-wide">
+        <span className="text-[8px] font-bold text-orange-700 px-1 py-0.5 bg-orange-50 rounded border border-orange-200/60 inline-block uppercase tracking-wide">
           {user.role === "ADMIN" ? "Admin" : user.role === "MANAGER" ? "Mgr" : "Staff"}
         </span>
       </div>

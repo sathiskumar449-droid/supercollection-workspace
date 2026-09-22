@@ -10,15 +10,15 @@ export const INITIAL_COURIERS: Courier[] = [
 
 export const CURRENT_USER: UserSession = {
   id: "usr-admin-01",
-  name: "Priya Sundaram",
-  email: "priya.operations@orderflow.internal",
+  name: "Admin",
+  email: "admin@orderflow.internal",
   role: "ADMIN",
   avatarUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
   online: true,
 };
 
 export const STAFF_USERS: UserSession[] = [
-  { id: "usr-1", name: "Priya Sundaram", email: "priya@orderflow.internal", role: "ADMIN", online: true },
+  { id: "usr-1", name: "Admin", email: "admin@orderflow.internal", role: "ADMIN", online: true },
   { id: "usr-2", name: "Karthik Rajan", email: "karthik.mgr@orderflow.internal", role: "MANAGER", online: true },
   { id: "usr-3", name: "Deepa Verma", email: "deepa.order@orderflow.internal", role: "ORDER_STAFF", online: true },
   { id: "usr-4", name: "Muthu Kumar", email: "muthu.pack@orderflow.internal", role: "PACKING_STAFF", online: true },

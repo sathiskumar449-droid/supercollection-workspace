@@ -81,7 +81,16 @@ export function initStore(): Order[] {
 
     const cachedUser = localStorage.getItem(STORAGE_KEY_USER);
     if (cachedUser) {
-      globalUser = JSON.parse(cachedUser);
+      try {
+        const parsed = JSON.parse(cachedUser);
+        if (parsed?.name && parsed.name.includes("Priya")) {
+          parsed.name = "Admin";
+          localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(parsed));
+        }
+        globalUser = parsed;
+      } catch {
+        globalUser = CURRENT_USER;
+      }
     }
 
     // Connect to Supabase when configured
