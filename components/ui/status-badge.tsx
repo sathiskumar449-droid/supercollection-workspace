@@ -10,7 +10,9 @@ import {
   AlertCircle, 
   Globe, 
   MessageSquare,
-  Box
+  Box,
+  Instagram,
+  User
 } from "lucide-react";
 
 export function OrderStatusBadge({ status, className }: { status: OrderStatus; className?: string }) {
@@ -145,29 +147,41 @@ export function SmsStatusBadge({ status, className }: { status: SmsStatus; class
 }
 
 export function SourceBadge({ source, className }: { source: OrderSource; className?: string }) {
-  if (source === "WEBSITE") {
-    return (
-      <span
-        className={cn(
-          "inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 select-none",
-          className
-        )}
-      >
-        <Globe className="w-3.5 h-3.5 text-slate-400" />
-        <span>Website</span>
-      </span>
-    );
-  }
+  const configs: Record<OrderSource, { label: string; textClass: string; icon: React.ReactNode }> = {
+    WEBSITE: {
+      label: "Website",
+      textClass: "text-slate-700",
+      icon: <Globe className="w-3.5 h-3.5 text-slate-400" />,
+    },
+    WHATSAPP: {
+      label: "WhatsApp",
+      textClass: "text-emerald-600",
+      icon: <MessageSquare className="w-3.5 h-3.5 text-emerald-500" />,
+    },
+    INSTAGRAM: {
+      label: "Instagram",
+      textClass: "text-fuchsia-600",
+      icon: <Instagram className="w-3.5 h-3.5 text-fuchsia-500" />,
+    },
+    DIRECT: {
+      label: "Direct",
+      textClass: "text-amber-700",
+      icon: <User className="w-3.5 h-3.5 text-amber-500" />,
+    },
+  };
+
+  const c = configs[source] || configs.WEBSITE;
 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 select-none",
+        "inline-flex items-center gap-1.5 text-xs font-semibold select-none",
+        c.textClass,
         className
       )}
     >
-      <MessageSquare className="w-3.5 h-3.5 text-emerald-500" />
-      <span>WhatsApp</span>
+      {c.icon}
+      <span>{c.label}</span>
     </span>
   );
 }

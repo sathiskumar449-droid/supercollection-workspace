@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 import { OrderStatus } from "@/types/orderflow";
+import { detectWooCommerceSource, parseWooCommerceDate } from "@/lib/woocommerce-source";
 
 /**
  * WooCommerce 2-Day Live Sync Endpoint
@@ -101,6 +102,9 @@ export async function POST(req: NextRequest) {
       const paymentStatus = wc.status === "processing" || wc.status === "completed" ? "PAID" : wc.payment_method === "cod" ? "COD" : "PENDING";
       const courierStatus = "PENDING"; // Synced orders start as PENDING courier status; only dispatched orders from packing reach courier hub
 
+      // Detect source from WooCommerce order data (created_via, meta_data, UTM, referrer)
+      const orderSource = detectWooCommerceSource(wc);
+
       // 1. Safe Customer Lookup / Upsert (avoid 42P10 constraint error)
       let customerId: string | null = null;
       if (mobile) {
@@ -163,7 +167,6 @@ export async function POST(req: NextRequest) {
       const { data: existingOrder } = await supabase
         .from("orders")
         .select("id, status")
-        .eq("source", "WEBSITE")
         .eq("external_order_id", wcId)
         .maybeSingle();
 
@@ -176,21 +179,35 @@ export async function POST(req: NextRequest) {
       }
 
       // 2. Upsert Order
-      const { data: order, error: orderError } = await (supabase as any)
+      const orderPayload: any = {
+        order_number: `SC-WC-${wcId}`,
+        external_order_id: wcId,
+        source: orderSource,
+        customer_id: customerId,
+        status: effectiveStatus,
+        payment_status: paymentStatus,
+        total_amount: totalAmount,
+        created_at: parseWooCommerceDate(wc.date_created_gmt, wc.date_created),
+        updated_at: new Date().toISOString(),
+      };
+
+      let { data: order, error: orderError } = await (supabase as any)
         .from("orders")
-        .upsert({
-          order_number: `SC-WC-${wcId}`,
-          external_order_id: wcId,
-          source: "WEBSITE",
-          customer_id: customerId,
-          status: effectiveStatus,
-          payment_status: paymentStatus,
-          total_amount: totalAmount,
-          created_at: wc.date_created ? new Date(wc.date_created).toISOString() : new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "source,external_order_id" })
+        .upsert(orderPayload, { onConflict: "source,external_order_id" })
         .select()
         .single();
+
+      // If DB enum does not support DIRECT or INSTAGRAM, fallback safely to WEBSITE
+      if (orderError && (orderError.code === "22P02" || orderError.message?.includes("enum"))) {
+        orderPayload.source = "WEBSITE";
+        const retry = await (supabase as any)
+          .from("orders")
+          .upsert(orderPayload, { onConflict: "source,external_order_id" })
+          .select()
+          .single();
+        order = retry.data;
+        orderError = retry.error;
+      }
 
       if (!orderError && order) {
         syncedCount++;
@@ -232,7 +249,7 @@ export async function POST(req: NextRequest) {
           .select("id, action")
           .eq("order_id", order.id);
 
-        const createdAtTime = wc.date_created ? new Date(wc.date_created).toISOString() : new Date().toISOString();
+        const createdAtTime = parseWooCommerceDate(wc.date_created_gmt, wc.date_created);
         const baseTime = new Date(createdAtTime).getTime();
 
         if (!existingLogs || existingLogs.length === 0) {
@@ -256,7 +273,7 @@ export async function POST(req: NextRequest) {
           ];
 
           if (wc.status === "completed") {
-            const completedTimestamp = wc.date_modified ? new Date(wc.date_modified).toISOString() : new Date(baseTime + 2000).toISOString();
+            const completedTimestamp = parseWooCommerceDate(wc.date_modified_gmt, wc.date_modified) || new Date(baseTime + 2000).toISOString();
             initialLogs.push(
               {
                 order_id: order.id,
@@ -284,7 +301,7 @@ export async function POST(req: NextRequest) {
             (l: any) => l.action?.toLowerCase() === "order completed"
           );
           if (!hasCompletedLog) {
-            const completedTimestamp = wc.date_modified ? new Date(wc.date_modified).toISOString() : new Date().toISOString();
+            const completedTimestamp = parseWooCommerceDate(wc.date_modified_gmt, wc.date_modified) || new Date().toISOString();
             await supabase.from("activity_logs").insert([
               {
                 order_id: order.id,

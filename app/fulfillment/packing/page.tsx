@@ -293,11 +293,9 @@ export default function PackingPage() {
       "Order ID",
       "Phone Number",
       "Customer Name",
-      "Amount (INR)",
       "Items",
       "Size",
       "Qty",
-      "Order Taken",
       "Dispatch No",
       "Status",
     ];
@@ -307,9 +305,6 @@ export default function PackingPage() {
       const allItems = order.items.map((it) => it.productName).join("; ");
       const allSizes = Array.from(new Set(order.items.map((it) => it.size))).join(", ");
       const totalQuantity = order.items.reduce((sum, it) => sum + it.quantity, 0);
-      const orderTakenBy =
-        order.orderTakenBy ||
-        (order.source === "WHATSAPP" ? "WhatsApp" : "Website");
       const statusLabel = STATUS_OPTIONS.find((s) => s.key === order.orderStatus)?.label || order.orderStatus;
 
       return [
@@ -318,11 +313,9 @@ export default function PackingPage() {
         order.orderNumber,
         order.customer.mobile,
         order.customer.name,
-        order.totalAmount,
         allItems || primaryItem?.productName || "",
         allSizes,
         totalQuantity,
-        orderTakenBy,
         order.dispatch.llrNumber || "",
         statusLabel,
       ];
@@ -340,11 +333,9 @@ export default function PackingPage() {
       "Order ID",
       "Phone",
       "Customer Name",
-      "Amount",
       "Items",
       "Size",
       "Qty",
-      "Source",
       "Dispatch No",
       "Status",
     ];
@@ -352,9 +343,6 @@ export default function PackingPage() {
     const rows = filteredOrders.map((order, index) => {
       const allSizes = Array.from(new Set(order.items.map((it) => it.size))).join(", ");
       const totalQuantity = order.items.reduce((sum, it) => sum + it.quantity, 0);
-      const orderTakenBy =
-        order.orderTakenBy ||
-        (order.source === "WHATSAPP" ? "WhatsApp" : "Website");
       const statusLabel = STATUS_OPTIONS.find((s) => s.key === order.orderStatus)?.label || order.orderStatus;
 
       return [
@@ -363,11 +351,9 @@ export default function PackingPage() {
         order.orderNumber,
         order.customer.mobile,
         order.customer.name,
-        formatINR(order.totalAmount),
         order.items[0]?.productName + (order.items.length > 1 ? ` (+${order.items.length - 1})` : ""),
         allSizes,
         totalQuantity,
-        orderTakenBy,
         order.dispatch.llrNumber || "-",
         statusLabel,
       ];
@@ -536,8 +522,8 @@ export default function PackingPage() {
 
       {/* EXCEL SPREADSHEET TABLE VIEW */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
-        <table className="w-full table-fixed text-left text-[11px] border-collapse border border-slate-300">
-          <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10px] uppercase tracking-tight">
+        <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300">
+          <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight">
             <tr>
               <th className="py-2 px-1 w-[2.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
                 <input
@@ -549,23 +535,21 @@ export default function PackingPage() {
                 />
               </th>
               <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
-              <th className="py-2 px-1.5 w-[7%] border-r border-b-2 border-slate-300 bg-slate-100">Date</th>
-              <th className="py-2 px-1.5 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
-              <th className="py-2 px-1.5 w-[8.5%] border-r border-b-2 border-slate-300 bg-slate-100">Phone Number</th>
-              <th className="py-2 px-1.5 w-[10.5%] border-r border-b-2 border-slate-300 bg-slate-100">Name</th>
-              <th className="py-2 px-1.5 w-[6%] border-r border-b-2 border-slate-300 bg-slate-100">Amount</th>
-              <th className="py-2 px-1.5 w-[16%] border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
+              <th className="py-2 px-1.5 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">Date</th>
+              <th className="py-2 px-1.5 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
+              <th className="py-2 px-1.5 w-[9%] border-r border-b-2 border-slate-300 bg-slate-100">Phone Number</th>
+              <th className="py-2 px-1.5 w-[12%] border-r border-b-2 border-slate-300 bg-slate-100">Name</th>
+              <th className="py-2 px-1.5 w-[20%] border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
               <th className="py-2 px-1 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Size</th>
-              <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Qty</th>
-              <th className="py-2 px-1.5 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100">Order Taken</th>
-              <th className="py-2 px-1.5 w-[11%] border-r border-b-2 border-slate-300 bg-slate-100">Dispatch No</th>
-              <th className="py-2 px-1 w-[11.5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">Update Status</th>
+              <th className="py-2 px-1 w-[3.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Qty</th>
+              <th className="py-2 px-1.5 w-[13%] border-r border-b-2 border-slate-300 bg-slate-100">Dispatch No</th>
+              <th className="py-2 px-1 w-[14.5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">Update Status</th>
             </tr>
           </thead>
           <tbody>
             {filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan={13} className="py-14 text-center text-slate-400 border-b border-slate-300">
+                <td colSpan={11} className="py-14 text-center text-slate-400 border-b border-slate-300">
                   <Box className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                   <p className="text-sm font-semibold text-slate-700">No orders match your filter criteria</p>
                   <p className="text-xs text-slate-400 mt-1">Try selecting "All Orders" or clearing the search query.</p>
@@ -576,10 +560,6 @@ export default function PackingPage() {
                 const primaryItem = order.items[0];
                 const allSizes = Array.from(new Set(order.items.map((it) => it.size))).join(", ");
                 const totalQuantity = order.items.reduce((sum, it) => sum + it.quantity, 0);
-
-                const orderTakenBy =
-                  order.orderTakenBy ||
-                  (order.source === "WHATSAPP" ? "WhatsApp" : "Website");
 
                 return (
                   <tr
@@ -609,17 +589,17 @@ export default function PackingPage() {
                     </td>
 
                     {/* 2. Date */}
-                    <td className="py-2 px-1.5 whitespace-nowrap text-slate-600 border-r border-b border-slate-300 font-mono text-[10px] truncate">
+                    <td className="py-2 px-1.5 whitespace-nowrap text-slate-600 border-r border-b border-slate-300 font-medium text-[11px] truncate">
                       {formatDate(order.createdAt)}
                     </td>
 
                     {/* 3. Order ID */}
-                    <td className="py-2 px-1.5 whitespace-nowrap font-mono font-semibold text-slate-900 border-r border-b border-slate-300 text-[10px]">
+                    <td className="py-2 px-1.5 whitespace-nowrap font-mono font-semibold text-slate-900 border-r border-b border-slate-300 text-[11px]">
                       {order.orderNumber}
                     </td>
 
                     {/* 4. Phone Number */}
-                    <td className="py-2 px-1.5 whitespace-nowrap font-mono text-slate-700 border-r border-b border-slate-300 text-[10px] truncate">
+                    <td className="py-2 px-1.5 whitespace-nowrap font-mono text-slate-700 border-r border-b border-slate-300 text-[11px] truncate">
                       {order.customer.mobile}
                     </td>
 
@@ -629,42 +609,32 @@ export default function PackingPage() {
                         {order.customer.name}
                       </span>
                       {order.customer.city && (
-                        <span className="text-[9px] text-slate-400 block truncate">
+                        <span className="text-[10px] text-slate-400 block truncate">
                           {order.customer.city}
                         </span>
                       )}
                     </td>
 
-                    {/* 6. Amount */}
-                    <td className="py-2 px-1.5 whitespace-nowrap font-bold text-slate-900 border-r border-b border-slate-300 font-mono text-[10px]">
-                      {formatINR(order.totalAmount)}
-                    </td>
-
-                    {/* 7. Items */}
+                    {/* 6. Items */}
                     <td className="py-2 px-1.5 border-r border-b border-slate-300 text-slate-700 truncate">
                       <span className="font-medium truncate block leading-tight" title={primaryItem?.productName}>
                         {primaryItem?.productName}
                       </span>
                       {order.items.length > 1 && (
-                        <span className="text-[9px] text-orange-700 font-semibold block">
+                        <span className="text-[10px] text-orange-700 font-semibold block">
                           +{order.items.length - 1} item
                         </span>
                       )}
                     </td>
 
-                    {/* 8. Size */}
-                    <td className="py-2 px-1 text-center whitespace-nowrap border-r border-b border-slate-300 font-mono font-semibold text-[10px] text-slate-700 truncate">
+                    {/* 7. Size */}
+                    <td className="py-2 px-1 text-center whitespace-nowrap border-r border-b border-slate-300 font-mono font-semibold text-[11px] text-slate-700 truncate">
                       {allSizes}
                     </td>
 
-                    {/* 9. Qty */}
+                    {/* 8. Qty */}
                     <td className="py-2 px-1 text-center font-mono font-bold text-slate-800 border-r border-b border-slate-300">
                       {totalQuantity}
-                    </td>
-
-                    {/* 10. Order Taken By */}
-                    <td className="py-2 px-1.5 whitespace-nowrap border-r border-b border-slate-300 text-slate-600 truncate text-[10px]">
-                      {orderTakenBy}
                     </td>
 
                     {/* 11. Dispatch No (Manually Editable) */}
@@ -683,7 +653,7 @@ export default function PackingPage() {
                         value={order.orderStatus}
                         onChange={(e) => handleInlineStatusChange(order, e.target.value as OrderStatus)}
                         className={cn(
-                          "w-full text-[10px] font-semibold py-0.5 px-1 rounded border border-slate-200 bg-white shadow-xs outline-none cursor-pointer transition-all truncate",
+                          "w-full text-[11px] font-semibold py-0.5 px-1 rounded border border-slate-200 bg-white shadow-xs outline-none cursor-pointer transition-all truncate",
                           order.orderStatus === "NEW" && "text-slate-700",
                           order.orderStatus === "CONFIRMED" && "text-blue-600",
                           order.orderStatus === "PACKING" && "text-orange-600",

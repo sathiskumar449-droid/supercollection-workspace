@@ -1,4 +1,4 @@
-import { Order, OrderStatus, CourierStatus, SmsStatus, Role, UserSession, ActivityLog, DashboardMetrics, ActionRequiredItem } from "@/types/orderflow";
+import { Order, OrderStatus, OrderSource, CourierStatus, SmsStatus, Role, UserSession, ActivityLog, DashboardMetrics, ActionRequiredItem } from "@/types/orderflow";
 import { generateMockOrders, CURRENT_USER, INITIAL_COURIERS, STAFF_USERS } from "./mock-data";
 import { matchesDateFilter } from "./utils";
 import { 
@@ -658,7 +658,7 @@ export const orderflowStore = {
   },
 
   // Ingest order from Webhook (WooCommerce or WhatsApp)
-  ingestWebhookOrder(payload: Partial<Order> & { source: "WEBSITE" | "WHATSAPP"; externalOrderId: string }): { success: boolean; order?: Order; duplicate?: boolean } {
+  ingestWebhookOrder(payload: Partial<Order> & { source: OrderSource; externalOrderId: string }): { success: boolean; order?: Order; duplicate?: boolean } {
     const existing = globalOrders.find((o) => o.source === payload.source && o.externalOrderId === payload.externalOrderId);
     if (existing) {
       return { success: false, duplicate: true, order: existing };

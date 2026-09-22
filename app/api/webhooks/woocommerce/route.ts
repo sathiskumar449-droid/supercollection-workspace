@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
+import { detectWooCommerceSource, parseWooCommerceDate } from "@/lib/woocommerce-source";
 
 export async function GET() {
   return NextResponse.json({ status: "active", message: "SuperCollection WooCommerce Webhook Endpoint is live" }, { status: 200 });
@@ -63,6 +64,9 @@ export async function POST(req: NextRequest) {
 
     const paymentStatus = body.status === "processing" || body.status === "completed" ? "PAID" : body.payment_method === "cod" ? "COD" : "PENDING";
     const courierStatus = "PENDING"; // Webhook orders start as PENDING courier status; only dispatched orders from packing reach courier hub
+
+    // Detect source from WooCommerce order data (created_via, meta_data, UTM, referrer)
+    const orderSource = detectWooCommerceSource(body);
 
     const items = (body.line_items || []).map((item: any, idx: number) => ({
       product_name: item.name || "Product",
@@ -128,21 +132,35 @@ export async function POST(req: NextRequest) {
 
       // 2. Insert/Upsert Order
       const orderNumber = `SC-WC-${wcId}`;
-      const { data: order, error: orderError } = await db
+      const orderPayload: any = {
+        order_number: orderNumber,
+        external_order_id: wcId,
+        source: orderSource,
+        customer_id: customerId,
+        status: orderStatus,
+        payment_status: paymentStatus,
+        total_amount: totalAmount,
+        created_at: parseWooCommerceDate(body.date_created_gmt, body.date_created),
+        updated_at: new Date().toISOString(),
+      };
+
+      let { data: order, error: orderError } = await db
         .from("orders")
-        .upsert({
-          order_number: orderNumber,
-          external_order_id: wcId,
-          source: "WEBSITE",
-          customer_id: customerId,
-          status: orderStatus,
-          payment_status: paymentStatus,
-          total_amount: totalAmount,
-          created_at: body.date_created ? new Date(body.date_created).toISOString() : new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "source,external_order_id" })
+        .upsert(orderPayload, { onConflict: "source,external_order_id" })
         .select()
         .single();
+
+      // If DB enum does not support DIRECT or INSTAGRAM, fallback safely to WEBSITE
+      if (orderError && (orderError.code === "22P02" || orderError.message?.includes("enum"))) {
+        orderPayload.source = "WEBSITE";
+        const retry = await db
+          .from("orders")
+          .upsert(orderPayload, { onConflict: "source,external_order_id" })
+          .select()
+          .single();
+        order = retry.data;
+        orderError = retry.error;
+      }
 
       if (orderError) {
         console.error("Supabase order error:", orderError);
@@ -182,14 +200,27 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 5. Initial Activity Log
-        await db.from("activity_logs").insert({
-          order_id: order.id,
-          user_name: "WooCommerce Webhook",
-          user_role: "ORDER_STAFF",
-          action: "Order Ingested",
-          details: `WooCommerce Order #${wcId} received and processed as ${orderNumber}`,
-        });
+        // 5. Initial Activity Logs (Order placed & Order processing)
+        const orderPlacedAt = parseWooCommerceDate(body.date_created_gmt, body.date_created);
+        const orderPlacedMs = new Date(orderPlacedAt).getTime();
+        await db.from("activity_logs").insert([
+          {
+            order_id: order.id,
+            user_name: "Website",
+            user_role: "ORDER_STAFF",
+            action: "Order placed",
+            details: "Order received from website",
+            created_at: orderPlacedAt,
+          },
+          {
+            order_id: order.id,
+            user_name: "Orders System",
+            user_role: "ORDER_STAFF",
+            action: "Order processing",
+            details: "Order is being processed",
+            created_at: new Date(orderPlacedMs + 1000).toISOString(),
+          },
+        ]);
       }
 
       return NextResponse.json({

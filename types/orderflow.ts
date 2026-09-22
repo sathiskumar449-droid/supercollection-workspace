@@ -4,7 +4,7 @@ export type CourierStatus = "PENDING" | "SHIPPED" | "DISPATCHED" | "DELIVERED";
 
 export type SmsStatus = "SENT" | "PENDING" | "FAILED";
 
-export type OrderSource = "WEBSITE" | "WHATSAPP";
+export type OrderSource = "WEBSITE" | "WHATSAPP" | "INSTAGRAM" | "DIRECT";
 
 export type Role = "ADMIN" | "MANAGER" | "ORDER_STAFF" | "PACKING_STAFF" | "DISPATCH_STAFF" | "SYSTEM";
 
