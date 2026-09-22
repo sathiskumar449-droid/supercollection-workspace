@@ -137,9 +137,15 @@ export default function PackingPage() {
     );
   };
 
+  // Orders eligible for Packing Station (WooCommerce completed/processing or active packing flow)
+  // Strictly excludes "NEW" (Pending) and "RETURN" (Failed/Cancelled)
+  const packingEligibleOrders = useMemo(() => {
+    return orders.filter((o) => o.orderStatus !== "NEW" && o.orderStatus !== "RETURN");
+  }, [orders]);
+
   // Filtered orders list
   const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
+    return packingEligibleOrders.filter((order) => {
       // Status filter
       if (statusFilter !== "ALL" && order.orderStatus !== statusFilter) {
         return false;
@@ -159,15 +165,14 @@ export default function PackingPage() {
 
       return true;
     });
-  }, [orders, statusFilter, searchQuery]);
+  }, [packingEligibleOrders, statusFilter, searchQuery]);
 
-  // Stage counts for KPI pills
-  const pendingCount = orders.filter((o) => o.orderStatus === "NEW").length;
-  const processingCount = orders.filter((o) => o.orderStatus === "CONFIRMED").length;
-  const packagingCount = orders.filter((o) => o.orderStatus === "PACKING").length;
-  const packedCount = orders.filter((o) => o.orderStatus === "PACKED").length;
-  const dispatchedCount = orders.filter((o) => o.orderStatus === "DISPATCHED").length;
-  const completedCount = orders.filter((o) => o.orderStatus === "COMPLETED").length;
+  // Stage counts for KPI pills (Packing Station)
+  const completedCount = packingEligibleOrders.filter((o) => o.orderStatus === "COMPLETED").length;
+  const processingCount = packingEligibleOrders.filter((o) => o.orderStatus === "CONFIRMED").length;
+  const packagingCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKING").length;
+  const packedCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKED").length;
+  const dispatchedCount = packingEligibleOrders.filter((o) => o.orderStatus === "DISPATCHED").length;
 
   // Export handlers
   const handleExportExcel = () => {
@@ -274,8 +279,8 @@ export default function PackingPage() {
 
   return (
     <div className="space-y-3.5 max-w-full mx-auto">
-      {/* KPI Status Filter Buttons Row (Packing Station card removed as requested) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+      {/* KPI Status Filter Buttons Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         <button
           onClick={() => setStatusFilter("ALL")}
           className={cn(
@@ -283,30 +288,30 @@ export default function PackingPage() {
             statusFilter === "ALL" ? "border-orange-600 ring-2 ring-orange-500/20" : "border-slate-200 hover:border-slate-300"
           )}
         >
-          <span className="text-[11px] text-slate-500 block">All Orders</span>
-          <span className="text-base font-bold text-slate-900 font-mono mt-0.5 block">{orders.length}</span>
+          <span className="text-[11px] text-slate-500 block">All Packing Orders</span>
+          <span className="text-base font-bold text-slate-900 font-mono mt-0.5 block">{packingEligibleOrders.length}</span>
         </button>
 
         <button
-          onClick={() => setStatusFilter("NEW")}
+          onClick={() => setStatusFilter("COMPLETED")}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs",
-            statusFilter === "NEW" ? "border-slate-600 ring-2 ring-slate-500/20" : "border-slate-200 hover:border-slate-300"
+            statusFilter === "COMPLETED" ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-blue-300"
           )}
         >
-          <span className="text-[11px] text-slate-500 block">Pending</span>
-          <span className="text-base font-bold text-slate-700 font-mono mt-0.5 block">{pendingCount}</span>
+          <span className="text-[11px] text-blue-800 font-medium block">Completed (Ready)</span>
+          <span className="text-base font-bold text-blue-800 font-mono mt-0.5 block">{completedCount}</span>
         </button>
 
         <button
           onClick={() => setStatusFilter("CONFIRMED")}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs",
-            statusFilter === "CONFIRMED" ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-blue-300"
+            statusFilter === "CONFIRMED" ? "border-sky-600 ring-2 ring-sky-500/20" : "border-slate-200 hover:border-sky-300"
           )}
         >
-          <span className="text-[11px] text-blue-700 font-medium block">Processing</span>
-          <span className="text-base font-bold text-blue-700 font-mono mt-0.5 block">{processingCount}</span>
+          <span className="text-[11px] text-sky-700 font-medium block">Processing</span>
+          <span className="text-base font-bold text-sky-700 font-mono mt-0.5 block">{processingCount}</span>
         </button>
 
         <button
@@ -340,17 +345,6 @@ export default function PackingPage() {
         >
           <span className="text-[11px] text-emerald-700 font-medium block">Dispatched</span>
           <span className="text-base font-bold text-emerald-700 font-mono mt-0.5 block">{dispatchedCount}</span>
-        </button>
-
-        <button
-          onClick={() => setStatusFilter("COMPLETED")}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs",
-            statusFilter === "COMPLETED" ? "border-orange-600 ring-2 ring-orange-500/20" : "border-slate-200 hover:border-orange-300"
-          )}
-        >
-          <span className="text-[11px] text-orange-800 font-medium block">Completed</span>
-          <span className="text-base font-bold text-orange-800 font-mono mt-0.5 block">{completedCount}</span>
         </button>
       </div>
 

@@ -22,6 +22,17 @@ export const supabase = isSupabaseConfigured()
     })
   : null;
 
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+export const supabaseAdmin = (isSupabaseConfigured() && supabaseServiceKey)
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    })
+  : supabase;
+
 // ==============================================================================
 // SUPABASE DATA LAYER
 // ==============================================================================

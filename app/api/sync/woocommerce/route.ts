@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 
 /**
- * WooCommerce Full Historical / Manual Sync Endpoint
- * Connects to WooCommerce REST API and imports all orders directly into Supabase.
+ * WooCommerce 2-Day Live Sync Endpoint
+ * Connects to WooCommerce REST API and imports only the last 2 days' orders directly into Supabase.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -28,9 +28,15 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
+    // Limit sync strictly to the last 2 days (today & yesterday)
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    twoDaysAgo.setHours(0, 0, 0, 0);
+    const afterIso = twoDaysAgo.toISOString();
+
     // Call WooCommerce REST API using BOTH query params and Basic Auth header for maximum compatibility
     const authHeader = "Basic " + Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
-    const wcApiUrl = `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=any&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`;
+    const wcApiUrl = `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=any&after=${encodeURIComponent(afterIso)}&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`;
 
     const res = await fetch(wcApiUrl, {
       headers: {
@@ -59,8 +65,13 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
+    const db = supabaseAdmin || supabase;
+
+    // Purge old orders older than 2 days so only last 2 days orders remain in the app
+    await db.from("orders").delete().lt("created_at", afterIso);
+
     // Default ST Courier ID
-    const { data: stCourier } = await supabase
+    const { data: stCourier } = await db
       .from("couriers")
       .select("id")
       .eq("code", "ST_COURIER")

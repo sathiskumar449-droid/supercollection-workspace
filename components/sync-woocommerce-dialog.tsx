@@ -96,8 +96,8 @@ export function SyncWooCommerceDialog({
               <Globe className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Sync Website Orders</h3>
-              <p className="text-xs text-slate-500">Import existing live orders from supercollections.in</p>
+              <h3 className="text-base font-bold text-slate-900">Sync Website Orders (Last 2 Days)</h3>
+              <p className="text-xs text-slate-500">Import recent live orders from supercollections.in</p>
             </div>
           </div>
           <button
@@ -220,7 +220,7 @@ export function SyncWooCommerceDialog({
               className="inline-flex items-center gap-2 px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-              <span>{isLoading ? "Syncing Orders..." : "Sync All Orders Now"}</span>
+              <span>{isLoading ? "Syncing Orders..." : "Sync Last 2 Days Orders Now"}</span>
             </button>
           </div>
         </form>

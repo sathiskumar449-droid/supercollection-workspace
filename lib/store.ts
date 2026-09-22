@@ -583,15 +583,19 @@ export const orderflowStore = {
 
     orders.forEach((o) => {
       if (o.orderStatus === "NEW") newOrders++;
-      if (o.orderStatus === "CONFIRMED") confirmedOrders++;
+      if (o.orderStatus === "CONFIRMED" || o.orderStatus === "COMPLETED") confirmedOrders++;
       if (o.orderStatus === "PACKING") packingOrders++;
       if (o.orderStatus === "PACKED") packedOrders++;
       if (o.orderStatus === "DISPATCHED") dispatchedOrders++;
 
-      if (o.sms.status === "PENDING") smsPending++;
-      if (o.sms.status === "FAILED") smsFailed++;
+      // SMS counts only for orders that have actually been shipped by courier
+      if (o.dispatch.courierStatus === "SHIPPED" || (o.dispatch.courierStatus as string) === "DELIVERED") {
+        if (o.sms.status === "PENDING") smsPending++;
+        if (o.sms.status === "FAILED") smsFailed++;
+      }
 
-      if (o.dispatch.courierName === "ST Courier") {
+      // Courier Missing LLR only for orders that have been marked as DISPATCHED in Packing Station
+      if (o.orderStatus === "DISPATCHED" && o.dispatch.courierName === "ST Courier") {
         if (!o.dispatch.llrNumber || o.dispatch.llrNumber.trim() === "") {
           stCourierMissingLlr++;
         }

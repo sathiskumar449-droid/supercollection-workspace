@@ -97,16 +97,25 @@ function StCourierContent() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Metric counts across all orders (Only Pending and Shipped)
-  const totalOrders = orders.length;
-  const llrMissingCount = orders.filter((o) => !o.dispatch.llrNumber || !o.dispatch.llrNumber.trim()).length;
+  // ONLY orders that have been marked as "DISPATCHED" in Packing Station (or already SHIPPED by courier)
+  const courierOrders = useMemo(() => {
+    return orders.filter((o) => 
+      o.orderStatus === "DISPATCHED" || 
+      o.dispatch.courierStatus === "SHIPPED" || 
+      (o.dispatch.courierStatus as string) === "DELIVERED"
+    );
+  }, [orders]);
+
+  // Metric counts across dispatched orders
+  const totalOrders = courierOrders.length;
+  const llrMissingCount = courierOrders.filter((o) => !o.dispatch.llrNumber || !o.dispatch.llrNumber.trim()).length;
   const llrAddedCount = totalOrders - llrMissingCount;
-  const shippedCourierCount = orders.filter((o) => o.dispatch.courierStatus === "SHIPPED" || (o.dispatch.courierStatus as string) === "DELIVERED").length;
+  const shippedCourierCount = courierOrders.filter((o) => o.dispatch.courierStatus === "SHIPPED" || (o.dispatch.courierStatus as string) === "DELIVERED").length;
   const pendingCourierStatusCount = totalOrders - shippedCourierCount;
 
   // Filter by active tab and search
   const displayedOrders = useMemo(() => {
-    return orders.filter((o) => {
+    return courierOrders.filter((o) => {
       // Tab filter
       if (activeTab === "missing-llr") {
         if (o.dispatch.llrNumber && o.dispatch.llrNumber.trim()) return false;
@@ -129,7 +138,7 @@ function StCourierContent() {
 
       return true;
     });
-  }, [orders, activeTab, searchQuery]);
+  }, [courierOrders, activeTab, searchQuery]);
 
   // Handler for saving LLR number
   const handleLlrSave = (orderId: string, orderNumber: string, newLlr: string) => {
@@ -397,8 +406,12 @@ function StCourierContent() {
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400 border-b border-slate-300">
                     <Truck className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    <p className="text-sm font-semibold text-slate-700">No courier orders found</p>
-                    <p className="text-xs text-slate-400 mt-1">Try checking other filter tabs or clearing search terms.</p>
+                    <p className="text-sm font-semibold text-slate-700">No Dispatched Orders for Courier</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {courierOrders.length === 0
+                        ? "Orders will appear here automatically once you update their status to 'Dispatched' in the Packing Station."
+                        : "Try checking other filter tabs or clearing search terms."}
+                    </p>
                   </td>
                 </tr>
               ) : (

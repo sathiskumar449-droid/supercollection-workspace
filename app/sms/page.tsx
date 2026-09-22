@@ -36,9 +36,17 @@ function SmsMonitoringContent() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshBanner, setRefreshBanner] = useState<string | null>(null);
 
-  // Orders that have SMS logged (dispatched or active)
+  // ONLY orders that have been marked as "SHIPPED" in Courier Hub
+  const shippedOrders = useMemo(() => {
+    return orders.filter((o) => 
+      o.dispatch.courierStatus === "SHIPPED" || 
+      (o.dispatch.courierStatus as string) === "DELIVERED"
+    );
+  }, [orders]);
+
+  // Orders that have SMS logged (shipped orders)
   const smsOrders = useMemo(() => {
-    return orders.filter((o) => {
+    return shippedOrders.filter((o) => {
       // Filter by SMS status
       if (statusFilter !== "ALL" && o.sms.status !== statusFilter) {
         return false;
@@ -58,13 +66,13 @@ function SmsMonitoringContent() {
 
       return true;
     });
-  }, [orders, statusFilter, searchQuery]);
+  }, [shippedOrders, statusFilter, searchQuery]);
 
-  // Overall counts across all orders
-  const totalSms = orders.length;
-  const sentCount = orders.filter((o) => o.sms.status === "SENT").length;
-  const pendingCount = orders.filter((o) => o.sms.status === "PENDING").length;
-  const failedCount = orders.filter((o) => o.sms.status === "FAILED").length;
+  // Overall counts across shipped orders
+  const totalSms = shippedOrders.length;
+  const sentCount = shippedOrders.filter((o) => o.sms.status === "SENT").length;
+  const pendingCount = shippedOrders.filter((o) => o.sms.status === "PENDING").length;
+  const failedCount = shippedOrders.filter((o) => o.sms.status === "FAILED").length;
   const deliveryRate = totalSms > 0 ? Math.round((sentCount / totalSms) * 100) : 0;
 
   const handleRefresh = async () => {
@@ -319,8 +327,12 @@ function SmsMonitoringContent() {
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-400 border-b border-slate-300">
                     <Send className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    <p className="text-sm font-semibold text-slate-700">No matching SMS records found</p>
-                    <p className="text-xs text-slate-400 mt-1">Try switching status filters or clearing the search query.</p>
+                    <p className="text-sm font-semibold text-slate-700">No Shipped Orders for SMS Tracking</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {shippedOrders.length === 0
+                        ? "Orders will appear here automatically once marked as 'Shipped' in the Courier Hub."
+                        : "Try switching status filters or clearing the search query."}
+                    </p>
                   </td>
                 </tr>
               ) : (
