@@ -273,7 +273,7 @@ function OrdersContent() {
   };
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto">
+    <div className="space-y-3.5 max-w-full mx-auto">
       {/* Bulk Actions Banner */}
       {selectedIds.length > 0 && (
         <div className="flex items-center justify-between bg-orange-50 border border-orange-200 px-3.5 py-2 rounded-xl text-xs animate-in fade-in">
@@ -409,12 +409,12 @@ function OrdersContent() {
       </div>
 
       {/* Orders Table (Excel Spreadsheet Grid Style with S.No) */}
-      <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto hidden md:block">
-          <table className="w-full text-left text-xs border-collapse border border-slate-300">
-            <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[11px] uppercase tracking-tight">
+      <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
+        <div className="overflow-x-auto hidden md:block w-full">
+          <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300">
+            <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight">
               <tr>
-                <th className="py-2.5 px-3 w-10 text-center border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="py-2 px-1 w-[2.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
                   <input
                     type="checkbox"
                     onChange={handleSelectAll}
@@ -422,54 +422,56 @@ function OrdersContent() {
                     className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
                   />
                 </th>
-                <th className="py-2.5 px-2 w-12 text-center border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="py-2 px-1 w-[3.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
                   S.No
                 </th>
                 <th
-                  className="py-2.5 px-3 cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
+                  className="py-2 px-1.5 w-[8.5%] cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
                   onClick={() => {
                     setSortField("orderNumber");
                     setSortAsc(!sortAsc);
                   }}
                 >
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 truncate">
                     <span>Order ID</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                   </div>
                 </th>
                 <th
-                  className="py-2.5 px-3 cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
+                  className="py-2 px-1.5 w-[8.5%] cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
                   onClick={() => {
                     setSortField("createdAt");
                     setSortAsc(!sortAsc);
                   }}
                 >
-                  <div className="flex items-center gap-1">
-                    <span>Order Created Date</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  <div className="flex items-center gap-1 truncate">
+                    <span>Date</span>
+                    <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                   </div>
                 </th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer Name</th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Source</th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
+                <th className="py-2 px-1.5 w-[11%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  Customer Name
+                </th>
+                <th className="py-2 px-1 w-[6.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Source</th>
+                <th className="py-2 px-1 w-[4.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
                 <th
-                  className="py-2.5 px-3 cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
+                  className="py-2 px-1.5 w-[6%] text-right cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
                   onClick={() => {
                     setSortField("totalAmount");
                     setSortAsc(!sortAsc);
                   }}
                 >
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-end gap-1 truncate">
                     <span>Amount</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                   </div>
                 </th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Order Status</th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">LLR</th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">SMS Status</th>
-                <th className="py-2.5 px-3 text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">Order Tracking</th>
+                <th className="py-2 px-1 w-[8%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Order Status</th>
+                <th className="py-2 px-1 w-[8%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
+                <th className="py-2 px-1 w-[8%] text-center border-r border-b-2 border-slate-300 bg-slate-100">LLR</th>
+                <th className="py-2 px-1 w-[8%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
+                <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">SMS Status</th>
+                <th className="py-2 px-1 w-[8%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">Tracking</th>
               </tr>
             </thead>
 
@@ -509,7 +511,7 @@ function OrdersContent() {
                         isSelected && "bg-orange-50/70"
                       )}
                     >
-                      <td className="py-2.5 px-3 text-center border-r border-b border-slate-300 bg-slate-50" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2 px-1 text-center border-r border-b border-slate-300 bg-slate-50" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -519,82 +521,85 @@ function OrdersContent() {
                       </td>
 
                       {/* S.No column */}
-                      <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-b border-slate-300">
+                      <td className="py-2 px-1 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-b border-slate-300">
                         {serialNo}
                       </td>
 
                       {/* Order ID */}
-                      <td className="py-2.5 px-3 font-mono font-semibold text-slate-900 whitespace-nowrap border-r border-b border-slate-300">
+                      <td className="py-2 px-1.5 font-mono font-semibold text-slate-900 truncate border-r border-b border-slate-300 text-[11px]" title={order.orderNumber}>
                         {order.orderNumber}
                       </td>
 
                       {/* Order Created Date */}
-                      <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap border-r border-b border-slate-300 font-medium">
+                      <td className="py-2 px-1.5 text-slate-600 truncate border-r border-b border-slate-300 font-medium text-[11px]" title={formatDate(order.createdAt)}>
                         {formatDate(order.createdAt)}
                       </td>
 
-                      {/* Customer Name */}
-                      <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300">
-                        <span className="font-semibold text-slate-800 block">
+                      {/* Customer Name (compact width, truncated name, phone below) */}
+                      <td className="py-2 px-1.5 truncate border-r border-b border-slate-300" title={`${order.customer.name} (${order.customer.mobile})`}>
+                        <span className="font-semibold text-slate-800 block truncate text-xs">
                           {order.customer.name}
                         </span>
-                        <span className="text-[11px] text-slate-400 font-mono">
+                        <span className="text-[10px] text-slate-400 font-mono block truncate">
                           {order.customer.mobile}
                         </span>
                       </td>
 
                       {/* Source */}
-                      <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300">
-                        <SourceBadge source={order.source} />
+                      <td className="py-2 px-1 text-center truncate border-r border-b border-slate-300">
+                        <SourceBadge source={order.source} className="justify-center text-[11px]" />
                       </td>
 
                       {/* Items */}
-                      <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap border-r border-b border-slate-300">
+                      <td className="py-2 px-1 text-center text-slate-600 truncate border-r border-b border-slate-300 font-medium text-[11px]">
                         {order.items.length} {order.items.length === 1 ? "Item" : "Items"}
                       </td>
 
                       {/* Amount */}
-                      <td className="py-2.5 px-3 font-semibold text-slate-900 whitespace-nowrap border-r border-b border-slate-300">
+                      <td className="py-2 px-1.5 text-right font-semibold text-slate-900 truncate border-r border-b border-slate-300 text-xs">
                         {formatINR(order.totalAmount)}
                       </td>
 
                       {/* Order Status */}
-                      <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300">
-                        <OrderStatusBadge status={order.orderStatus} />
+                      <td className="py-2 px-1 text-center truncate border-r border-b border-slate-300">
+                        <OrderStatusBadge status={order.orderStatus} className="justify-center text-[11px]" />
                       </td>
 
                       {/* Courier */}
-                      <td className="py-2.5 px-3 text-slate-700 font-medium whitespace-nowrap border-r border-b border-slate-300">
+                      <td className="py-2 px-1 text-center text-slate-700 font-medium truncate border-r border-b border-slate-300 text-[11px]" title={order.dispatch.courierName}>
                         {order.dispatch.courierName}
                       </td>
 
                       {/* LLR */}
-                      <td className="py-2.5 px-3 font-mono text-slate-700 whitespace-nowrap border-r border-b border-slate-300">
-                        {order.dispatch.llrNumber || (
-                          <span className="text-amber-600 text-[11px] italic font-normal">
+                      <td className="py-2 px-1 text-center font-mono text-slate-700 truncate border-r border-b border-slate-300 text-[11px]">
+                        {order.dispatch.llrNumber ? (
+                          <span className="truncate block" title={order.dispatch.llrNumber}>{order.dispatch.llrNumber}</span>
+                        ) : (
+                          <span className="text-amber-600 text-[10px] italic font-normal truncate block">
                             {order.dispatch.courierName === "ST Courier" ? "LLR Required" : "-"}
                           </span>
                         )}
                       </td>
 
                       {/* Courier Status */}
-                      <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300">
-                        <CourierStatusBadge status={order.dispatch.courierStatus} />
+                      <td className="py-2 px-1 text-center truncate border-r border-b border-slate-300">
+                        <CourierStatusBadge status={order.dispatch.courierStatus} className="justify-center text-[11px]" />
                       </td>
 
                       {/* SMS Status */}
-                      <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300">
-                        <SmsStatusBadge status={order.sms.status} />
+                      <td className="py-2 px-1 text-center truncate border-r border-b border-slate-300">
+                        <SmsStatusBadge status={order.sms.status} className="justify-center text-[11px]" />
                       </td>
 
                       {/* Order Tracking */}
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap border-b border-slate-300 bg-slate-50/50" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2 px-1 text-center truncate border-b border-slate-300 bg-slate-50/50" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => setSelectedOrder(order)}
-                          className="px-2.5 py-1 text-xs font-medium text-orange-700 hover:bg-orange-50 border border-orange-200 rounded transition-colors inline-flex items-center gap-1.5"
+                          className="px-1.5 py-1 text-[11px] font-semibold text-orange-700 hover:bg-orange-100/70 border border-orange-200 rounded transition-colors inline-flex items-center gap-1 shadow-2xs whitespace-nowrap"
+                          title="View order tracking details"
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Order Tracking</span>
+                          <Eye className="w-3 h-3 shrink-0" />
+                          <span>Tracking</span>
                         </button>
                       </td>
                     </tr>
