@@ -257,10 +257,9 @@ export async function updateSupabaseCourierDetails(
       if (insertErr) console.error("Error inserting dispatch in Supabase:", insertErr);
     }
 
-    // If marked as SHIPPED, also update order status to COMPLETED and log SMS sent
+    // If marked as SHIPPED, record shipped_at timestamp and log SMS sent without overwriting order status (keep DISPATCHED)
     if (details.courierStatus === "SHIPPED") {
       await db.from("orders").update({
-        status: "COMPLETED",
         shipped_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq("id", orderId);

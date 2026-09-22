@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 
 export async function GET() {
   return NextResponse.json({ status: "active", message: "SuperCollection WooCommerce Webhook Endpoint is live" }, { status: 200 });
@@ -73,11 +73,12 @@ export async function POST(req: NextRequest) {
       subtotal: parseFloat(item.total || "0") || 0,
     }));
 
-    if (isSupabaseConfigured() && supabase) {
+    const db = supabaseAdmin || supabase;
+    if (isSupabaseConfigured() && db) {
       // 1. Safe Customer Lookup / Upsert (avoid 42P10 constraint error)
       let customerId: string | null = null;
       if (mobile) {
-        const { data: existingCustomer } = await supabase
+        const { data: existingCustomer } = await db
           .from("customers")
           .select("id")
           .eq("mobile", mobile)
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
 
         if (existingCustomer?.id) {
           customerId = existingCustomer.id;
-          await supabase
+          await db
             .from("customers")
             .update({
               name: customerName,
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (!customerId) {
-        const { data: newCustomer, error: custError } = await supabase
+        const { data: newCustomer, error: custError } = await db
           .from("customers")
           .insert({
             name: customerName,
@@ -121,13 +122,13 @@ export async function POST(req: NextRequest) {
       }
 
       if (!customerId) {
-        const { data: fallbackCust } = await supabase.from("customers").select("id").limit(1).maybeSingle();
+        const { data: fallbackCust } = await db.from("customers").select("id").limit(1).maybeSingle();
         customerId = fallbackCust?.id || null;
       }
 
       // 2. Insert/Upsert Order
       const orderNumber = `SC-WC-${wcId}`;
-      const { data: order, error: orderError } = await supabase
+      const { data: order, error: orderError } = await db
         .from("orders")
         .upsert({
           order_number: orderNumber,
@@ -150,8 +151,8 @@ export async function POST(req: NextRequest) {
 
       // 3. Insert items (idempotent replacement)
       if (order && items.length > 0) {
-        await supabase.from("order_items").delete().eq("order_id", order.id);
-        await supabase.from("order_items").insert(
+        await db.from("order_items").delete().eq("order_id", order.id);
+        await db.from("order_items").insert(
           items.map((it: any) => ({
             order_id: order.id,
             ...it,
@@ -161,20 +162,28 @@ export async function POST(req: NextRequest) {
 
       // 4. Initial Dispatch record
       if (order) {
-        const { data: stCourier } = await supabase
+        const { data: stCourier } = await db
           .from("couriers")
           .select("id")
           .eq("code", "ST_COURIER")
           .maybeSingle();
 
-        await supabase.from("dispatches").upsert({
-          order_id: order.id,
-          courier_id: stCourier?.id || null,
-          courier_status: courierStatus,
-        }, { onConflict: "order_id" });
+        const { data: existingDisp } = await db
+          .from("dispatches")
+          .select("id")
+          .eq("order_id", order.id)
+          .maybeSingle();
+
+        if (!existingDisp) {
+          await db.from("dispatches").insert({
+            order_id: order.id,
+            courier_id: stCourier?.id || "1646c4ed-2883-4f72-b3c8-aab24f7631b6",
+            courier_status: "PENDING",
+          });
+        }
 
         // 5. Initial Activity Log
-        await supabase.from("activity_logs").insert({
+        await db.from("activity_logs").insert({
           order_id: order.id,
           user_name: "WooCommerce Webhook",
           user_role: "ORDER_STAFF",

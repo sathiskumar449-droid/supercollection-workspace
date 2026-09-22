@@ -99,6 +99,24 @@ export function initStore(): Order[] {
           }
         });
       });
+
+      // Background live sync from WooCommerce website every 30 seconds
+      if (typeof window !== "undefined") {
+        setInterval(() => {
+          fetch("/api/sync/woocommerce", { method: "POST" })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data?.syncedCount) {
+                fetchSupabaseOrders().then((remoteOrders) => {
+                  if (remoteOrders !== null) {
+                    persistOrders(remoteOrders);
+                  }
+                });
+              }
+            })
+            .catch(() => {});
+        }, 30000);
+      }
     }
   } catch (err) {
     console.error("Error reading from localStorage:", err);
@@ -401,7 +419,7 @@ export const orderflowStore = {
 
     const updatedOrder: Order = {
       ...order,
-      orderStatus: isShipped ? "COMPLETED" : (params.courierStatus === "PENDING" && order.orderStatus === "COMPLETED" ? "DISPATCHED" : order.orderStatus),
+      orderStatus: order.orderStatus, // Keep order status as DISPATCHED (do NOT change to COMPLETED)
       updatedAt: now,
       dispatch: {
         ...order.dispatch,
