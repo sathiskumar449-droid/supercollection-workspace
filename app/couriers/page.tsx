@@ -163,11 +163,22 @@ function CourierHubContent() {
   const isCourierUser = user.role === "COURIER";
   const userCourierPartnerId = user.courierPartnerId;
 
-  // Selected courier filter (Admin only)
-  const [adminPartnerFilter, setAdminPartnerFilter] = useState<string>("ALL");
+  // Active courier partner selection (Admin can toggle between partners; default to ST_COURIER or URL param)
+  const initialPartnerParam = searchParams.get("partner");
+  const [adminPartnerFilter, setAdminPartnerFilter] = useState<string>(initialPartnerParam || "ST_COURIER");
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusTab);
   const [searchQuery, setSearchQuery] = useState("");
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
+
+  // Sync if URL query param or courierPartners load
+  React.useEffect(() => {
+    const p = searchParams.get("partner");
+    if (p) {
+      setAdminPartnerFilter(p);
+    } else if (!adminPartnerFilter && courierPartners.length > 0) {
+      setAdminPartnerFilter(courierPartners[0].code);
+    }
+  }, [searchParams, courierPartners, adminPartnerFilter]);
 
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -182,8 +193,13 @@ function CourierHubContent() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
+  // Active courier partner code
+  const activePartnerCode = useMemo(() => {
+    if (isCourierUser) return userCourierPartnerId || "ST_COURIER";
+    return adminPartnerFilter || courierPartners[0]?.code || "ST_COURIER";
+  }, [isCourierUser, userCourierPartnerId, adminPartnerFilter, courierPartners]);
+
   // 1. Base eligibility: Orders marked as DISPATCHED in Packing Station
-  // Backend & UI isolation: If courier user, strictly filter to their assigned courierPartnerId
   const eligibleDispatchedOrders = useMemo(() => {
     return orders.filter((o) => {
       // Must be dispatched from packing station
@@ -196,23 +212,52 @@ function CourierHubContent() {
         return false;
       }
 
-      // Strict courier partner isolation
+      // Strict courier partner isolation for courier user
       if (isCourierUser) {
-        return o.dispatch?.courierPartnerId === userCourierPartnerId;
+        return (o.dispatch?.courierPartnerId || "ST_COURIER") === userCourierPartnerId;
       }
 
       return true;
     });
   }, [orders, dateFilter, customDate, isCourierUser, userCourierPartnerId]);
 
-  // 2. Metrics calculation
+  // Partner order counts for Admin tabs
+  const partnerCounts = useMemo(() => {
+    if (isCourierUser) return {};
+
+    const counts: Record<string, number> = {};
+    courierPartners.forEach((cp) => {
+      counts[cp.code] = 0;
+    });
+
+    eligibleDispatchedOrders.forEach((o) => {
+      const code = o.dispatch?.courierPartnerId || "ST_COURIER";
+      if (counts[code] !== undefined) {
+        counts[code]++;
+      } else {
+        counts[code] = 1;
+      }
+    });
+
+    return counts;
+  }, [eligibleDispatchedOrders, courierPartners, isCourierUser]);
+
+  // Orders belonging specifically to the active partner
+  const currentPartnerOrders = useMemo(() => {
+    return eligibleDispatchedOrders.filter((o) => {
+      const code = o.dispatch?.courierPartnerId || "ST_COURIER";
+      return code === activePartnerCode;
+    });
+  }, [eligibleDispatchedOrders, activePartnerCode]);
+
+  // 2. Metrics calculation for active partner
   const metrics = useMemo(() => {
     let waiting = 0;
     let pickedUp = 0;
     let delivered = 0;
     let missingLlr = 0;
 
-    eligibleDispatchedOrders.forEach((o) => {
+    currentPartnerOrders.forEach((o) => {
       const cStatus = o.dispatch?.courierStatus;
       if (cStatus === "DELIVERED") {
         delivered++;
@@ -228,55 +273,17 @@ function CourierHubContent() {
     });
 
     return {
-      total: eligibleDispatchedOrders.length,
+      total: currentPartnerOrders.length,
       waiting,
       pickedUp,
       delivered,
       missingLlr,
     };
-  }, [eligibleDispatchedOrders]);
+  }, [currentPartnerOrders]);
 
-  // Partner order counts for Admin tabs
-  const partnerCounts = useMemo(() => {
-    if (isCourierUser) return {};
-
-    const counts: Record<string, number> = {
-      ALL: eligibleDispatchedOrders.length,
-      UNASSIGNED: 0,
-    };
-
-    courierPartners.forEach((cp) => {
-      counts[cp.code] = 0;
-    });
-
-    eligibleDispatchedOrders.forEach((o) => {
-      const code = o.dispatch?.courierPartnerId;
-      if (!code || code === "UNASSIGNED") {
-        counts["UNASSIGNED"] = (counts["UNASSIGNED"] || 0) + 1;
-      } else {
-        counts[code] = (counts[code] || 0) + 1;
-      }
-    });
-
-    return counts;
-  }, [eligibleDispatchedOrders, courierPartners, isCourierUser]);
-
-  // 3. Filtered Orders based on Partner Filter, Status Filter, and Search Query
+  // 3. Filtered Orders for the active partner based on Status Filter and Search Query
   const displayedOrders = useMemo(() => {
-    return eligibleDispatchedOrders.filter((o) => {
-      // Admin Courier Partner tab filter
-      if (!isCourierUser && adminPartnerFilter !== "ALL") {
-        if (adminPartnerFilter === "UNASSIGNED") {
-          if (o.dispatch?.courierPartnerId && o.dispatch.courierPartnerId !== "UNASSIGNED") {
-            return false;
-          }
-        } else {
-          if (o.dispatch?.courierPartnerId !== adminPartnerFilter) {
-            return false;
-          }
-        }
-      }
-
+    return currentPartnerOrders.filter((o) => {
       // Status tab filter
       const cStatus = o.dispatch?.courierStatus;
       if (statusFilter === "WAITING_FOR_PICKUP") {
@@ -312,7 +319,7 @@ function CourierHubContent() {
 
       return true;
     });
-  }, [eligibleDispatchedOrders, isCourierUser, adminPartnerFilter, statusFilter, searchQuery]);
+  }, [currentPartnerOrders, statusFilter, searchQuery]);
 
   // 4. Inline handlers
   const handleSavePickupPhone = (orderId: string, orderNumber: string, val: string) => {
@@ -436,12 +443,16 @@ function CourierHubContent() {
     });
   };
 
-  // Helper display name for courier partner portal
-  const courierPartnerName = useMemo(() => {
-    if (!isCourierUser) return "";
-    const match = courierPartners.find((c) => c.code === userCourierPartnerId);
-    return match ? match.name : "Courier Partner";
-  }, [isCourierUser, userCourierPartnerId, courierPartners]);
+  // Helper display name for current partner
+  const currentPartner = useMemo(() => {
+    return (
+      courierPartners.find((c) => c.code === activePartnerCode) || {
+        id: "cour-1",
+        name: activePartnerCode === "PROFESSIONAL" ? "Professional Courier" : activePartnerCode === "DTDC" ? "DTDC" : "ST Courier",
+        code: activePartnerCode,
+      }
+    );
+  }, [courierPartners, activePartnerCode]);
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-4 pb-16">
@@ -459,18 +470,16 @@ function CourierHubContent() {
           <div className="flex items-center gap-2">
             <Truck className="w-5 h-5 text-orange-600" />
             <h1 className="text-xl font-black text-slate-900 tracking-tight">
-              Courier Hub
+              {isCourierUser ? `${currentPartner.name} Portal` : `Courier Hub — ${currentPartner.name}`}
             </h1>
-            {isCourierUser && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
-                {courierPartnerName} Portal
-              </span>
-            )}
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
+              {currentPartnerOrders.length} Shipments
+            </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
             {isCourierUser 
-              ? `Dedicated shipment queue for ${courierPartnerName}. Manage pickup details and update tracking statuses.`
-              : "Consolidated dispatch handoff, pickup person telemetry, and courier partner fulfillment."
+              ? `Dedicated shipment queue for ${currentPartner.name}. Manage pickup details and update tracking statuses.`
+              : `Active handoff queue for ${currentPartner.name}. Monitor driver pickup telemetry, enter LLR, and verify delivery.`
             }
           </p>
         </div>
@@ -584,49 +593,46 @@ function CourierHubContent() {
       {/* ADMIN ONLY: Courier Partner Filter Tabs (Requirement 7 & 8) */}
       {/* Strict Privacy: NEVER shown to courier users! */}
       {!isCourierUser && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 text-xs">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-2 shrink-0">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200 text-xs">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 shrink-0">
             Courier Partner:
           </span>
 
-          <button
-            onClick={() => setAdminPartnerFilter("ALL")}
-            className={cn(
-              "px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer",
-              adminPartnerFilter === "ALL"
-                ? "bg-slate-900 text-white shadow-xs"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            )}
-          >
-            All Partners ({partnerCounts["ALL"] || 0})
-          </button>
-
-          {courierPartners.map((cp) => (
-            <button
-              key={cp.id}
-              onClick={() => setAdminPartnerFilter(cp.code)}
-              className={cn(
-                "px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer",
-                adminPartnerFilter === cp.code
-                  ? "bg-orange-600 text-white shadow-xs"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              )}
-            >
-              {cp.name} ({partnerCounts[cp.code] || 0})
-            </button>
-          ))}
-
-          <button
-            onClick={() => setAdminPartnerFilter("UNASSIGNED")}
-            className={cn(
-              "px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer",
-              adminPartnerFilter === "UNASSIGNED"
-                ? "bg-amber-600 text-white shadow-xs"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            )}
-          >
-            Unassigned ({partnerCounts["UNASSIGNED"] || 0})
-          </button>
+          {courierPartners.map((cp) => {
+            const isSelected = activePartnerCode === cp.code;
+            const count = partnerCounts[cp.code] || 0;
+            return (
+              <button
+                key={cp.id}
+                onClick={() => {
+                  setAdminPartnerFilter(cp.code);
+                  if (typeof window !== "undefined") {
+                    const params = new URLSearchParams(window.location.search);
+                    params.set("partner", cp.code);
+                    window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+                  }
+                }}
+                className={cn(
+                  "px-4 py-2 rounded-xl font-bold transition-all shrink-0 cursor-pointer flex items-center gap-2 text-xs",
+                  isSelected
+                    ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 ring-1 ring-orange-500"
+                    : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200"
+                )}
+              >
+                <span>{cp.name}</span>
+                <span
+                  className={cn(
+                    "px-2 py-0.5 rounded-full text-[11px] font-bold",
+                    isSelected
+                      ? "bg-white/20 text-white"
+                      : "bg-slate-100 text-slate-600 border border-slate-200"
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
 

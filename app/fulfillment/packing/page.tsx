@@ -133,9 +133,9 @@ export default function PackingPage() {
 
   const handleConfirmDispatch = () => {
     if (!dispatchModalOrder) return;
-    const res = markAsDispatched(dispatchModalOrder.id, selectedCourierPartner);
-    const partnerObj = courierPartners.find((c) => c.code === selectedCourierPartner) || { name: "ST Courier" };
-    triggerToast(`Order ${dispatchModalOrder.orderNumber} dispatched to ${partnerObj.name}`);
+    const partnerObj = courierPartners.find((c) => c.code === selectedCourierPartner) || { name: "ST Courier", code: "ST_COURIER" };
+    markAsDispatched(dispatchModalOrder.id, selectedCourierPartner);
+    triggerToast(`Order ${dispatchModalOrder.orderNumber} dispatched! Moved to ${partnerObj.name} page in Courier Hub.`);
     setDispatchModalOrder(null);
   };
 
@@ -747,7 +747,7 @@ export default function PackingPage() {
               </div>
 
               <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
-                ℹ A unique <strong>Dispatch ID</strong> will be automatically generated. The order will be immediately transferred to <strong>Courier Hub</strong> with status <em>"Waiting for Pickup"</em>.
+                ℹ A unique <strong>Dispatch ID</strong> will be automatically generated. The order will be immediately transferred to the <strong>{courierPartners.find((c) => c.code === selectedCourierPartner)?.name || "selected courier"}</strong> page in Courier Hub with status <em>"Waiting for Pickup"</em>.
               </div>
             </div>
 

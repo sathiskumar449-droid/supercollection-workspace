@@ -45,6 +45,75 @@ export function generateDispatchId(existingOrders: Order[] = globalOrders): stri
   return `${prefix}${String(maxSeq + 1).padStart(3, "0")}`;
 }
 
+export function sanitizeOrders(orders: Order[]): Order[] {
+  let dispCounter = 1;
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const todayPrefix = `DSP-${yy}${mm}${dd}-`;
+
+  return orders.map((ord) => {
+    if (!ord) return ord;
+
+    // 1. Deduplicate items
+    if (Array.isArray(ord?.items) && ord.items.length > 1) {
+      const map = new Map<string, OrderItem>();
+      ord.items.forEach((it) => {
+        const k = `${(it.sku || "").trim().toLowerCase()}__${(it.size || "").trim().toLowerCase()}__${(it.productName || "").trim().toLowerCase()}`;
+        if (!map.has(k)) map.set(k, it);
+      });
+      ord.items = Array.from(map.values());
+    }
+
+    // 2. Ensure dispatched orders have valid courierPartnerId, courierName, dispatchId, and courierStatus
+    if (ord.orderStatus === "DISPATCHED" || ord.dispatchedAt || ord.dispatch?.dispatchedAt) {
+      const cName = (ord.dispatch?.courierName || "").toLowerCase();
+      let partnerCode = ord.dispatch?.courierPartnerId;
+
+      if (!partnerCode || partnerCode === "UNASSIGNED") {
+        if (cName.includes("professional")) {
+          partnerCode = "PROFESSIONAL";
+        } else if (cName.includes("dtdc")) {
+          partnerCode = "DTDC";
+        } else {
+          partnerCode = "ST_COURIER";
+        }
+      }
+
+      let resolvedCourierName = ord.dispatch?.courierName;
+      if (!resolvedCourierName || resolvedCourierName.toLowerCase().includes("st")) {
+        resolvedCourierName = "ST Courier";
+      } else if (resolvedCourierName.toLowerCase().includes("prof")) {
+        resolvedCourierName = "Professional Courier";
+      } else if (resolvedCourierName.toLowerCase().includes("dtdc")) {
+        resolvedCourierName = "DTDC";
+      }
+
+      let dispatchId = ord.dispatch?.dispatchId;
+      if (!dispatchId || dispatchId === "Pending ID" || dispatchId === "pending" || !dispatchId.startsWith("DSP-")) {
+        dispatchId = `${todayPrefix}${String(dispCounter++).padStart(3, "0")}`;
+      }
+
+      let courierStatus = ord.dispatch?.courierStatus;
+      if (!courierStatus || courierStatus === "PENDING" || (courierStatus as string) === "DISPATCHED") {
+        courierStatus = "WAITING_FOR_PICKUP";
+      }
+
+      ord.orderStatus = "DISPATCHED";
+      ord.dispatch = {
+        ...ord.dispatch,
+        courierPartnerId: partnerCode,
+        courierName: resolvedCourierName,
+        dispatchId,
+        courierStatus,
+      };
+    }
+
+    return ord;
+  });
+}
+
 function notifyListeners() {
   listeners.forEach((listener) => listener());
 }
@@ -58,7 +127,7 @@ export function initStore(): Order[] {
       return globalOrders;
     }
     if (globalOrders.length === 0) {
-      globalOrders = generateMockOrders();
+      globalOrders = sanitizeOrders(generateMockOrders());
     }
     return globalOrders;
   }
@@ -78,19 +147,7 @@ export function initStore(): Order[] {
             localStorage.removeItem(STORAGE_KEY_ORDERS);
             globalOrders = [];
           } else {
-            if (Array.isArray(parsed)) {
-              parsed.forEach((ord: any) => {
-                if (Array.isArray(ord?.items) && ord.items.length > 1) {
-                  const map = new Map();
-                  ord.items.forEach((it: any) => {
-                    const k = `${(it.sku || "").trim().toLowerCase()}__${(it.size || "").trim().toLowerCase()}__${(it.productName || it.product_name || "").trim().toLowerCase()}`;
-                    if (!map.has(k)) map.set(k, it);
-                  });
-                  ord.items = Array.from(map.values());
-                }
-              });
-            }
-            globalOrders = parsed;
+            globalOrders = sanitizeOrders(Array.isArray(parsed) ? parsed : []);
           }
         } catch {
           localStorage.removeItem(STORAGE_KEY_ORDERS);
@@ -104,13 +161,13 @@ export function initStore(): Order[] {
       const cachedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
       if (cachedOrders) {
         try {
-          globalOrders = JSON.parse(cachedOrders);
+          globalOrders = sanitizeOrders(JSON.parse(cachedOrders));
         } catch {
-          globalOrders = generateMockOrders();
+          globalOrders = sanitizeOrders(generateMockOrders());
           localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(globalOrders));
         }
       } else {
-        globalOrders = generateMockOrders();
+        globalOrders = sanitizeOrders(generateMockOrders());
         localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(globalOrders));
       }
     }
@@ -173,21 +230,11 @@ export function initStore(): Order[] {
 }
 
 function persistOrders(orders: Order[]) {
-  // Ensure items are deduplicated before storing
-  orders.forEach((ord) => {
-    if (Array.isArray(ord?.items) && ord.items.length > 1) {
-      const map = new Map<string, OrderItem>();
-      ord.items.forEach((it) => {
-        const k = `${(it.sku || "").trim().toLowerCase()}__${(it.size || "").trim().toLowerCase()}__${(it.productName || "").trim().toLowerCase()}`;
-        if (!map.has(k)) map.set(k, it);
-      });
-      ord.items = Array.from(map.values());
-    }
-  });
-  globalOrders = [...orders];
+  const cleanOrders = sanitizeOrders(orders);
+  globalOrders = [...cleanOrders];
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orders));
+      localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(cleanOrders));
     } catch (err) {
       console.error("Error saving to localStorage:", err);
     }
