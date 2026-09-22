@@ -150,8 +150,8 @@ export function SourceBadge({ source, className }: { source: OrderSource; classN
   const configs: Record<OrderSource, { label: string; textClass: string; icon: React.ReactNode }> = {
     WEBSITE: {
       label: "Website",
-      textClass: "text-slate-700",
-      icon: <Globe className="w-3.5 h-3.5 text-slate-400" />,
+      textClass: "text-blue-600",
+      icon: <Globe className="w-3.5 h-3.5 text-blue-500" />,
     },
     WHATSAPP: {
       label: "WhatsApp",
