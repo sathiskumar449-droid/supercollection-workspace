@@ -190,8 +190,6 @@ export default function DashboardPage() {
     return items;
   }, [packingCounts.processing, courierCounts.missingLlr, smsCounts.failed]);
 
-  const firstName = user.name ? user.name.split(" ")[0] : "Priya";
-
   return (
     <div className="max-w-[1200px] mx-auto space-y-6 pb-12">
       {/* HEADER */}
@@ -202,7 +200,7 @@ export default function DashboardPage() {
             className="text-2xl font-bold text-slate-900 tracking-tight leading-tight flex items-center gap-2"
           >
             <span>
-              {mounted ? `${getGreeting()}, ${firstName}` : `Welcome, ${firstName}`}
+              {mounted ? getGreeting() : "Welcome"}
             </span>
             <span className="inline-block text-xl">👋</span>
           </h1>
@@ -225,7 +223,7 @@ export default function DashboardPage() {
       <div>
         <div
           onClick={handleOpenTodayOrders}
-          className="w-full sm:max-w-xs bg-white border border-slate-200 rounded-xl p-5 flex flex-col gap-2 transition-all duration-150 select-none hover:border-slate-300 hover:shadow-sm cursor-pointer group"
+          className="w-full sm:max-w-xs bg-white border border-orange-400/90 hover:border-orange-500 rounded-xl p-5 flex flex-col gap-2 transition-all duration-150 select-none hover:shadow-sm cursor-pointer group"
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -277,7 +275,7 @@ export default function DashboardPage() {
       {/* ROW 2: MODULE CARDS (PACKING | COURIER | SMS) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* PACKING CARD */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col">
+        <div className="bg-white border border-orange-400/90 hover:border-orange-500 transition-colors rounded-xl p-5 shadow-xs flex flex-col">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-2">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-blue-50 text-blue-600">
@@ -380,7 +378,7 @@ export default function DashboardPage() {
         </div>
 
         {/* COURIER CARD */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col">
+        <div className="bg-white border border-orange-400/90 hover:border-orange-500 transition-colors rounded-xl p-5 shadow-xs flex flex-col">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-2">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-amber-50 text-amber-600">
@@ -470,7 +468,7 @@ export default function DashboardPage() {
         </div>
 
         {/* SMS CARD */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col">
+        <div className="bg-white border border-orange-400/90 hover:border-orange-500 transition-colors rounded-xl p-5 shadow-xs flex flex-col">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-2">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600">
@@ -545,7 +543,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ROW 3: NEEDS ATTENTION */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+      <div className="bg-white border border-orange-400/90 hover:border-orange-500 transition-colors rounded-xl p-5 shadow-xs">
         <div className="flex items-center gap-2 mb-3">
           <AlertTriangle className="w-4 h-4 text-amber-500" />
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700">
