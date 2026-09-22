@@ -217,7 +217,28 @@ export const orderflowStore = {
 
     const order = globalOrders[orderIndex];
     const oldStatus = order.orderStatus;
+    if (oldStatus === newStatus && !reason) return { success: true };
     const now = new Date().toISOString();
+
+    let action = "Order status updated";
+    let details = reason || `Updated by ${globalUser.name}`;
+
+    if (newStatus === "CONFIRMED") {
+      action = "Order confirmed";
+      details = reason || "Updated from Orders";
+    } else if (newStatus === "PACKING") {
+      action = "Packing started";
+      details = reason || "Updated from Packing Station";
+    } else if (newStatus === "PACKED") {
+      action = "Order packed";
+      details = reason || "Updated from Packing Station";
+    } else if (newStatus === "DISPATCHED") {
+      action = "Order dispatched";
+      details = reason || "Updated from Packing Station / Dispatch";
+    } else if (newStatus === "COMPLETED") {
+      action = "Order completed";
+      details = reason || "Delivered to customer";
+    }
 
     const updatedTimeline: ActivityLog[] = [
       ...order.timeline,
@@ -227,8 +248,8 @@ export const orderflowStore = {
         timestamp: now,
         user: globalUser.name,
         role: globalUser.role,
-        action: `Order Status Changed: ${oldStatus} → ${newStatus}`,
-        details: reason || `Updated by ${globalUser.name}`,
+        action,
+        details,
         oldValue: oldStatus,
         newValue: newStatus,
       },
@@ -361,32 +382,55 @@ export const orderflowStore = {
     const timelineEntries: ActivityLog[] = [];
 
     if (params.llrNumber !== undefined && params.llrNumber !== order.dispatch.llrNumber) {
+      const courierName = params.courierName || order.dispatch.courierName || "ST Courier";
+      const isNew = !order.dispatch.llrNumber;
       timelineEntries.push({
         id: `tl-${Date.now()}-llr`,
         orderId: order.id,
         timestamp: now,
         user: globalUser.name,
         role: globalUser.role,
-        action: "LLR Number Updated",
-        details: `LLR number set to ${params.llrNumber || "(empty)"}`,
+        action: isNew ? "LLR added" : "LLR updated",
+        details: `${courierName} · LLR: ${params.llrNumber || ""}`,
         oldValue: order.dispatch.llrNumber,
         newValue: params.llrNumber,
       });
     }
 
     if (params.courierStatus !== undefined && finalCourierStatus !== oldCourierStatus) {
-      if (isShipped) {
-        const courierName = params.courierName || order.dispatch.courierName || "ST Courier";
-        const currentLlr = params.llrNumber !== undefined ? params.llrNumber : order.dispatch.llrNumber;
+      if (params.courierStatus === "DELIVERED") {
+        timelineEntries.push({
+          id: `tl-${Date.now()}-deliv`,
+          orderId: order.id,
+          timestamp: now,
+          user: globalUser.name,
+          role: globalUser.role,
+          action: "Courier status updated",
+          details: "Status: Delivered",
+          oldValue: oldCourierStatus,
+          newValue: "DELIVERED",
+        });
 
+        timelineEntries.push({
+          id: `tl-${Date.now() + 500}-smsdel`,
+          orderId: order.id,
+          timestamp: new Date(Date.now() + 1000).toISOString(),
+          user: "Ping4SMS",
+          role: "SYSTEM" as Role,
+          action: "SMS delivered",
+          details: "Customer notification delivered",
+          oldValue: order.sms.status,
+          newValue: "SENT",
+        });
+      } else if (isShipped) {
         timelineEntries.push({
           id: `tl-${Date.now()}-ship`,
           orderId: order.id,
           timestamp: now,
           user: globalUser.name,
           role: globalUser.role,
-          action: "Order Shipped",
-          details: `In transit via ${courierName}${currentLlr ? ` (LLR: ${currentLlr})` : ""}`,
+          action: "Courier status updated",
+          details: "Status: Dispatched",
           oldValue: oldCourierStatus,
           newValue: "SHIPPED",
         });
@@ -395,10 +439,10 @@ export const orderflowStore = {
           id: `tl-${Date.now() + 500}-sms`,
           orderId: order.id,
           timestamp: new Date(Date.now() + 1000).toISOString(),
-          user: "Ping4SMS Gateway",
+          user: "Ping4SMS",
           role: "SYSTEM" as Role,
-          action: "SMS Sent",
-          details: `Tracking SMS sent to customer ${order.customer.mobile} via Ping4SMS (MsgID: P4S-SHIP-${order.orderNumber.replace(/[^a-zA-Z0-9]/g, "")})`,
+          action: "SMS sent",
+          details: "Customer notification sent",
           oldValue: order.sms.status,
           newValue: "SENT",
         });
@@ -409,8 +453,8 @@ export const orderflowStore = {
           timestamp: now,
           user: globalUser.name,
           role: globalUser.role,
-          action: "Courier Status Changed",
-          details: `Courier status changed from ${oldCourierStatus} to PENDING`,
+          action: "Courier status updated",
+          details: "Status: Pending",
           oldValue: oldCourierStatus,
           newValue: "PENDING",
         });

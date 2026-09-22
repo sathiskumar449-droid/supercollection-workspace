@@ -209,14 +209,24 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 5. Activity Log
-        await supabase.from("activity_logs").insert({
-          order_id: order.id,
-          user_name: "WooCommerce REST API Sync",
-          user_role: "ORDER_STAFF",
-          action: "Orders Synced",
-          details: `Order #${wcId} synced from supercollections.in`,
-        });
+        // 5. Activity Log (Only for initial order creation, avoid duplicate sync logs)
+        const { data: existingLogs } = await supabase
+          .from("activity_logs")
+          .select("id")
+          .eq("order_id", order.id)
+          .limit(1);
+
+        if (!existingLogs || existingLogs.length === 0) {
+          const createdAtTime = wc.date_created ? new Date(wc.date_created).toISOString() : new Date().toISOString();
+          await supabase.from("activity_logs").insert({
+            order_id: order.id,
+            user_name: "Website",
+            user_role: "ORDER_STAFF",
+            action: "Order created",
+            details: "Order received from website",
+            created_at: createdAtTime,
+          });
+        }
       } else if (orderError) {
         console.error("Order upsert error for wcId", wcId, orderError);
       }
