@@ -220,40 +220,104 @@ export const orderflowStore = {
     if (oldStatus === newStatus && !reason) return { success: true };
     const now = new Date().toISOString();
 
-    let action = "Order status updated";
-    let details = reason || `Updated by ${globalUser.name}`;
+    const newEntries: ActivityLog[] = [];
 
     if (newStatus === "CONFIRMED") {
-      action = "Order confirmed";
-      details = reason || "Updated from Orders";
+      if (!order.timeline.some((t) => t.action === "Order confirmed")) {
+        newEntries.push({
+          id: `tl-${Date.now()}-conf`,
+          orderId: order.id,
+          timestamp: now,
+          user: globalUser.name,
+          role: globalUser.role,
+          action: "Order confirmed",
+          details: "Order confirmed",
+          oldValue: oldStatus,
+          newValue: newStatus,
+        });
+      }
+      if (!order.timeline.some((t) => t.action === "Waiting for packing")) {
+        newEntries.push({
+          id: `tl-${Date.now() + 100}-waitpack`,
+          orderId: order.id,
+          timestamp: new Date(Date.now() + 100).toISOString(),
+          user: "Packing Station",
+          role: "PACKING_STAFF",
+          action: "Waiting for packing",
+          details: "Order is ready for packing",
+        });
+      }
     } else if (newStatus === "PACKING") {
-      action = "Packing started";
-      details = reason || "Updated from Packing Station";
+      if (!order.timeline.some((t) => t.action === "Packing started")) {
+        newEntries.push({
+          id: `tl-${Date.now()}-packstart`,
+          orderId: order.id,
+          timestamp: now,
+          user: globalUser.name,
+          role: globalUser.role,
+          action: "Packing started",
+          details: "Packing started",
+          oldValue: oldStatus,
+          newValue: newStatus,
+        });
+      }
     } else if (newStatus === "PACKED") {
-      action = "Order packed";
-      details = reason || "Updated from Packing Station";
+      if (!order.timeline.some((t) => t.action === "Order packed")) {
+        newEntries.push({
+          id: `tl-${Date.now()}-packed`,
+          orderId: order.id,
+          timestamp: now,
+          user: globalUser.name,
+          role: globalUser.role,
+          action: "Order packed",
+          details: "Order packed successfully",
+          oldValue: oldStatus,
+          newValue: newStatus,
+        });
+      }
     } else if (newStatus === "DISPATCHED") {
-      action = "Order dispatched";
-      details = reason || "Updated from Packing Station / Dispatch";
+      if (!order.timeline.some((t) => t.action === "Order dispatched")) {
+        newEntries.push({
+          id: `tl-${Date.now()}-disp`,
+          orderId: order.id,
+          timestamp: now,
+          user: globalUser.name,
+          role: globalUser.role,
+          action: "Order dispatched",
+          details: "Order dispatched",
+          oldValue: oldStatus,
+          newValue: newStatus,
+        });
+      }
+      if (!order.timeline.some((t) => t.action === "Waiting for shipment")) {
+        const courierName = order.dispatch.courierName || "ST Courier";
+        newEntries.push({
+          id: `tl-${Date.now() + 100}-waitship`,
+          orderId: order.id,
+          timestamp: new Date(Date.now() + 100).toISOString(),
+          user: "Courier Hub",
+          role: "DISPATCH_STAFF",
+          action: "Waiting for shipment",
+          details: `Order moved to ${courierName}`,
+        });
+      }
     } else if (newStatus === "COMPLETED") {
-      action = "Order completed";
-      details = reason || "Delivered to customer";
+      if (!order.timeline.some((t) => t.action === "Order completed")) {
+        newEntries.push({
+          id: `tl-${Date.now()}-compl`,
+          orderId: order.id,
+          timestamp: now,
+          user: globalUser.name,
+          role: globalUser.role,
+          action: "Order completed",
+          details: "Delivered to customer",
+          oldValue: oldStatus,
+          newValue: newStatus,
+        });
+      }
     }
 
-    const updatedTimeline: ActivityLog[] = [
-      ...order.timeline,
-      {
-        id: `tl-${Date.now()}`,
-        orderId: order.id,
-        timestamp: now,
-        user: globalUser.name,
-        role: globalUser.role,
-        action,
-        details,
-        oldValue: oldStatus,
-        newValue: newStatus,
-      },
-    ];
+    const updatedTimeline: ActivityLog[] = [...order.timeline, ...newEntries];
 
     const isDispatched = newStatus === "DISPATCHED";
     const isShipped = newStatus === "COMPLETED";
@@ -293,8 +357,10 @@ export const orderflowStore = {
     newOrders[orderIndex] = updatedOrder;
     persistOrders(newOrders);
 
-    if (isSupabaseConfigured()) {
-      updateSupabaseOrderStatus(orderId, newStatus, updatedTimeline[updatedTimeline.length - 1]);
+    if (isSupabaseConfigured() && newEntries.length > 0) {
+      newEntries.forEach((entry) => {
+        updateSupabaseOrderStatus(orderId, newStatus, entry);
+      });
     }
 
     return { success: true };
@@ -302,12 +368,12 @@ export const orderflowStore = {
 
   // 2. Start Packing
   startPacking(orderId: string) {
-    return this.updateOrderStatus(orderId, "PACKING", "Packing process initiated at packing station");
+    return this.updateOrderStatus(orderId, "PACKING", "Packing started");
   },
 
   // 3. Mark as Packed
   markAsPacked(orderId: string) {
-    return this.updateOrderStatus(orderId, "PACKED", "All items verified and sealed in delivery package");
+    return this.updateOrderStatus(orderId, "PACKED", "Order packed successfully");
   },
 
   // 4. Mark as Dispatched
@@ -323,6 +389,33 @@ export const orderflowStore = {
     };
 
     const finalLlr = llrNumber || order.dispatch.llrNumber;
+    const newEntries: ActivityLog[] = [];
+
+    if (!order.timeline.some((t) => t.action === "Order dispatched")) {
+      newEntries.push({
+        id: `tl-${Date.now()}-disp`,
+        orderId: order.id,
+        timestamp: now,
+        user: globalUser.name,
+        role: globalUser.role,
+        action: "Order dispatched",
+        details: "Order dispatched",
+        oldValue: order.orderStatus,
+        newValue: "DISPATCHED",
+      });
+    }
+
+    if (!order.timeline.some((t) => t.action === "Waiting for shipment")) {
+      newEntries.push({
+        id: `tl-${Date.now() + 100}-waitship`,
+        orderId: order.id,
+        timestamp: new Date(Date.now() + 100).toISOString(),
+        user: "Courier Hub",
+        role: "DISPATCH_STAFF",
+        action: "Waiting for shipment",
+        details: `Order moved to ${selectedCourier.name}`,
+      });
+    }
 
     const updatedOrder: Order = {
       ...order,
@@ -337,25 +430,18 @@ export const orderflowStore = {
         courierStatus: "PENDING",
         dispatchedAt: now,
       },
-      timeline: [
-        ...order.timeline,
-        {
-          id: `tl-${Date.now()}`,
-          orderId: order.id,
-          timestamp: now,
-          user: globalUser.name,
-          role: globalUser.role,
-          action: "Order Dispatched",
-          details: `Dispatched via ${selectedCourier.name}${finalLlr ? ` (LLR: ${finalLlr})` : ""}`,
-          oldValue: order.orderStatus,
-          newValue: "DISPATCHED",
-        },
-      ],
+      timeline: [...order.timeline, ...newEntries],
     };
 
     const newOrders = [...globalOrders];
     newOrders[orderIndex] = updatedOrder;
     persistOrders(newOrders);
+
+    if (isSupabaseConfigured() && newEntries.length > 0) {
+      newEntries.forEach((entry) => {
+        updateSupabaseOrderStatus(orderId, "DISPATCHED", entry);
+      });
+    }
 
     return { success: true };
   },
@@ -398,54 +484,48 @@ export const orderflowStore = {
     }
 
     if (params.courierStatus !== undefined && finalCourierStatus !== oldCourierStatus) {
-      if (params.courierStatus === "DELIVERED") {
-        timelineEntries.push({
-          id: `tl-${Date.now()}-deliv`,
-          orderId: order.id,
-          timestamp: now,
-          user: globalUser.name,
-          role: globalUser.role,
-          action: "Courier status updated",
-          details: "Status: Delivered",
-          oldValue: oldCourierStatus,
-          newValue: "DELIVERED",
-        });
+      const courierName = params.courierName || order.dispatch.courierName || "ST Courier";
 
-        timelineEntries.push({
-          id: `tl-${Date.now() + 500}-smsdel`,
-          orderId: order.id,
-          timestamp: new Date(Date.now() + 1000).toISOString(),
-          user: "Ping4SMS",
-          role: "SYSTEM" as Role,
-          action: "SMS delivered",
-          details: "Customer notification delivered",
-          oldValue: order.sms.status,
-          newValue: "SENT",
-        });
-      } else if (isShipped) {
-        timelineEntries.push({
-          id: `tl-${Date.now()}-ship`,
-          orderId: order.id,
-          timestamp: now,
-          user: globalUser.name,
-          role: globalUser.role,
-          action: "Courier status updated",
-          details: "Status: Dispatched",
-          oldValue: oldCourierStatus,
-          newValue: "SHIPPED",
-        });
+      if (isShipped) {
+        if (!order.timeline.some((t) => t.action === "Shipped")) {
+          timelineEntries.push({
+            id: `tl-${Date.now()}-ship`,
+            orderId: order.id,
+            timestamp: now,
+            user: courierName,
+            role: "DISPATCH_STAFF",
+            action: "Shipped",
+            details: `${courierName} marked the order as shipped`,
+            oldValue: oldCourierStatus,
+            newValue: "SHIPPED",
+          });
+        }
 
-        timelineEntries.push({
-          id: `tl-${Date.now() + 500}-sms`,
-          orderId: order.id,
-          timestamp: new Date(Date.now() + 1000).toISOString(),
-          user: "Ping4SMS",
-          role: "SYSTEM" as Role,
-          action: "SMS sent",
-          details: "Customer notification sent",
-          oldValue: order.sms.status,
-          newValue: "SENT",
-        });
+        if (!order.timeline.some((t) => t.action === "Waiting for SMS")) {
+          timelineEntries.push({
+            id: `tl-${Date.now() + 100}-waitsms`,
+            orderId: order.id,
+            timestamp: new Date(Date.now() + 100).toISOString(),
+            user: "Ping4SMS",
+            role: "SYSTEM",
+            action: "Waiting for SMS",
+            details: "Customer notification pending",
+          });
+        }
+
+        if (!order.timeline.some((t) => t.action === "SMS sent")) {
+          timelineEntries.push({
+            id: `tl-${Date.now() + 500}-sms`,
+            orderId: order.id,
+            timestamp: new Date(Date.now() + 1000).toISOString(),
+            user: "Ping4SMS",
+            role: "SYSTEM" as Role,
+            action: "SMS sent",
+            details: "Customer notification sent",
+            oldValue: order.sms.status,
+            newValue: "SENT",
+          });
+        }
       } else {
         timelineEntries.push({
           id: `tl-${Date.now()}-cstatus`,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
+import { OrderStatus } from "@/types/orderflow";
 
 /**
  * WooCommerce 2-Day Live Sync Endpoint
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
       const totalAmount = parseFloat(wc.total || "0") || 0;
 
       // Status mapping
-      let orderStatus: "NEW" | "CONFIRMED" | "COMPLETED" | "RETURN" = "NEW";
+      let orderStatus: OrderStatus = "NEW";
       if (wc.status === "completed") orderStatus = "COMPLETED";
       else if (wc.status === "processing") orderStatus = "CONFIRMED";
       else if (wc.status === "cancelled" || wc.status === "refunded" || wc.status === "failed") orderStatus = "RETURN";
@@ -158,15 +159,31 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      // Check if order already exists in Supabase to preserve active fulfillment progression
+      const { data: existingOrder } = await supabase
+        .from("orders")
+        .select("id, status")
+        .eq("source", "WEBSITE")
+        .eq("external_order_id", wcId)
+        .maybeSingle();
+
+      let effectiveStatus: any = orderStatus;
+      if (existingOrder?.status) {
+        const advancedStatuses = ["PACKING", "PACKED", "DISPATCHED"];
+        if (advancedStatuses.includes(existingOrder.status)) {
+          effectiveStatus = existingOrder.status;
+        }
+      }
+
       // 2. Upsert Order
-      const { data: order, error: orderError } = await supabase
+      const { data: order, error: orderError } = await (supabase as any)
         .from("orders")
         .upsert({
           order_number: `SC-WC-${wcId}`,
           external_order_id: wcId,
           source: "WEBSITE",
           customer_id: customerId,
-          status: orderStatus,
+          status: effectiveStatus,
           payment_status: paymentStatus,
           total_amount: totalAmount,
           created_at: wc.date_created ? new Date(wc.date_created).toISOString() : new Date().toISOString(),
@@ -218,14 +235,44 @@ export async function POST(req: NextRequest) {
 
         if (!existingLogs || existingLogs.length === 0) {
           const createdAtTime = wc.date_created ? new Date(wc.date_created).toISOString() : new Date().toISOString();
-          await supabase.from("activity_logs").insert({
-            order_id: order.id,
-            user_name: "Website",
-            user_role: "ORDER_STAFF",
-            action: "Order created",
-            details: "Order received from website",
-            created_at: createdAtTime,
-          });
+          const baseTime = new Date(createdAtTime).getTime();
+
+          const initialLogs = [
+            {
+              order_id: order.id,
+              user_name: "Website",
+              user_role: "ORDER_STAFF",
+              action: "Order placed",
+              details: "Order received from website",
+              created_at: new Date(baseTime).toISOString(),
+            },
+            {
+              order_id: order.id,
+              user_name: "Orders System",
+              user_role: "ORDER_STAFF",
+              action: "Order processing",
+              details: "Order is being processed",
+              created_at: new Date(baseTime + 1000).toISOString(),
+            },
+            {
+              order_id: order.id,
+              user_name: "Orders System",
+              user_role: "ORDER_STAFF",
+              action: "Order confirmed",
+              details: "Order confirmed",
+              created_at: new Date(baseTime + 2000).toISOString(),
+            },
+            {
+              order_id: order.id,
+              user_name: "Packing Station",
+              user_role: "PACKING_STAFF",
+              action: "Waiting for packing",
+              details: "Order is ready for packing",
+              created_at: new Date(baseTime + 3000).toISOString(),
+            },
+          ];
+
+          await supabase.from("activity_logs").insert(initialLogs);
         }
       } else if (orderError) {
         console.error("Order upsert error for wcId", wcId, orderError);

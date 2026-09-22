@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Order, OrderStatus, CourierStatus, Role } from "@/types/orderflow";
+import React, { useState, useMemo } from "react";
+import { Order, CourierStatus, Role } from "@/types/orderflow";
 import { 
   X, 
   Phone, 
@@ -15,7 +15,7 @@ interface OrderDetailsDrawerProps {
   order: Order | null;
   isOpen: boolean;
   onClose: () => void;
-  onUpdateStatus?: (orderId: string, status: OrderStatus, reason?: string) => void;
+  onUpdateStatus?: (orderId: string, status: any, reason?: string) => void;
   onUpdateCourier: (
     orderId: string,
     params: { llrNumber?: string; courierStatus?: CourierStatus }
@@ -23,11 +23,12 @@ interface OrderDetailsDrawerProps {
   userRole?: Role;
 }
 
-interface OrderHistoryItem {
-  id: string;
-  timestamp: string;
+interface TrackingStage {
+  key: string;
   title: string;
   description: string;
+  timestamp?: string;
+  completed: boolean;
 }
 
 /**
@@ -52,217 +53,194 @@ function formatDateTime(dateString?: string): string {
 }
 
 /**
- * Build real chronological journey of the order for business owner view.
- * Guarantees:
- * 1. First event is always the real order creation date/time (from WooCommerce).
- * 2. Removes technical noise (e.g. "Orders Synced", "WooCommerce REST API Sync").
- * 3. Removes contradictory flip-flops and duplicate entries.
- * 4. Human-readable titles and modules.
+ * Build continuous chronological order tracking journey (Flipkart / Amazon style).
+ * Strict 11-stage chronological lifecycle:
+ * 1. Order placed
+ * 2. Order processing
+ * 3. Order confirmed
+ * 4. Waiting for packing
+ * 5. Packing started
+ * 6. Order packed
+ * 7. Order dispatched
+ * 8. Waiting for shipment (Moved to Courier Hub)
+ * 9. Shipped (Courier shipment)
+ * 10. Waiting for SMS
+ * 11. SMS sent (or SMS failed)
  */
-function buildOrderHistory(order: Order): OrderHistoryItem[] {
-  const items: OrderHistoryItem[] = [];
-
-  // 1. Initial creation event - using original WooCommerce order creation date/time
-  const createdDate = order.createdAt || new Date().toISOString();
-  items.push({
-    id: "initial-order-created",
-    timestamp: createdDate,
-    title: "Order created",
-    description: order.source === "WEBSITE" ? "Order received from website" : "Order received from WhatsApp",
-  });
-
-  // 2. Real timeline logs from database
-  if (order.timeline && Array.isArray(order.timeline)) {
-    const sortedLogs = [...order.timeline].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+function buildTrackingPipeline(order: Order): { stages: TrackingStage[]; currentIndex: number } {
+  // Helper to extract recorded timestamp from timeline for a specific action
+  const getTimelineTime = (actionName: string): string | undefined => {
+    if (!order.timeline || !Array.isArray(order.timeline)) return undefined;
+    const match = order.timeline.find(
+      (t) => t.action?.toLowerCase() === actionName.toLowerCase()
     );
+    return match?.timestamp;
+  };
 
-    let lastTitle = "Order created";
+  const createdTime = order.createdAt || new Date().toISOString();
+  const confirmedTime = getTimelineTime("Order confirmed") || order.confirmedAt || createdTime;
+  const waitingPackingTime = getTimelineTime("Waiting for packing") || confirmedTime;
 
-    for (const log of sortedLogs) {
-      const act = log.action || "";
-      const actLower = act.toLowerCase();
-      const details = log.details || "";
+  // Determine packing stage completion
+  const isPackingStarted =
+    order.orderStatus === "PACKING" ||
+    order.orderStatus === "PACKED" ||
+    order.orderStatus === "DISPATCHED" ||
+    order.orderStatus === "COMPLETED" ||
+    Boolean(order.packingStartedAt) ||
+    Boolean(getTimelineTime("Packing started"));
+  const packingStartedTime = getTimelineTime("Packing started") || order.packingStartedAt;
 
-      // Skip raw sync logs or telemetry checks (first item already represents creation)
-      if (
-        actLower.includes("orders synced") ||
-        actLower.includes("order synced") ||
-        actLower.includes("order ingested") ||
-        actLower.includes("telemetry refreshed") ||
-        log.user === "WooCommerce REST API Sync" ||
-        log.user === "WooCommerce Webhook" ||
-        log.user === "WhatsApp Chat Box"
-      ) {
-        continue;
-      }
+  const isPacked =
+    order.orderStatus === "PACKED" ||
+    order.orderStatus === "DISPATCHED" ||
+    order.orderStatus === "COMPLETED" ||
+    Boolean(order.packedAt) ||
+    Boolean(getTimelineTime("Order packed"));
+  const packedTime = getTimelineTime("Order packed") || order.packedAt;
 
-      // Skip identical old/new values (e.g. COMPLETED -> COMPLETED)
-      if (log.oldValue && log.newValue && log.oldValue === log.newValue) {
-        continue;
-      }
+  // Determine dispatch stage completion
+  const isDispatched =
+    order.orderStatus === "DISPATCHED" ||
+    order.orderStatus === "COMPLETED" ||
+    Boolean(order.dispatchedAt) ||
+    Boolean(getTimelineTime("Order dispatched"));
+  const dispatchedTime = getTimelineTime("Order dispatched") || order.dispatchedAt;
 
-      let title = "";
-      let desc = "";
+  // Courier Hub stage
+  const isMovedToCourier = isDispatched;
+  const waitingShipmentTime =
+    getTimelineTime("Waiting for shipment") ||
+    order.dispatch.dispatchedAt ||
+    dispatchedTime;
 
-      if (actLower.includes("confirmed") || log.newValue === "CONFIRMED") {
-        title = "Order confirmed";
-        desc = "Updated from Orders";
-      } else if (actLower.includes("packing started") || log.newValue === "PACKING") {
-        title = "Packing started";
-        desc = "Updated from Packing Station";
-      } else if (actLower.includes("order packed") || log.newValue === "PACKED") {
-        title = "Order packed";
-        desc = "Updated from Packing Station";
-      } else if (actLower.includes("dispatched") || log.newValue === "DISPATCHED") {
-        title = "Order dispatched";
-        desc = "Updated from Packing Station / Dispatch";
-      } else if (actLower.includes("completed") || log.newValue === "COMPLETED") {
-        title = "Order completed";
-        desc = "Updated to completed";
-      } else if (actLower.includes("llr")) {
-        title = actLower.includes("added") ? "LLR added" : "LLR updated";
-        const courier = order.dispatch.courierName || "ST Courier";
-        const llr = log.newValue || order.dispatch.llrNumber || "";
-        desc = llr ? `${courier} · LLR: ${llr}` : details || "LLR updated";
-      } else if (actLower.includes("courier status") || actLower.includes("shipped")) {
-        title = "Courier status updated";
-        if (log.newValue === "SHIPPED" || log.newValue === "DISPATCHED" || actLower.includes("shipped")) {
-          desc = "Status: Dispatched";
-        } else if (log.newValue === "DELIVERED" || actLower.includes("delivered")) {
-          desc = "Status: Delivered";
-        } else {
-          desc = `Status: ${log.newValue || "Pending"}`;
-        }
-      } else if (actLower.includes("sms sent")) {
-        title = "SMS sent";
-        desc = "Customer notification sent";
-      } else if (actLower.includes("sms delivered")) {
-        title = "SMS delivered";
-        desc = "Customer notification delivered";
-      } else if (actLower.includes("sms failed") || actLower.includes("delivery failed")) {
-        title = "SMS delivery failed";
-        desc = "Customer notification failed";
-      } else {
-        title = act;
-        desc = details;
-      }
+  // Shipped stage
+  const isShipped =
+    order.dispatch.courierStatus === "SHIPPED" ||
+    (order.dispatch.courierStatus as string) === "DELIVERED" ||
+    Boolean(getTimelineTime("Shipped"));
+  const shippedTime =
+    getTimelineTime("Shipped") ||
+    order.dispatch.deliveredAt ||
+    order.updatedAt;
 
-      // Prevent duplicate consecutive entries
-      if (title === lastTitle) {
-        continue;
-      }
+  // SMS stages
+  const isWaitingSms = isShipped;
+  const waitingSmsTime = getTimelineTime("Waiting for SMS") || shippedTime;
 
-      items.push({
-        id: log.id || `hist-${new Date(log.timestamp).getTime()}-${items.length}`,
-        timestamp: log.timestamp || new Date().toISOString(),
-        title,
-        description: desc,
-      });
+  const isSmsSent =
+    order.sms.status === "SENT" ||
+    Boolean(getTimelineTime("SMS sent"));
+  const isSmsFailed = order.sms.status === "FAILED";
+  const smsTime = getTimelineTime("SMS sent") || order.sms.sentAt || order.updatedAt;
 
-      lastTitle = title;
-    }
-  }
+  const courierName = order.dispatch.courierName || "ST Courier";
 
-  // 3. Fallback for recorded order stages if missing from timeline
-  const existingTitles = new Set(items.map((i) => i.title));
-
-  if (order.confirmedAt && !existingTitles.has("Order confirmed")) {
-    items.push({
-      id: "stage-confirmed",
-      timestamp: order.confirmedAt,
+  // Build the 11 sequential stages
+  const stages: TrackingStage[] = [
+    // 1. Order placed
+    {
+      key: "ORDER_PLACED",
+      title: "Order placed",
+      description: order.source === "WEBSITE" ? "Order received from website" : "Order received from WhatsApp",
+      timestamp: createdTime,
+      completed: true,
+    },
+    // 2. Order processing
+    {
+      key: "PROCESSING",
+      title: "Order processing",
+      description: "Order is being processed",
+      timestamp: getTimelineTime("Order processing") || createdTime,
+      completed: true,
+    },
+    // 3. Order confirmed
+    {
+      key: "CONFIRMED",
       title: "Order confirmed",
-      description: "Updated from Orders",
-    });
-  }
-
-  if (order.packingStartedAt && !existingTitles.has("Packing started")) {
-    items.push({
-      id: "stage-packing",
-      timestamp: order.packingStartedAt,
+      description: "Order confirmed",
+      timestamp: confirmedTime,
+      completed: order.orderStatus !== "NEW",
+    },
+    // 4. Waiting for packing
+    {
+      key: "WAITING_PACKING",
+      title: "Waiting for packing",
+      description: "Order is ready for packing",
+      timestamp: waitingPackingTime,
+      completed: order.orderStatus !== "NEW",
+    },
+    // 5. Packing started
+    {
+      key: "PACKING_STARTED",
       title: "Packing started",
-      description: "Updated from Packing Station",
-    });
-  }
-
-  if (order.packedAt && !existingTitles.has("Order packed")) {
-    items.push({
-      id: "stage-packed",
-      timestamp: order.packedAt,
+      description: "Packing started",
+      timestamp: packingStartedTime,
+      completed: Boolean(isPackingStarted),
+    },
+    // 6. Order packed
+    {
+      key: "ORDER_PACKED",
       title: "Order packed",
-      description: "Updated from Packing Station",
-    });
-  }
-
-  if (order.dispatchedAt && !existingTitles.has("Order dispatched")) {
-    items.push({
-      id: "stage-dispatched",
-      timestamp: order.dispatchedAt,
+      description: "Order packed successfully",
+      timestamp: packedTime,
+      completed: Boolean(isPacked),
+    },
+    // 7. Order dispatched
+    {
+      key: "ORDER_DISPATCHED",
       title: "Order dispatched",
-      description: "Updated from Packing Station / Dispatch",
-    });
-  }
+      description: "Order dispatched",
+      timestamp: dispatchedTime,
+      completed: Boolean(isDispatched),
+    },
+    // 8. Waiting for shipment (Courier Hub)
+    {
+      key: "WAITING_SHIPMENT",
+      title: "Waiting for shipment",
+      description: `Order moved to ${courierName}${order.dispatch.llrNumber ? ` · LLR: ${order.dispatch.llrNumber}` : ""}`,
+      timestamp: waitingShipmentTime,
+      completed: Boolean(isMovedToCourier),
+    },
+    // 9. Shipped
+    {
+      key: "SHIPPED",
+      title: "Shipped",
+      description: `${courierName} marked the order as shipped`,
+      timestamp: shippedTime,
+      completed: Boolean(isShipped),
+    },
+    // 10. Waiting for SMS
+    {
+      key: "WAITING_SMS",
+      title: "Waiting for SMS",
+      description: "Customer notification pending",
+      timestamp: waitingSmsTime,
+      completed: Boolean(isWaitingSms),
+    },
+    // 11. SMS notification
+    {
+      key: "SMS_SENT",
+      title: isSmsFailed ? "SMS failed" : "SMS sent",
+      description: isSmsFailed 
+        ? "Customer notification could not be delivered" 
+        : "Customer notification sent",
+      timestamp: isSmsSent || isSmsFailed ? smsTime : undefined,
+      completed: Boolean(isSmsSent || isSmsFailed),
+    },
+  ];
 
-  if (order.dispatch.llrNumber && !existingTitles.has("LLR added") && !existingTitles.has("LLR updated")) {
-    const courier = order.dispatch.courierName || "ST Courier";
-    items.push({
-      id: "stage-llr",
-      timestamp: order.dispatch.dispatchedAt || order.dispatchedAt || order.updatedAt,
-      title: "LLR added",
-      description: `${courier} · LLR: ${order.dispatch.llrNumber}`,
-    });
-  }
-
-  if (
-    (order.dispatch.courierStatus === "SHIPPED" || (order.dispatch.courierStatus as string) === "DELIVERED") &&
-    !existingTitles.has("Courier status updated")
-  ) {
-    items.push({
-      id: "stage-courier-status",
-      timestamp: order.dispatch.deliveredAt || order.dispatch.dispatchedAt || order.updatedAt,
-      title: "Courier status updated",
-      description: order.dispatch.courierStatus === "DELIVERED" ? "Status: Delivered" : "Status: Dispatched",
-    });
-  }
-
-  if (order.sms.status === "SENT" && !existingTitles.has("SMS sent")) {
-    items.push({
-      id: "stage-sms-sent",
-      timestamp: order.sms.sentAt || order.dispatch.deliveredAt || order.updatedAt,
-      title: "SMS sent",
-      description: "Customer notification sent",
-    });
-  }
-
-  if (order.sms.deliveredAt && !existingTitles.has("SMS delivered")) {
-    items.push({
-      id: "stage-sms-delivered",
-      timestamp: order.sms.deliveredAt,
-      title: "SMS delivered",
-      description: "Customer notification delivered",
-    });
-  }
-
-  // 4. Sort chronologically
-  items.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-  // 5. Ensure "Order created" is always strictly the very first event
-  const createdIndex = items.findIndex((i) => i.title === "Order created");
-  if (createdIndex > 0) {
-    const [createdItem] = items.splice(createdIndex, 1);
-    items.unshift(createdItem);
-  }
-
-  // 6. Final deduplication of consecutive identical titles
-  const cleanItems: OrderHistoryItem[] = [];
-  for (const item of items) {
-    if (cleanItems.length > 0 && cleanItems[cleanItems.length - 1].title === item.title) {
-      continue;
+  // Current stage is the highest completed stage in sequential order
+  let currentIndex = 0;
+  for (let i = 0; i < stages.length; i++) {
+    if (stages[i].completed) {
+      currentIndex = i;
+    } else {
+      break;
     }
-    cleanItems.push(item);
   }
 
-  return cleanItems;
+  return { stages, currentIndex };
 }
 
 export function OrderDetailsDrawer({
@@ -289,6 +267,11 @@ export function OrderDetailsDrawer({
     }
   }, [order]);
 
+  const { stages, currentIndex } = useMemo(() => {
+    if (!order) return { stages: [], currentIndex: 0 };
+    return buildTrackingPipeline(order);
+  }, [order]);
+
   if (!isOpen || !order) return null;
 
   const handleSaveCourierDetails = () => {
@@ -302,7 +285,6 @@ export function OrderDetailsDrawer({
   };
 
   const canEditCourier = ["ADMIN", "MANAGER", "DISPATCH_STAFF"].includes(userRole);
-  const historyEntries = buildOrderHistory(order);
 
   // Clean Order ID for display (e.g. "17604")
   const displayOrderNum = order.externalOrderId || order.orderNumber.replace(/^(SC-WC-|OF-)/, "");
@@ -333,7 +315,7 @@ export function OrderDetailsDrawer({
             <OrderStatusBadge status={order.orderStatus} />
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
               title="Close panel"
             >
               <X className="w-5 h-5" />
@@ -510,13 +492,13 @@ export function OrderDetailsDrawer({
                           setCourierStatusInput(order.dispatch.courierStatus);
                           setIsEditingCourier(false);
                         }}
-                        className="px-3 py-1 text-xs text-slate-600 hover:bg-slate-200/50 rounded font-medium"
+                        className="px-3 py-1 text-xs text-slate-600 hover:bg-slate-200/50 rounded font-medium cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleSaveCourierDetails}
-                        className="inline-flex items-center gap-1 px-3 py-1 bg-orange-700 hover:bg-orange-800 text-white rounded text-xs font-medium shadow-xs"
+                        className="inline-flex items-center gap-1 px-3 py-1 bg-orange-700 hover:bg-orange-800 text-white rounded text-xs font-medium shadow-xs cursor-pointer"
                       >
                         <Save className="w-3 h-3" />
                         <span>Save</span>
@@ -525,7 +507,7 @@ export function OrderDetailsDrawer({
                   ) : (
                     <button
                       onClick={() => setIsEditingCourier(true)}
-                      className="px-3 py-1 text-xs text-orange-700 hover:bg-orange-50 border border-orange-200 rounded font-medium transition-colors"
+                      className="px-3 py-1 text-xs text-orange-700 hover:bg-orange-50 border border-orange-200 rounded font-medium transition-colors cursor-pointer"
                     >
                       {order.dispatch.llrNumber ? "Update LLR" : "Add LLR"}
                     </button>
@@ -587,7 +569,7 @@ export function OrderDetailsDrawer({
                   <button
                     type="button"
                     onClick={() => setShowTechDetails(!showTechDetails)}
-                    className="text-[11px] text-slate-500 hover:text-slate-800 font-medium inline-flex items-center gap-1"
+                    className="text-[11px] text-slate-500 hover:text-slate-800 font-medium inline-flex items-center gap-1 cursor-pointer"
                   >
                     <ChevronRight className={cn("w-3.5 h-3.5 transition-transform", showTechDetails && "rotate-90")} />
                     <span>{showTechDetails ? "Hide Technical Details" : "View Technical Details"}</span>
@@ -614,29 +596,88 @@ export function OrderDetailsDrawer({
             </div>
           </div>
 
-          {/* 6. ORDER HISTORY */}
-          <div className="p-4 bg-white rounded-lg border border-slate-200 shadow-xs space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Order History
-            </h3>
+          {/* 6. ORDER TRACKING (Amazon / Flipkart Style Vertical Timeline) */}
+          <div className="p-4 bg-white rounded-lg border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Order Tracking
+              </h3>
+              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                {stages[currentIndex]?.title || "In Progress"}
+              </span>
+            </div>
 
-            <div className="relative pl-5 space-y-4 border-l-2 border-slate-200 ml-2 mt-2">
-              {historyEntries.map((entry) => (
-                <div key={entry.id} className="relative group">
-                  <div className="absolute -left-[27px] top-1 w-3.5 h-3.5 rounded-full bg-white border-2 border-orange-600" />
-                  <div className="text-xs">
-                    <span className="text-[11px] text-slate-400 font-mono block">
-                      {formatDateTime(entry.timestamp)}
-                    </span>
-                    <span className="font-semibold text-slate-800 text-xs block mt-0.5">
-                      {entry.title}
-                    </span>
-                    <p className="text-slate-500 text-[11px] mt-0.5">
-                      {entry.description}
-                    </p>
+            <div className="relative pl-6 space-y-4 ml-1 mt-3">
+              {stages.map((stage, idx) => {
+                const isCompleted = idx < currentIndex;
+                const isCurrent = idx === currentIndex;
+                const isUpcoming = idx > currentIndex;
+                const isLast = idx === stages.length - 1;
+
+                return (
+                  <div key={stage.key} className="relative group">
+                    {/* Vertical connecting line to next item */}
+                    {!isLast && (
+                      <div
+                        className={cn(
+                          "absolute -left-[17px] top-4 w-0.5 h-[calc(100%+8px)] transition-colors",
+                          idx < currentIndex ? "bg-emerald-500" : "bg-slate-200"
+                        )}
+                      />
+                    )}
+
+                    {/* Status Dot */}
+                    <div
+                      className={cn(
+                        "absolute -left-[24px] top-1 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold transition-all",
+                        isCompleted && "bg-emerald-600 text-white shadow-2xs",
+                        isCurrent && "bg-emerald-600 text-white ring-4 ring-emerald-100 shadow-xs",
+                        isUpcoming && "bg-white border-2 border-slate-300 text-transparent"
+                      )}
+                    >
+                      {isCompleted ? "✓" : isCurrent ? "●" : ""}
+                    </div>
+
+                    {/* Content */}
+                    <div className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "font-semibold text-xs",
+                            isCompleted && "text-slate-900",
+                            isCurrent && "text-emerald-700 font-bold",
+                            isUpcoming && "text-slate-400 font-normal"
+                          )}
+                        >
+                          {stage.title}
+                        </span>
+                        {isCurrent && (
+                          <span className="text-[9px] px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-semibold uppercase tracking-tight">
+                            Current
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Timestamp (only for completed or current events) */}
+                      {(isCompleted || isCurrent) && stage.timestamp && (
+                        <span className="text-[11px] text-slate-500 font-mono block mt-0.5">
+                          {formatDateTime(stage.timestamp)}
+                        </span>
+                      )}
+
+                      {/* Description */}
+                      <p
+                        className={cn(
+                          "text-[11px] mt-0.5 leading-snug",
+                          isCompleted ? "text-slate-600" : isCurrent ? "text-slate-700 font-medium" : "text-slate-400"
+                        )}
+                      >
+                        {stage.description}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -647,7 +688,7 @@ export function OrderDetailsDrawer({
           <span>Order ID: <code className="font-mono text-slate-700">{order.orderNumber}</code></span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium rounded-md transition-colors"
+            className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium rounded-md transition-colors cursor-pointer"
           >
             Close
           </button>
