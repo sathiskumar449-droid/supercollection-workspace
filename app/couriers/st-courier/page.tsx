@@ -97,15 +97,20 @@ function StCourierContent() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // ONLY orders that have been marked as "DISPATCHED" in Packing Station (or already SHIPPED by courier)
+  // ONLY orders that have been marked as "DISPATCHED" in Packing Station (or subsequently SHIPPED in Courier Hub)
   const courierOrders = useMemo(() => {
-    return orders.filter((o) => 
-      o.orderStatus === "DISPATCHED" || 
-      o.dispatch.courierStatus === "SHIPPED" || 
-      (o.dispatch.courierStatus as string) === "DELIVERED" ||
-      Boolean(o.dispatchedAt) ||
-      Boolean(o.dispatch.dispatchedAt)
-    );
+    return orders.filter((o) => {
+      // Must be currently DISPATCHED in Packing Station
+      if (o.orderStatus === "DISPATCHED") return true;
+      // Or was dispatched from Packing Station and subsequently marked as SHIPPED in Courier Hub
+      if (
+        (o.dispatch.courierStatus === "SHIPPED" || (o.dispatch.courierStatus as string) === "DELIVERED") &&
+        (Boolean(o.dispatchedAt) || Boolean(o.dispatch.dispatchedAt))
+      ) {
+        return true;
+      }
+      return false;
+    });
   }, [orders]);
 
   // Metric counts across dispatched orders

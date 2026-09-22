@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       else orderStatus = "NEW";
 
       const paymentStatus = wc.status === "processing" || wc.status === "completed" ? "PAID" : wc.payment_method === "cod" ? "COD" : "PENDING";
-      const courierStatus = orderStatus === "COMPLETED" ? "SHIPPED" : "PENDING";
+      const courierStatus = "PENDING"; // Synced orders start as PENDING courier status; only dispatched orders from packing reach courier hub
 
       // 1. Safe Customer Lookup / Upsert (avoid 42P10 constraint error)
       let customerId: string | null = null;
@@ -159,11 +159,10 @@ export async function POST(req: NextRequest) {
       }
 
       // 2. Upsert Order
-      const orderNumber = `SC-WC-${wcId}`;
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .upsert({
-          order_number: orderNumber,
+          order_number: `SC-WC-${wcId}`,
           external_order_id: wcId,
           source: "WEBSITE",
           customer_id: customerId,
@@ -195,12 +194,20 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        // 4. Upsert Dispatch
-        await supabase.from("dispatches").upsert({
-          order_id: order.id,
-          courier_id: defaultCourierId,
-          courier_status: courierStatus,
-        }, { onConflict: "order_id" });
+        // 4. Ensure Dispatch record exists without overwriting staff updates
+        const { data: existingDisp } = await supabase
+          .from("dispatches")
+          .select("id")
+          .eq("order_id", order.id)
+          .maybeSingle();
+
+        if (!existingDisp) {
+          await supabase.from("dispatches").insert({
+            order_id: order.id,
+            courier_id: defaultCourierId,
+            courier_status: "PENDING",
+          });
+        }
 
         // 5. Activity Log
         await supabase.from("activity_logs").insert({

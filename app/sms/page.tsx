@@ -36,13 +36,11 @@ function SmsMonitoringContent() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshBanner, setRefreshBanner] = useState<string | null>(null);
 
-  // ONLY orders that have been marked as "SHIPPED" in Courier Hub
+  // ONLY orders that have been marked as "SHIPPED" in Courier Hub (after being dispatched from packing)
   const shippedOrders = useMemo(() => {
     return orders.filter((o) => 
-      o.dispatch.courierStatus === "SHIPPED" || 
-      (o.dispatch.courierStatus as string) === "DELIVERED" ||
-      Boolean(o.dispatch.deliveredAt) ||
-      (o.orderStatus === "COMPLETED" && (Boolean(o.dispatchedAt) || Boolean(o.dispatch.dispatchedAt)))
+      (o.dispatch.courierStatus === "SHIPPED" || (o.dispatch.courierStatus as string) === "DELIVERED") &&
+      (Boolean(o.dispatchedAt) || Boolean(o.dispatch.dispatchedAt))
     );
   }, [orders]);
 

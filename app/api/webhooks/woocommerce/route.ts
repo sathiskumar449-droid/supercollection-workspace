@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     else orderStatus = "NEW";
 
     const paymentStatus = body.status === "processing" || body.status === "completed" ? "PAID" : body.payment_method === "cod" ? "COD" : "PENDING";
-    const courierStatus = orderStatus === "COMPLETED" ? "SHIPPED" : "PENDING";
+    const courierStatus = "PENDING"; // Webhook orders start as PENDING courier status; only dispatched orders from packing reach courier hub
 
     const items = (body.line_items || []).map((item: any, idx: number) => ({
       product_name: item.name || "Product",
