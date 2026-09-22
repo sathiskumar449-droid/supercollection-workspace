@@ -2,17 +2,12 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
-  ShoppingBag,
   Box,
   Truck,
   Send,
   ArrowRight,
   ArrowUpRight,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   AlertTriangle,
   AlertCircle,
   CheckCircle2,
@@ -29,44 +24,14 @@ function getGreeting() {
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const { orders, user, setDateFilter, dateFilter, customDate } = useOrderFlow();
+  const { orders, dateFilter, customDate } = useOrderFlow();
 
-  // 1. Top Card: Today's Orders calculation from order createdAt date
-  const todayOrders = useMemo(() => {
-    return orders.filter((o) => matchesDateFilter(o.createdAt, "Today"));
-  }, [orders]);
-
-  const yesterdayOrders = useMemo(() => {
-    return orders.filter((o) => matchesDateFilter(o.createdAt, "Yesterday"));
-  }, [orders]);
-
-  const todayCount = todayOrders.length;
-  const yesterdayCount = yesterdayOrders.length;
-
-  // Comparison percentage vs yesterday (only shown when reliable data exists)
-  const comparison = useMemo(() => {
-    if (yesterdayCount <= 0) return null;
-    const diff = todayCount - yesterdayCount;
-    const percent = Math.round((diff / yesterdayCount) * 100);
-    return {
-      percent,
-      direction: percent > 0 ? ("up" as const) : percent < 0 ? ("down" as const) : ("flat" as const),
-      label: `${percent > 0 ? "+" : ""}${percent}% vs yesterday`,
-    };
-  }, [todayCount, yesterdayCount]);
-
-  const handleOpenTodayOrders = () => {
-    setDateFilter("Today");
-    router.push("/orders");
-  };
-
-  // 2. Packing Station Counts (matches Packing Station's exact criteria: non-NEW, non-RETURN)
+  // 1. Packing Station Counts (matches Packing Station's exact criteria: non-NEW, non-RETURN)
   const packingEligibleOrders = useMemo(() => {
     return orders.filter(
       (o) =>
@@ -219,60 +184,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ROW 1: TOP CARD — TODAY'S ORDERS */}
-      <div>
-        <div
-          onClick={handleOpenTodayOrders}
-          className="w-full sm:max-w-xs bg-white border border-orange-400/90 hover:border-orange-500 rounded-xl p-5 flex flex-col gap-2 transition-all duration-150 select-none hover:shadow-sm cursor-pointer group"
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              handleOpenTodayOrders();
-            }
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="p-2 rounded-lg bg-slate-100 text-slate-600">
-              <ShoppingBag className="w-4 h-4" />
-            </div>
-            <div className="flex items-center gap-1 text-slate-400 group-hover:text-orange-600 transition-colors">
-              <span className="text-[11px] font-medium">View</span>
-              <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-            </div>
-          </div>
-
-          <div className="mt-1">
-            <div
-              suppressHydrationWarning
-              className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight leading-none font-mono"
-            >
-              {todayCount}
-            </div>
-            <div className="text-xs font-medium text-slate-500 mt-1.5">
-              Today&apos;s Orders
-            </div>
-          </div>
-
-          {comparison && (
-            <div
-              className={cn(
-                "flex items-center gap-1 text-[11px] font-medium pt-1",
-                comparison.direction === "up" && "text-emerald-600",
-                comparison.direction === "down" && "text-red-500",
-                comparison.direction === "flat" && "text-slate-400"
-              )}
-            >
-              {comparison.direction === "up" && <TrendingUp className="w-3.5 h-3.5" />}
-              {comparison.direction === "down" && <TrendingDown className="w-3.5 h-3.5" />}
-              {comparison.direction === "flat" && <Minus className="w-3.5 h-3.5" />}
-              <span>{comparison.label}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ROW 2: MODULE CARDS (PACKING | COURIER | SMS) */}
+      {/* MODULE CARDS (PACKING | COURIER | SMS) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* PACKING CARD */}
         <div className="bg-white border border-orange-400/90 hover:border-orange-500 transition-colors rounded-xl p-5 shadow-xs flex flex-col">
