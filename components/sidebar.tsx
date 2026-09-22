@@ -40,6 +40,11 @@ export function Sidebar({
 
   // RBAC Permission checks
   const canAccess = (item: string): boolean => {
+    // Strict privacy & security: Courier users ONLY see Courier Hub
+    if (user.role === "COURIER") {
+      return item === "courier";
+    }
+
     switch (item) {
       case "dashboard":
         return ["ADMIN", "MANAGER"].includes(user.role);
@@ -48,6 +53,7 @@ export function Sidebar({
       case "packing":
         return ["ADMIN", "MANAGER", "PACKING_STAFF"].includes(user.role);
       case "courier":
+        return ["ADMIN", "MANAGER", "DISPATCH_STAFF", "COURIER"].includes(user.role);
       case "sms":
         return ["ADMIN", "MANAGER", "DISPATCH_STAFF"].includes(user.role);
       case "reports":
@@ -95,10 +101,10 @@ export function Sidebar({
     {
       id: "courier",
       label: "Courier",
-      href: "/couriers/st-courier",
+      href: "/couriers",
       exact: false,
       icon: Truck,
-      badge: badgeCounts.stMissingLlr && badgeCounts.stMissingLlr > 0 ? badgeCounts.stMissingLlr : undefined,
+      badge: user.role !== "COURIER" && badgeCounts.stMissingLlr && badgeCounts.stMissingLlr > 0 ? badgeCounts.stMissingLlr : undefined,
       badgeType: "warning",
     },
     {

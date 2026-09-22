@@ -16,15 +16,36 @@ import {
   Copy,
   ShieldCheck,
   CheckCircle2,
-  Lock
+  Lock,
+  Plus,
+  Pencil,
+  X,
+  AlertCircle
 } from "lucide-react";
-import { STAFF_USERS, INITIAL_COURIERS } from "@/lib/mock-data";
-import { Role } from "@/types/orderflow";
+import { STAFF_USERS } from "@/lib/mock-data";
+import { Role, Courier } from "@/types/orderflow";
+import { useOrderFlow } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"business" | "users" | "couriers" | "ping4sms" | "woocommerce" | "whatsapp">("business");
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const { courierPartners, addCourierPartner, updateCourierPartner, toggleCourierPartner } = useOrderFlow();
+
+  // Add courier modal state
+  const [showAddCourierModal, setShowAddCourierModal] = useState(false);
+  const [newCourierName, setNewCourierName] = useState("");
+  const [newCourierCode, setNewCourierCode] = useState("");
+  const [newCourierTracking, setNewCourierTracking] = useState("");
+  const [newCourierIsSt, setNewCourierIsSt] = useState(false);
+
+  // Edit courier modal state
+  const [editingCourier, setEditingCourier] = useState<Courier | null>(null);
+  const [editCourierName, setEditCourierName] = useState("");
+  const [editCourierCode, setEditCourierCode] = useState("");
+  const [editCourierTracking, setEditCourierTracking] = useState("");
+  const [editCourierIsSt, setEditCourierIsSt] = useState(false);
 
   // Masked secret fields visibility
   const [showPing4ApiKey, setShowPing4ApiKey] = useState(false);
@@ -199,7 +220,7 @@ export default function SettingsPage() {
 
                     <div className="flex items-center gap-3">
                       <span className="px-2.5 py-1 rounded-full font-semibold text-[11px] bg-slate-100 text-slate-800 border border-slate-200">
-                        {staff.role}
+                        {staff.role} {staff.courierPartnerId ? `(${staff.courierPartnerId})` : ""}
                       </span>
                       <span className="w-2 h-2 rounded-full bg-emerald-500" title="Active" />
                     </div>
@@ -212,33 +233,93 @@ export default function SettingsPage() {
           {/* 3. Couriers */}
           {activeTab === "couriers" && (
             <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Supported Courier Partners</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Couriers available for parcel handoff with automated tracking URL templates.
-                </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Supported Courier Partners</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Configure courier partners for parcel pickup and automated tracking URL templates.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewCourierName("");
+                    setNewCourierCode("");
+                    setNewCourierTracking("");
+                    setNewCourierIsSt(false);
+                    setShowAddCourierModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Courier Partner</span>
+                </button>
               </div>
 
-              <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden text-xs">
-                {INITIAL_COURIERS.map((courier) => (
-                  <div key={courier.id} className="p-3.5 flex items-center justify-between hover:bg-slate-50">
-                    <div>
-                      <div className="flex items-center gap-2">
+              {/* Courier Partner Privacy Notice */}
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-950 text-xs flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <span className="font-bold text-amber-900 block">Strict Courier Partner Privacy & Isolation</span>
+                  <p className="text-amber-800 text-[11px] leading-relaxed">
+                    Each courier partner user (e.g. ST Courier driver / manager) has an isolated portal view. They can only see and manage orders dispatched to their fleet. Multi-courier queues, other partner tabs, and cross-courier API requests are strictly blocked (403 Forbidden).
+                  </p>
+                </div>
+              </div>
+
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden text-xs bg-white">
+                {courierPartners.map((courier) => (
+                  <div key={courier.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-slate-900">{courier.name}</span>
+                        <span className="px-1.5 py-0.5 text-[10px] font-mono font-semibold bg-slate-100 text-slate-600 rounded border border-slate-200">
+                          {courier.code}
+                        </span>
                         {courier.isStCourier && (
                           <span className="px-2 py-0.5 text-[10px] font-bold bg-orange-100 text-orange-800 rounded">
                             Primary LLR Partner
                           </span>
                         )}
+                        <span className="px-2 py-0.5 text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded">
+                          🔒 Isolated Portal
+                        </span>
                       </div>
-                      <span className="text-[11px] font-mono text-slate-400 block mt-0.5">
-                        Tracking format: {courier.trackingUrlPattern}
+                      <span className="text-[11px] font-mono text-slate-400 block truncate">
+                        Tracking format: {courier.trackingUrlPattern || "Default web search"}
                       </span>
                     </div>
 
-                    <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Active Carrier
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={() => toggleCourierPartner(courier.id)}
+                        className={cn(
+                          "px-2.5 py-1 rounded text-[11px] font-medium border transition-colors",
+                          courier.active !== false
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                            : "bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200"
+                        )}
+                        title="Click to toggle active status"
+                      >
+                        {courier.active !== false ? "Active Carrier" : "Inactive"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingCourier(courier);
+                          setEditCourierName(courier.name);
+                          setEditCourierCode(courier.code);
+                          setEditCourierTracking(courier.trackingUrlPattern || "");
+                          setEditCourierIsSt(Boolean(courier.isStCourier));
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
+                        title="Edit courier configuration"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -457,6 +538,208 @@ export default function SettingsPage() {
 
         </div>
       </div>
+
+      {/* Add Courier Partner Modal */}
+      {showAddCourierModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900">Add New Courier Partner</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddCourierModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newCourierName.trim()) return;
+                addCourierPartner({
+                  name: newCourierName.trim(),
+                  code: newCourierCode.trim() || newCourierName.trim().toUpperCase().replace(/\s+/g, "_"),
+                  trackingUrlPattern: newCourierTracking.trim() || undefined,
+                  isStCourier: newCourierIsSt,
+                  active: true,
+                });
+                setShowAddCourierModal(false);
+                setSavedSuccess(true);
+                setTimeout(() => setSavedSuccess(false), 3000);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Carrier Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Blue Dart Express, Delhivery"
+                  value={newCourierName}
+                  onChange={(e) => {
+                    setNewCourierName(e.target.value);
+                    if (!newCourierCode) {
+                      setNewCourierCode(e.target.value.toUpperCase().replace(/\s+/g, "_"));
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Partner Code / Identifier</label>
+                <input
+                  type="text"
+                  placeholder="e.g. BLUEDART, DELHIVERY"
+                  value={newCourierCode}
+                  onChange={(e) => setNewCourierCode(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none font-mono focus:border-orange-500 uppercase"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">Used for RBAC portal mapping and API queries.</span>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Tracking URL Pattern</label>
+                <input
+                  type="text"
+                  placeholder="e.g. https://track.carrier.com/search?awb={llr}"
+                  value={newCourierTracking}
+                  onChange={(e) => setNewCourierTracking(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none font-mono focus:border-orange-500"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">Use {"{llr}"} or {"{trackingNumber}"} as placeholder for parcel LLR / AWB.</span>
+              </div>
+
+              <div className="pt-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newCourierIsSt}
+                    onChange={(e) => setNewCourierIsSt(e.target.checked)}
+                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                  />
+                  <span className="text-slate-700 font-medium">Designate as Primary LLR Partner</span>
+                </label>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCourierModal(false)}
+                  className="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold shadow-xs flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Save Partner</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Courier Partner Modal */}
+      {editingCourier && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900">Edit Courier Partner</h3>
+              <button
+                type="button"
+                onClick={() => setEditingCourier(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!editingCourier || !editCourierName.trim()) return;
+                updateCourierPartner(editingCourier.id, {
+                  name: editCourierName.trim(),
+                  code: editCourierCode.trim().toUpperCase().replace(/\s+/g, "_"),
+                  trackingUrlPattern: editCourierTracking.trim() || undefined,
+                  isStCourier: editCourierIsSt,
+                });
+                setEditingCourier(null);
+                setSavedSuccess(true);
+                setTimeout(() => setSavedSuccess(false), 3000);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Carrier Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editCourierName}
+                  onChange={(e) => setEditCourierName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Partner Code / Identifier</label>
+                <input
+                  type="text"
+                  value={editCourierCode}
+                  onChange={(e) => setEditCourierCode(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none font-mono focus:border-orange-500 uppercase"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Tracking URL Pattern</label>
+                <input
+                  type="text"
+                  placeholder="e.g. https://track.carrier.com/search?awb={llr}"
+                  value={editCourierTracking}
+                  onChange={(e) => setEditCourierTracking(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none font-mono focus:border-orange-500"
+                />
+              </div>
+
+              <div className="pt-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editCourierIsSt}
+                    onChange={(e) => setEditCourierIsSt(e.target.checked)}
+                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                  />
+                  <span className="text-slate-700 font-medium">Designate as Primary LLR Partner</span>
+                </label>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingCourier(null)}
+                  className="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold shadow-xs flex items-center gap-1.5"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

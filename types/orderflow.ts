@@ -1,12 +1,18 @@
 export type OrderStatus = "NEW" | "CONFIRMED" | "PACKING" | "PACKED" | "DISPATCHED" | "COMPLETED" | "RETURN";
 
-export type CourierStatus = "PENDING" | "SHIPPED" | "DISPATCHED" | "DELIVERED";
+export type CourierStatus = 
+  | "WAITING_FOR_PICKUP" 
+  | "PICKED_UP" 
+  | "DELIVERED" 
+  | "PENDING" 
+  | "SHIPPED" 
+  | "DISPATCHED";
 
 export type SmsStatus = "SENT" | "PENDING" | "FAILED";
 
 export type OrderSource = "WEBSITE" | "WHATSAPP" | "INSTAGRAM" | "DIRECT";
 
-export type Role = "ADMIN" | "MANAGER" | "ORDER_STAFF" | "PACKING_STAFF" | "DISPATCH_STAFF" | "SYSTEM";
+export type Role = "ADMIN" | "MANAGER" | "ORDER_STAFF" | "PACKING_STAFF" | "DISPATCH_STAFF" | "COURIER" | "SYSTEM";
 
 export type PaymentStatus = "PAID" | "COD" | "PENDING";
 
@@ -37,9 +43,13 @@ export interface OrderItem {
 export interface DispatchInfo {
   courierId: string;
   courierName: string;
+  courierPartnerId?: string; // e.g. "ST_COURIER" | "PROFESSIONAL" | "DTDC" | "UNASSIGNED"
+  dispatchId?: string; // Auto-generated e.g. "DSP-260922-001"
   llrNumber?: string;
+  pickupPhone?: string; // Courier pickup person's phone number (separate from customer mobile)
   courierStatus: CourierStatus;
   dispatchedAt?: string;
+  pickedUpAt?: string;
   deliveredAt?: string;
   estimatedDelivery?: string;
   notes?: string;
@@ -108,6 +118,7 @@ export interface UserSession {
   role: Role;
   avatarUrl?: string;
   online: boolean;
+  courierPartnerId?: string; // e.g. "ST_COURIER" | "PROFESSIONAL" | "DTDC"
 }
 
 export interface ActionRequiredItem {

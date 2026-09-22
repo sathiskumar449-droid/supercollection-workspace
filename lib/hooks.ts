@@ -69,6 +69,11 @@ export function useOrderFlow() {
     bulkUpdateCourierStatus: orderflowStore.bulkUpdateCourierStatus.bind(orderflowStore),
     syncPing4SmsStatus: orderflowStore.syncPing4SmsStatus.bind(orderflowStore),
     bulkSyncPing4SmsStatus: orderflowStore.syncPing4SmsStatus.bind(orderflowStore),
+    courierPartners: orderflowStore.getCourierPartners(),
+    addCourierPartner: orderflowStore.addCourierPartner.bind(orderflowStore),
+    updateCourierPartner: orderflowStore.updateCourierPartner.bind(orderflowStore),
+    toggleCourierPartner: orderflowStore.toggleCourierPartner.bind(orderflowStore),
+    userOrders: orderflowStore.getOrdersForUser(user),
     switchRole: orderflowStore.switchRole.bind(orderflowStore),
     resetData: orderflowStore.resetData.bind(orderflowStore),
   };

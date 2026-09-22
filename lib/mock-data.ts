@@ -2,10 +2,8 @@ import { Customer, Order, OrderItem, Courier, UserSession, ActivityLog } from "@
 
 export const INITIAL_COURIERS: Courier[] = [
   { id: "cour-1", name: "ST Courier", code: "ST_COURIER", isStCourier: true, trackingUrlPattern: "https://stcourier.com/track?llr={llr}", active: true },
-  { id: "cour-2", name: "Delhivery", code: "DELHIVERY", isStCourier: false, trackingUrlPattern: "https://www.delhivery.com/track/package/{llr}", active: true },
+  { id: "cour-2", name: "Professional Courier", code: "PROFESSIONAL", isStCourier: false, trackingUrlPattern: "https://www.tpcindia.com/track.aspx?doc_no={llr}", active: true },
   { id: "cour-3", name: "DTDC", code: "DTDC", isStCourier: false, trackingUrlPattern: "https://www.dtdc.in/tracking/tracking_results.asp?trkid={llr}", active: true },
-  { id: "cour-4", name: "Blue Dart", code: "BLUE_DART", isStCourier: false, trackingUrlPattern: "https://www.bluedart.com/tracking?handler=t&awb=awb&numbers={llr}", active: true },
-  { id: "cour-5", name: "The Professional Couriers", code: "TPC", isStCourier: false, trackingUrlPattern: "https://www.tpcindia.com/track.aspx?doc_no={llr}", active: true },
 ];
 
 export const CURRENT_USER: UserSession = {
@@ -23,6 +21,9 @@ export const STAFF_USERS: UserSession[] = [
   { id: "usr-3", name: "Deepa Verma", email: "deepa.order@orderflow.internal", role: "ORDER_STAFF", online: true },
   { id: "usr-4", name: "Muthu Kumar", email: "muthu.pack@orderflow.internal", role: "PACKING_STAFF", online: true },
   { id: "usr-5", name: "Saravanan P", email: "saravanan.disp@orderflow.internal", role: "DISPATCH_STAFF", online: true },
+  { id: "usr-st", name: "ST Courier Portal", email: "portal@stcourier.in", role: "COURIER", courierPartnerId: "ST_COURIER", online: true },
+  { id: "usr-prof", name: "Professional Courier Portal", email: "portal@tpcindia.com", role: "COURIER", courierPartnerId: "PROFESSIONAL", online: true },
+  { id: "usr-dtdc", name: "DTDC Hub Portal", email: "portal@dtdc.com", role: "COURIER", courierPartnerId: "DTDC", online: true },
 ];
 
 export const MOCK_CUSTOMERS: Customer[] = [
@@ -201,7 +202,7 @@ export function generateMockOrders(): Order[] {
       packedAt = new Date(new Date(packingStartedAt).getTime() + 18 * 60 * 1000).toISOString();
       packingStaff = "Muthu Kumar";
       updatedAt = packedAt;
-      courierStatus = "PENDING";
+      courierStatus = "WAITING_FOR_PICKUP";
       smsStatus = "PENDING";
     } else {
       // Remaining are DISPATCHED (orders 32 to 102 = 71 dispatched orders)
@@ -213,23 +214,58 @@ export function generateMockOrders(): Order[] {
       packingStaff = "Muthu Kumar";
       updatedAt = dispatchedAt;
 
-      // Assign LLR and Courier status
-      // We need exactly 5 ST Courier orders missing LLR (let's assign orders 32, 33, 34, 35, 36 to ST Courier without LLR!)
-      if (i >= 32 && i <= 36) {
+      // Courier Partner assignment: ST Courier (majority), Professional Courier, DTDC, or Unassigned
+      let courierPartnerId: string | undefined = "ST_COURIER";
+      if (i % 7 === 0) {
+        courierId = "cour-2";
+        courierName = "Professional Courier";
+        courierPartnerId = "PROFESSIONAL";
+        isSt = false;
+      } else if (i % 5 === 0) {
+        courierId = "cour-3";
+        courierName = "DTDC";
+        courierPartnerId = "DTDC";
+        isSt = false;
+      } else if (i === 101) {
+        courierId = "unassigned";
+        courierName = "Unassigned";
+        courierPartnerId = undefined;
+        isSt = false;
+      } else {
         courierId = "cour-1";
         courierName = "ST Courier";
+        courierPartnerId = "ST_COURIER";
         isSt = true;
-        llrNumber = undefined; // Missing LLR!
-        courierStatus = "PENDING";
-      } else {
-        llrNumber = isSt ? `STC${800000 + i}` : `TRK${900000 + i}`;
-        courierStatus = i % 4 === 0 ? "SHIPPED" : "PENDING";
       }
 
-      // SMS status handling:
-      // We need exactly 6 dispatched orders with SMS pending (orders 37, 38, 39, 40, 41, 42)
-      // and exactly 3 SMS failed (orders 43, 44, 45)
-      // all others SENT
+      // Assign LLR, Pickup Phone, and Courier Status
+      let pickupPhone: string | undefined = undefined;
+      const dispSeq = String(i - 31).padStart(3, "0");
+      const dispatchId = `DSP-260922-${dispSeq}`;
+
+      if (i >= 32 && i <= 36) {
+        // Missing LLR, Waiting for Pickup
+        llrNumber = undefined;
+        courierStatus = "WAITING_FOR_PICKUP";
+        pickupPhone = undefined;
+      } else if (i % 4 === 0) {
+        // Delivered
+        llrNumber = isSt ? `ST${100000 + i}` : courierPartnerId === "PROFESSIONAL" ? `TPC${200000 + i}` : `DTDC${300000 + i}`;
+        courierStatus = "DELIVERED";
+        pickupPhone = "+91 98410 23456";
+      } else if (i % 2 === 0) {
+        // Picked Up
+        llrNumber = isSt ? `ST${100000 + i}` : courierPartnerId === "PROFESSIONAL" ? `TPC${200000 + i}` : `DTDC${300000 + i}`;
+        courierStatus = "PICKED_UP";
+        pickupPhone = "+91 91234 56789";
+      } else {
+        // Waiting for Pickup with LLR pre-printed
+        llrNumber = isSt ? `ST${100000 + i}` : courierPartnerId === "PROFESSIONAL" ? `TPC${200000 + i}` : `DTDC${300000 + i}`;
+        courierStatus = "WAITING_FOR_PICKUP";
+        pickupPhone = undefined;
+      }
+
+      // SMS status handling
       if (i >= 37 && i <= 42) {
         smsStatus = "PENDING";
         smsMsgId = `PING-REQ-${77000 + i}`;
@@ -242,47 +278,28 @@ export function generateMockOrders(): Order[] {
       }
     }
 
-    // Build timeline logs
+    // Build chronological timeline logs (Flipkart / Amazon style with real events)
     const timeline: ActivityLog[] = [
       {
         id: `tl-${i}-1`,
         orderId: `ord-${i}`,
         timestamp: createdAt,
-        user: source === "WEBSITE" ? "WooCommerce Webhook" : "WhatsApp Chat Box",
+        user: source === "WEBSITE" ? "Website" : "WhatsApp",
         role: "ORDER_STAFF",
-        action: "Order Created",
-        details: `Imported from ${source} (${externalOrderId})`,
+        action: "Order created",
+        details: source === "WEBSITE" ? "Order received from website" : "Order received from WhatsApp",
       },
     ];
 
-    if (orderStatus === "CONFIRMED") {
+    if (confirmedAt) {
       timeline.push({
         id: `tl-${i}-2`,
         orderId: `ord-${i}`,
-        timestamp: confirmedAt || createdAt,
-        user: "Orders System",
-        role: "ORDER_STAFF" as const,
-        action: "Order processing",
-        details: "Order is being processed",
-      });
-    } else if (orderStatus !== "NEW") {
-      timeline.push({
-        id: `tl-${i}-2`,
-        orderId: `ord-${i}`,
-        timestamp: confirmedAt || createdAt,
-        user: "WooCommerce",
-        role: "ORDER_STAFF" as const,
-        action: "Order completed",
-        details: "Order completed in WooCommerce",
-      });
-      timeline.push({
-        id: `tl-${i}-2-pack`,
-        orderId: `ord-${i}`,
-        timestamp: new Date(new Date(confirmedAt || createdAt).getTime() + 1000).toISOString(),
-        user: "Packing Station",
-        role: "PACKING_STAFF" as const,
-        action: "Waiting for packing",
-        details: "Order is ready for packing",
+        timestamp: confirmedAt,
+        user: "Staff",
+        role: "ORDER_STAFF",
+        action: "Order confirmed",
+        details: "Order confirmed by staff",
       });
     }
 
@@ -292,9 +309,9 @@ export function generateMockOrders(): Order[] {
         orderId: `ord-${i}`,
         timestamp: packingStartedAt,
         user: packingStaff || "Muthu Kumar",
-        role: "PACKING_STAFF" as const,
-        action: "Packing Started",
-        details: "Assigned to packing bin #B" + ((i % 12) + 1),
+        role: "PACKING_STAFF",
+        action: "Packing started",
+        details: "Packing started at warehouse station",
       });
     }
 
@@ -304,9 +321,9 @@ export function generateMockOrders(): Order[] {
         orderId: `ord-${i}`,
         timestamp: packedAt,
         user: packingStaff || "Muthu Kumar",
-        role: "PACKING_STAFF" as const,
-        action: "Order Packed",
-        details: "Quality check passed, polybag sealed",
+        role: "PACKING_STAFF",
+        action: "Order packed",
+        details: "Order packed",
       });
     }
 
@@ -315,44 +332,65 @@ export function generateMockOrders(): Order[] {
         id: `tl-${i}-5`,
         orderId: `ord-${i}`,
         timestamp: dispatchedAt,
-        user: "Saravanan P",
-        role: "DISPATCH_STAFF" as const,
-        action: "Order Dispatched",
-        details: `Handed over to ${courierName}${llrNumber ? ` (LLR: ${llrNumber})` : " (LLR Pending)"}`,
+        user: "Packing Staff",
+        role: "PACKING_STAFF",
+        action: "Order dispatched",
+        details: "Sent to courier pickup",
       });
 
-      if (courierStatus === "SHIPPED") {
+      timeline.push({
+        id: `tl-${i}-5b`,
+        orderId: `ord-${i}`,
+        timestamp: new Date(new Date(dispatchedAt).getTime() + 60 * 1000).toISOString(),
+        user: "Courier Hub",
+        role: "DISPATCH_STAFF",
+        action: "Courier pickup waiting",
+        details: `Courier: ${courierName}`,
+      });
+
+      if (courierStatus === "PICKED_UP" || courierStatus === "DELIVERED") {
         timeline.push({
           id: `tl-${i}-6`,
           orderId: `ord-${i}`,
-          timestamp: new Date(new Date(dispatchedAt).getTime() + 15 * 60 * 1000).toISOString(),
-          user: "Saravanan P",
-          role: "DISPATCH_STAFF" as const,
-          action: "Order Shipped",
-          details: `In transit via ${courierName}${llrNumber ? ` (LLR: ${llrNumber})` : ""}`,
+          timestamp: new Date(new Date(dispatchedAt).getTime() + 20 * 60 * 1000).toISOString(),
+          user: courierName,
+          role: "DISPATCH_STAFF",
+          action: "Courier picked up",
+          details: `LLR: ${llrNumber || "N/A"}${courierName ? ` · ${courierName}` : ""}`,
         });
 
+        if (smsStatus === "SENT") {
+          timeline.push({
+            id: `tl-${i}-7`,
+            orderId: `ord-${i}`,
+            timestamp: new Date(new Date(dispatchedAt).getTime() + 22 * 60 * 1000).toISOString(),
+            user: "Ping4SMS",
+            role: "SYSTEM",
+            action: "SMS sent",
+            details: "Customer notification sent",
+          });
+        }
+      }
+
+      if (courierStatus === "DELIVERED") {
         timeline.push({
-          id: `tl-${i}-7`,
+          id: `tl-${i}-8`,
           orderId: `ord-${i}`,
-          timestamp: new Date(new Date(dispatchedAt).getTime() + 18 * 60 * 1000).toISOString(),
-          user: "Ping4SMS Gateway",
-          role: "SYSTEM" as const,
-          action: "SMS Sent",
-          details: `Tracking SMS sent to customer ${customer.mobile} (MsgID: ${smsMsgId || "P4S-SHIP-770" + i})`,
-        });
-      } else if (smsStatus && smsStatus !== "PENDING") {
-        timeline.push({
-          id: `tl-${i}-6`,
-          orderId: `ord-${i}`,
-          timestamp: new Date(new Date(dispatchedAt).getTime() + 2 * 60 * 1000).toISOString(),
-          user: "Ping4SMS Service",
-          role: "MANAGER" as const,
-          action: "SMS Status Updated",
-          details: `Delivery telemetry status: ${smsStatus} (MsgID: ${smsMsgId || "N/A"})`,
+          timestamp: new Date(new Date(dispatchedAt).getTime() + 24 * 3600 * 1000).toISOString(),
+          user: courierName,
+          role: "DISPATCH_STAFF",
+          action: "Delivered",
+          details: "Parcel delivered to customer",
         });
       }
     }
+
+    const dispSeq = String(Math.max(1, i - 31)).padStart(3, "0");
+    const dispatchId = orderStatus === "DISPATCHED" ? `DSP-260922-${dispSeq}` : undefined;
+    const courierPartnerId = 
+      courierName === "Professional Courier" ? "PROFESSIONAL" :
+      courierName === "DTDC" ? "DTDC" :
+      courierName === "Unassigned" ? undefined : "ST_COURIER";
 
     orders.push({
       id: `ord-${i}`,
@@ -367,10 +405,14 @@ export function generateMockOrders(): Order[] {
       dispatch: {
         courierId,
         courierName,
+        courierPartnerId,
+        dispatchId,
         llrNumber,
+        pickupPhone: (courierStatus === "PICKED_UP" || courierStatus === "DELIVERED") ? "+91 91234 56789" : undefined,
         courierStatus,
         dispatchedAt,
-        deliveredAt: (courierStatus === "SHIPPED" || (courierStatus as string) === "DELIVERED") ? new Date(new Date(dispatchedAt || createdAt).getTime() + 24 * 3600 * 1000).toISOString() : undefined,
+        pickedUpAt: (courierStatus === "PICKED_UP" || courierStatus === "DELIVERED") ? new Date(new Date(dispatchedAt || createdAt).getTime() + 20 * 60 * 1000).toISOString() : undefined,
+        deliveredAt: courierStatus === "DELIVERED" ? new Date(new Date(dispatchedAt || createdAt).getTime() + 24 * 3600 * 1000).toISOString() : undefined,
       },
       sms: {
         status: smsStatus,

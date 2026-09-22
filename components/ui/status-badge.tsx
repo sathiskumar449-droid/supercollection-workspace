@@ -72,6 +72,21 @@ export function OrderStatusBadge({ status, className }: { status: OrderStatus; c
 
 export function CourierStatusBadge({ status, className }: { status: CourierStatus; className?: string }) {
   const configs: Record<CourierStatus, { label: string; text: string; dotClass: string }> = {
+    WAITING_FOR_PICKUP: {
+      label: "Waiting for Pickup",
+      text: "text-amber-700",
+      dotClass: "bg-amber-500",
+    },
+    PICKED_UP: {
+      label: "Picked Up",
+      text: "text-blue-700",
+      dotClass: "bg-blue-500",
+    },
+    DELIVERED: {
+      label: "Delivered",
+      text: "text-emerald-700",
+      dotClass: "bg-emerald-500",
+    },
     PENDING: {
       label: "Pending",
       text: "text-amber-600",
@@ -79,16 +94,11 @@ export function CourierStatusBadge({ status, className }: { status: CourierStatu
     },
     SHIPPED: {
       label: "Shipped",
-      text: "text-emerald-600",
-      dotClass: "bg-emerald-500",
+      text: "text-indigo-600",
+      dotClass: "bg-indigo-500",
     },
     DISPATCHED: {
-      label: "Shipped",
-      text: "text-emerald-600",
-      dotClass: "bg-emerald-500",
-    },
-    DELIVERED: {
-      label: "Shipped",
+      label: "Dispatched",
       text: "text-emerald-600",
       dotClass: "bg-emerald-500",
     },

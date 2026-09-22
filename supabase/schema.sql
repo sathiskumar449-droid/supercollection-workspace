@@ -133,14 +133,20 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE TABLE IF NOT EXISTS dispatches (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID UNIQUE NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    dispatch_id VARCHAR(64) UNIQUE, -- Unique auto-generated ID: e.g. DSP-260922-001
     courier_id UUID REFERENCES couriers(id) ON DELETE SET NULL,
+    courier_partner_id VARCHAR(64), -- 'ST_COURIER', 'PROFESSIONAL', 'DTDC'
     llr_number VARCHAR(64),
+    pickup_phone VARCHAR(32), -- Dedicated pickup person phone number (separate from customer mobile)
     courier_status courier_status NOT NULL DEFAULT 'PENDING',
     dispatched_at TIMESTAMPTZ,
+    picked_up_at TIMESTAMPTZ,
     shipped_at TIMESTAMPTZ,
     notes TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_dispatches_dispatch_id ON dispatches(dispatch_id);
+CREATE INDEX IF NOT EXISTS idx_dispatches_courier_partner ON dispatches(courier_partner_id);
 CREATE INDEX IF NOT EXISTS idx_dispatches_llr ON dispatches(llr_number);
 CREATE INDEX IF NOT EXISTS idx_dispatches_courier_status ON dispatches(courier_status);
 

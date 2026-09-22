@@ -21,7 +21,7 @@ interface TopBarProps {
   title: string;
   breadcrumbs?: { label: string; href?: string }[];
   user: UserSession;
-  onRoleChange: (role: Role) => void;
+  onRoleChange: (role: Role, courierPartnerId?: string) => void;
   onOpenSearch: () => void;
   onResetData?: () => void;
   searchQuery?: string;
@@ -32,12 +32,22 @@ interface TopBarProps {
   onCustomDateChange?: (date: string) => void;
 }
 
-const ROLES_LIST: { role: Role; label: string; desc: string }[] = [
+interface RoleOption {
+  role: Role;
+  courierPartnerId?: string;
+  label: string;
+  desc: string;
+}
+
+const ROLES_LIST: RoleOption[] = [
   { role: "ADMIN", label: "Admin", desc: "Full Unrestricted Access" },
   { role: "MANAGER", label: "Operations Manager", desc: "Fulfillment, Reports, Courier & SMS" },
   { role: "ORDER_STAFF", label: "Order Desk Staff", desc: "Orders & Confirmations" },
   { role: "PACKING_STAFF", label: "Packing Station", desc: "Dedicated Packing & Packed" },
   { role: "DISPATCH_STAFF", label: "Dispatch & Logistics", desc: "Dispatch, ST Courier, LLR, SMS" },
+  { role: "COURIER", courierPartnerId: "ST_COURIER", label: "ST Courier Portal", desc: "Strict Privacy: ST Orders Only" },
+  { role: "COURIER", courierPartnerId: "PROFESSIONAL_COURIER", label: "Professional Courier Portal", desc: "Strict Privacy: Professional Orders Only" },
+  { role: "COURIER", courierPartnerId: "DTDC", label: "DTDC Hub Portal", desc: "Strict Privacy: DTDC Orders Only" },
 ];
 
 export function TopBar({
@@ -220,41 +230,47 @@ export function TopBar({
             <div className="text-left hidden sm:block">
               <span className="text-[10px] text-slate-400 block -mb-0.5 uppercase tracking-wide">Role</span>
               <span className="font-semibold text-slate-800 text-xs">
-                {ROLES_LIST.find((r) => r.role === user.role)?.label || user.role}
+                {ROLES_LIST.find((r) => r.role === user.role && (!r.courierPartnerId || user.courierPartnerId === r.courierPartnerId))?.label ||
+                  (user.role === "COURIER" ? `${user.name || "Courier Portal"}` : user.role)}
               </span>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-1" />
           </button>
 
           {roleDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 max-h-[80vh] overflow-y-auto">
               <div className="px-2.5 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                Switch Role (Test RBAC)
+                Switch Role / Portal (Test RBAC)
               </div>
               <div className="space-y-0.5">
-                {ROLES_LIST.map((r) => (
-                  <button
-                    key={r.role}
-                    onClick={() => {
-                      onRoleChange(r.role);
-                      setRoleDropdownOpen(false);
-                    }}
-                    className={cn(
-                      "w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors",
-                      user.role === r.role
-                        ? "bg-orange-50 text-orange-950 font-semibold"
-                        : "hover:bg-slate-50 text-slate-700"
-                    )}
-                  >
-                    <div>
-                      <div className="font-medium">{r.label}</div>
-                      <div className="text-[10px] text-slate-400 font-normal">{r.desc}</div>
-                    </div>
-                    {user.role === r.role && (
-                      <Check className="w-4 h-4 text-orange-600 shrink-0" />
-                    )}
-                  </button>
-                ))}
+                {ROLES_LIST.map((r) => {
+                  const isSelected =
+                    user.role === r.role &&
+                    (!r.courierPartnerId || user.courierPartnerId === r.courierPartnerId);
+                  return (
+                    <button
+                      key={`${r.role}-${r.courierPartnerId || "default"}`}
+                      onClick={() => {
+                        onRoleChange(r.role, r.courierPartnerId);
+                        setRoleDropdownOpen(false);
+                      }}
+                      className={cn(
+                        "w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors",
+                        isSelected
+                          ? "bg-orange-50 text-orange-950 font-semibold"
+                          : "hover:bg-slate-50 text-slate-700"
+                      )}
+                    >
+                      <div>
+                        <div className="font-medium">{r.label}</div>
+                        <div className="text-[10px] text-slate-400 font-normal">{r.desc}</div>
+                      </div>
+                      {isSelected && (
+                        <Check className="w-4 h-4 text-orange-600 shrink-0" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

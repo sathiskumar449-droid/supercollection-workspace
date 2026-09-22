@@ -1,4 +1,4 @@
-import { Order, OrderStatus, OrderSource, CourierStatus, SmsStatus, Role, UserSession, ActivityLog, DashboardMetrics, ActionRequiredItem } from "@/types/orderflow";
+import { Order, OrderItem, OrderStatus, OrderSource, CourierStatus, SmsStatus, Role, UserSession, ActivityLog, DashboardMetrics, ActionRequiredItem, Courier } from "@/types/orderflow";
 import { generateMockOrders, CURRENT_USER, INITIAL_COURIERS, STAFF_USERS } from "./mock-data";
 import { matchesDateFilter } from "./utils";
 import { 
@@ -11,15 +11,39 @@ import {
 
 const STORAGE_KEY_ORDERS = "orderflow_orders_v1";
 const STORAGE_KEY_USER = "orderflow_current_user_v1";
+const STORAGE_KEY_COURIERS = "orderflow_courier_partners_v1";
 
 // Global in-memory cache
 let globalOrders: Order[] = [];
 let globalUser: UserSession = CURRENT_USER;
+let globalCouriers: Courier[] = [...INITIAL_COURIERS];
 let globalSearchQuery: string = "";
 let globalDateFilter: string = "All";
 let globalCustomDate: string = "";
 let listeners: Array<() => void> = [];
 let supabaseInitialized = false;
+
+export function generateDispatchId(existingOrders: Order[] = globalOrders): string {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const prefix = `DSP-${yy}${mm}${dd}-`;
+
+  let maxSeq = 0;
+  existingOrders.forEach((o) => {
+    const dispId = o.dispatch?.dispatchId;
+    if (dispId && dispId.startsWith(prefix)) {
+      const seqStr = dispId.slice(prefix.length);
+      const seq = parseInt(seqStr, 10);
+      if (!isNaN(seq) && seq > maxSeq) {
+        maxSeq = seq;
+      }
+    }
+  });
+
+  return `${prefix}${String(maxSeq + 1).padStart(3, "0")}`;
+}
 
 function notifyListeners() {
   listeners.forEach((listener) => listener());
@@ -209,12 +233,87 @@ export const orderflowStore = {
     return globalUser;
   },
 
-  switchRole(role: Role) {
-    const matched = STAFF_USERS.find((u) => u.role === role) || {
+  switchRole(role: Role, courierPartnerId?: string) {
+    const matched = STAFF_USERS.find((u) => {
+      if (role === "COURIER") {
+        return u.role === "COURIER" && (!courierPartnerId || u.courierPartnerId === courierPartnerId);
+      }
+      return u.role === role;
+    }) || {
       ...globalUser,
       role,
+      courierPartnerId: role === "COURIER" ? (courierPartnerId || "ST_COURIER") : undefined,
     };
     persistUser(matched);
+  },
+
+  getCourierPartners(): Courier[] {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(STORAGE_KEY_COURIERS);
+        if (cached) {
+          globalCouriers = JSON.parse(cached);
+          return globalCouriers;
+        }
+      } catch {}
+    }
+    return globalCouriers;
+  },
+
+  addCourierPartner(partner: Omit<Courier, "id">): Courier {
+    const id = `cour-${Date.now()}`;
+    const newPartner: Courier = {
+      id,
+      name: partner.name.trim(),
+      code: partner.code.trim().toUpperCase().replace(/\s+/g, "_"),
+      isStCourier: Boolean(partner.isStCourier),
+      trackingUrlPattern: partner.trackingUrlPattern || `https://track.${partner.name.toLowerCase().replace(/\s+/g, "")}.com?llr={llr}`,
+      active: true,
+    };
+    globalCouriers = [...globalCouriers, newPartner];
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(STORAGE_KEY_COURIERS, JSON.stringify(globalCouriers));
+      } catch {}
+    }
+    notifyListeners();
+    return newPartner;
+  },
+
+  updateCourierPartner(id: string, updates: Partial<Courier>): boolean {
+    const index = globalCouriers.findIndex((c) => c.id === id);
+    if (index === -1) return false;
+    globalCouriers[index] = { ...globalCouriers[index], ...updates };
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(STORAGE_KEY_COURIERS, JSON.stringify(globalCouriers));
+      } catch {}
+    }
+    notifyListeners();
+    return true;
+  },
+
+  toggleCourierPartner(id: string): boolean {
+    const partner = globalCouriers.find((c) => c.id === id);
+    if (!partner) return false;
+    return this.updateCourierPartner(id, { active: !partner.active });
+  },
+
+  getOrdersForUser(user?: UserSession): Order[] {
+    const all = this.getOrders();
+    const currentUser = user || globalUser;
+    if (currentUser.role === "COURIER") {
+      const partnerId = currentUser.courierPartnerId || "ST_COURIER";
+      return all.filter((o) => o.dispatch?.courierPartnerId === partnerId);
+    }
+    return all;
+  },
+
+  canUserAccessOrder(user: UserSession, order: Order): boolean {
+    if (user.role === "COURIER") {
+      return order.dispatch?.courierPartnerId === user.courierPartnerId;
+    }
+    return true;
   },
 
   resetData() {
@@ -398,16 +497,40 @@ export const orderflowStore = {
   },
 
   // 4. Mark as Dispatched
-  markAsDispatched(orderId: string, courierId?: string, llrNumber?: string) {
+  markAsDispatched(orderId: string, courierPartnerCodeOrId?: string, llrNumber?: string) {
     const orderIndex = globalOrders.findIndex((o) => o.id === orderId);
     if (orderIndex === -1) return { success: false };
 
     const order = globalOrders[orderIndex];
     const now = new Date().toISOString();
-    const selectedCourier = INITIAL_COURIERS.find((c) => c.id === courierId) || {
-      id: order.dispatch.courierId,
-      name: order.dispatch.courierName,
-    };
+
+    // Auto-generate Dispatch ID if not already present
+    const dispatchId = order.dispatch.dispatchId || generateDispatchId(globalOrders);
+
+    // Look up courier partner
+    const couriersList = this.getCourierPartners();
+    let selectedCourier = couriersList.find(
+      (c) => c.code === courierPartnerCodeOrId || c.id === courierPartnerCodeOrId || c.name === courierPartnerCodeOrId
+    );
+    if (!selectedCourier) {
+      if (courierPartnerCodeOrId === "unassigned") {
+        selectedCourier = {
+          id: "unassigned",
+          name: "Unassigned",
+          code: "UNASSIGNED",
+          isStCourier: false,
+          active: true,
+        };
+      } else {
+        selectedCourier = couriersList.find((c) => c.isStCourier) || couriersList[0] || {
+          id: "cour-1",
+          name: "ST Courier",
+          code: "ST_COURIER",
+          isStCourier: true,
+          active: true,
+        };
+      }
+    }
 
     const finalLlr = llrNumber || order.dispatch.llrNumber;
     const newEntries: ActivityLog[] = [];
@@ -420,21 +543,21 @@ export const orderflowStore = {
         user: globalUser.name,
         role: globalUser.role,
         action: "Order dispatched",
-        details: "Order dispatched",
+        details: "Sent to courier pickup",
         oldValue: order.orderStatus,
         newValue: "DISPATCHED",
       });
     }
 
-    if (!order.timeline.some((t) => t.action === "Waiting for shipment")) {
+    if (!order.timeline.some((t) => t.action === "Courier pickup waiting")) {
       newEntries.push({
         id: `tl-${Date.now() + 100}-waitship`,
         orderId: order.id,
         timestamp: new Date(Date.now() + 100).toISOString(),
         user: "Courier Hub",
         role: "DISPATCH_STAFF",
-        action: "Waiting for shipment",
-        details: `Order moved to ${selectedCourier.name}`,
+        action: "Courier pickup waiting",
+        details: `Courier: ${selectedCourier.name}`,
       });
     }
 
@@ -445,10 +568,12 @@ export const orderflowStore = {
       updatedAt: now,
       dispatch: {
         ...order.dispatch,
+        dispatchId,
         courierId: selectedCourier.id,
         courierName: selectedCourier.name,
+        courierPartnerId: selectedCourier.code === "UNASSIGNED" ? undefined : selectedCourier.code,
         llrNumber: finalLlr,
-        courierStatus: "PENDING",
+        courierStatus: "WAITING_FOR_PICKUP",
         dispatchedAt: now,
       },
       timeline: [...order.timeline, ...newEntries],
@@ -458,22 +583,32 @@ export const orderflowStore = {
     newOrders[orderIndex] = updatedOrder;
     persistOrders(newOrders);
 
-    if (isSupabaseConfigured() && newEntries.length > 0) {
+    if (isSupabaseConfigured()) {
       newEntries.forEach((entry) => {
         updateSupabaseOrderStatus(orderId, "DISPATCHED", entry);
       });
+      updateSupabaseCourierDetails(orderId, {
+        dispatchId,
+        courierId: selectedCourier.id,
+        courierPartnerId: selectedCourier.code === "UNASSIGNED" ? undefined : selectedCourier.code,
+        llrNumber: finalLlr,
+        courierStatus: "WAITING_FOR_PICKUP",
+      });
     }
 
-    return { success: true };
+    return { success: true, dispatchId };
   },
 
-  // 5. Update Courier Details (LLR, Courier Name, Courier Status)
+  // 5. Update Courier Details (Pickup Phone, LLR, Courier Name, Courier Status)
   updateCourierDetails(
     orderId: string,
     params: {
       courierId?: string;
       courierName?: string;
+      courierPartnerId?: string;
+      dispatchId?: string;
       llrNumber?: string;
+      pickupPhone?: string;
       courierStatus?: CourierStatus;
     }
   ) {
@@ -483,13 +618,40 @@ export const orderflowStore = {
     const order = globalOrders[orderIndex];
     const now = new Date().toISOString();
     const oldCourierStatus = order.dispatch.courierStatus;
-    const isShipped = params.courierStatus === "SHIPPED" || params.courierStatus === "DELIVERED";
-    const finalCourierStatus: CourierStatus = isShipped ? "SHIPPED" : "PENDING";
 
+    // Normalize courier status (support legacy SHIPPED as PICKED_UP)
+    let finalCourierStatus: CourierStatus = order.dispatch.courierStatus;
+    if (params.courierStatus) {
+      if (params.courierStatus === "SHIPPED") {
+        finalCourierStatus = "PICKED_UP";
+      } else if (params.courierStatus === "PENDING") {
+        finalCourierStatus = "WAITING_FOR_PICKUP";
+      } else {
+        finalCourierStatus = params.courierStatus;
+      }
+    }
+
+    const courierName = params.courierName || order.dispatch.courierName || "ST Courier";
     const timelineEntries: ActivityLog[] = [];
 
+    // Pickup Phone entry (read-only customer phone is preserved; pickup phone is strictly separate)
+    if (params.pickupPhone !== undefined && params.pickupPhone !== order.dispatch.pickupPhone) {
+      const isNew = !order.dispatch.pickupPhone;
+      timelineEntries.push({
+        id: `tl-${Date.now()}-phone`,
+        orderId: order.id,
+        timestamp: now,
+        user: globalUser.name,
+        role: globalUser.role,
+        action: isNew ? "Pickup phone recorded" : "Pickup phone updated",
+        details: `Courier pickup person: ${params.pickupPhone}`,
+        oldValue: order.dispatch.pickupPhone,
+        newValue: params.pickupPhone,
+      });
+    }
+
+    // LLR number entry
     if (params.llrNumber !== undefined && params.llrNumber !== order.dispatch.llrNumber) {
-      const courierName = params.courierName || order.dispatch.courierName || "ST Courier";
       const isNew = !order.dispatch.llrNumber;
       timelineEntries.push({
         id: `tl-${Date.now()}-llr`,
@@ -504,84 +666,92 @@ export const orderflowStore = {
       });
     }
 
+    // Courier status transitions: WAITING_FOR_PICKUP -> PICKED_UP -> DELIVERED
     if (params.courierStatus !== undefined && finalCourierStatus !== oldCourierStatus) {
-      const courierName = params.courierName || order.dispatch.courierName || "ST Courier";
-
-      if (isShipped) {
-        if (!order.timeline.some((t) => t.action === "Shipped")) {
+      if (finalCourierStatus === "PICKED_UP") {
+        if (!order.timeline.some((t) => t.action === "Courier picked up")) {
           timelineEntries.push({
-            id: `tl-${Date.now()}-ship`,
+            id: `tl-${Date.now()}-pickedup`,
             orderId: order.id,
             timestamp: now,
-            user: courierName,
+            user: globalUser.name || courierName,
             role: "DISPATCH_STAFF",
-            action: "Shipped",
-            details: `${courierName} marked the order as shipped`,
+            action: "Courier picked up",
+            details: `LLR: ${params.llrNumber || order.dispatch.llrNumber || "N/A"}${courierName ? ` · ${courierName}` : ""}`,
             oldValue: oldCourierStatus,
-            newValue: "SHIPPED",
+            newValue: "PICKED_UP",
           });
         }
 
-        if (!order.timeline.some((t) => t.action === "Waiting for SMS")) {
-          timelineEntries.push({
-            id: `tl-${Date.now() + 100}-waitsms`,
-            orderId: order.id,
-            timestamp: new Date(Date.now() + 100).toISOString(),
-            user: "Ping4SMS",
-            role: "SYSTEM",
-            action: "Waiting for SMS",
-            details: "Customer notification pending",
-          });
-        }
-
+        // SMS notification triggered automatically after pickup
         if (!order.timeline.some((t) => t.action === "SMS sent")) {
           timelineEntries.push({
             id: `tl-${Date.now() + 500}-sms`,
             orderId: order.id,
-            timestamp: new Date(Date.now() + 1000).toISOString(),
+            timestamp: new Date(Date.now() + 500).toISOString(),
             user: "Ping4SMS",
-            role: "SYSTEM" as Role,
+            role: "SYSTEM",
             action: "SMS sent",
             details: "Customer notification sent",
             oldValue: order.sms.status,
             newValue: "SENT",
           });
         }
-      } else {
+      } else if (finalCourierStatus === "DELIVERED") {
+        if (!order.timeline.some((t) => t.action === "Delivered")) {
+          timelineEntries.push({
+            id: `tl-${Date.now()}-deliv`,
+            orderId: order.id,
+            timestamp: now,
+            user: globalUser.name || courierName,
+            role: "DISPATCH_STAFF",
+            action: "Delivered",
+            details: "Parcel delivered to customer",
+            oldValue: oldCourierStatus,
+            newValue: "DELIVERED",
+          });
+        }
+      } else if (finalCourierStatus === "WAITING_FOR_PICKUP") {
         timelineEntries.push({
-          id: `tl-${Date.now()}-cstatus`,
+          id: `tl-${Date.now()}-wait`,
           orderId: order.id,
           timestamp: now,
           user: globalUser.name,
           role: globalUser.role,
-          action: "Courier status updated",
-          details: "Status: Pending",
+          action: "Courier pickup waiting",
+          details: `Courier: ${courierName}`,
           oldValue: oldCourierStatus,
-          newValue: "PENDING",
+          newValue: "WAITING_FOR_PICKUP",
         });
       }
     }
 
+    const isPickedUpOrDelivered = finalCourierStatus === "PICKED_UP" || finalCourierStatus === "DELIVERED";
+
     const updatedOrder: Order = {
       ...order,
-      orderStatus: order.orderStatus, // Keep order status as DISPATCHED (do NOT change to COMPLETED)
+      orderStatus: order.orderStatus,
       updatedAt: now,
       dispatch: {
         ...order.dispatch,
+        dispatchId: params.dispatchId !== undefined ? params.dispatchId : order.dispatch.dispatchId,
+        pickupPhone: params.pickupPhone !== undefined ? params.pickupPhone : order.dispatch.pickupPhone,
         llrNumber: params.llrNumber !== undefined ? params.llrNumber : order.dispatch.llrNumber,
         courierStatus: finalCourierStatus,
         courierId: params.courierId || order.dispatch.courierId,
-        courierName: params.courierName || order.dispatch.courierName || "ST Courier",
-        deliveredAt: isShipped ? now : order.dispatch.deliveredAt,
+        courierName: params.courierName || order.dispatch.courierName,
+        courierPartnerId: params.courierPartnerId !== undefined ? params.courierPartnerId : order.dispatch.courierPartnerId,
+        pickedUpAt: finalCourierStatus === "PICKED_UP" ? (order.dispatch.pickedUpAt || now) : order.dispatch.pickedUpAt,
+        deliveredAt: finalCourierStatus === "DELIVERED" ? (order.dispatch.deliveredAt || now) : order.dispatch.deliveredAt,
       },
       sms: {
         ...order.sms,
-        status: isShipped ? "SENT" : order.sms.status,
+        status: isPickedUpOrDelivered ? "SENT" : order.sms.status,
         lastCheckedAt: now,
-        deliveredAt: isShipped ? now : order.sms.deliveredAt,
-        sentAt: isShipped ? (order.sms.sentAt || now) : order.sms.sentAt,
-        providerMessageId: isShipped ? (order.sms.providerMessageId || `P4S-SHIP-${order.orderNumber.replace(/[^a-zA-Z0-9]/g, "")}`) : order.sms.providerMessageId,
-        responseSnippet: isShipped ? "DELIVRD: Handset acknowledged (Shipment in transit)" : order.sms.responseSnippet,
+        deliveredAt: isPickedUpOrDelivered ? now : order.sms.deliveredAt,
+        sentAt: isPickedUpOrDelivered ? (order.sms.sentAt || now) : order.sms.sentAt,
+        providerMessageId: isPickedUpOrDelivered ? (order.sms.providerMessageId || `P4S-SHIP-${order.orderNumber.replace(/[^a-zA-Z0-9]/g, "")}`) : order.sms.providerMessageId,
+        responseSnippet: isPickedUpOrDelivered ? "DELIVRD: Handset acknowledged (Shipment in transit)" : order.sms.responseSnippet,
       },
       timeline: [...order.timeline, ...timelineEntries],
     };
@@ -592,12 +762,15 @@ export const orderflowStore = {
 
     if (isSupabaseConfigured()) {
       updateSupabaseCourierDetails(orderId, {
+        dispatchId: updatedOrder.dispatch.dispatchId,
+        pickupPhone: updatedOrder.dispatch.pickupPhone,
+        courierPartnerId: updatedOrder.dispatch.courierPartnerId,
         llrNumber: params.llrNumber,
         courierStatus: finalCourierStatus,
       }, timelineEntries[0]);
     }
 
-    if (typeof window !== "undefined" && isShipped) {
+    if (typeof window !== "undefined" && isPickedUpOrDelivered) {
       fetch("/api/sms/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -606,7 +779,7 @@ export const orderflowStore = {
           orderNumber: order.orderNumber,
           customerMobile: order.customer.mobile,
           customerName: order.customer.name,
-          courierName: params.courierName || order.dispatch.courierName || "ST Courier",
+          courierName,
           llrNumber: params.llrNumber || order.dispatch.llrNumber,
         }),
       }).catch((e) => console.log("SMS API background trigger:", e));

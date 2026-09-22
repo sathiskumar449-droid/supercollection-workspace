@@ -100,7 +100,7 @@ function InlineDispatchInput({
 }
 
 export default function PackingPage() {
-  const { orders, user, updateOrderStatus, updateCourierDetails, dateFilter, customDate } = useOrderFlow();
+  const { orders, user, updateOrderStatus, updateCourierDetails, markAsDispatched, courierPartners, dateFilter, customDate } = useOrderFlow();
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
 
   // Filtering & Search
@@ -110,6 +110,10 @@ export default function PackingPage() {
   // Instant notification feedback when status or dispatch number is updated
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Dispatch Confirmation Modal State (Requirement 18)
+  const [dispatchModalOrder, setDispatchModalOrder] = useState<Order | null>(null);
+  const [selectedCourierPartner, setSelectedCourierPartner] = useState<string>("ST_COURIER");
+
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -117,15 +121,22 @@ export default function PackingPage() {
 
   const handleInlineStatusChange = (order: Order, newStatus: OrderStatus) => {
     if (order.orderStatus === newStatus) return;
+    if (newStatus === "DISPATCHED") {
+      setDispatchModalOrder(order);
+      setSelectedCourierPartner(order.dispatch?.courierPartnerId || "ST_COURIER");
+      return;
+    }
     const targetLabel = STATUS_OPTIONS.find((s) => s.key === newStatus)?.label || newStatus;
     updateOrderStatus(order.id, newStatus, `Status updated to ${targetLabel} from Packing Station Table`);
-    if (newStatus === "DISPATCHED") {
-      updateCourierDetails(order.id, {
-        courierStatus: "PENDING",
-        courierName: order.dispatch.courierName || "ST Courier",
-      });
-    }
     triggerToast(`Order ${order.orderNumber} status updated to ${targetLabel}`);
+  };
+
+  const handleConfirmDispatch = () => {
+    if (!dispatchModalOrder) return;
+    const res = markAsDispatched(dispatchModalOrder.id, selectedCourierPartner);
+    const partnerObj = courierPartners.find((c) => c.code === selectedCourierPartner) || { name: "ST Courier" };
+    triggerToast(`Order ${dispatchModalOrder.orderNumber} dispatched to ${partnerObj.name}`);
+    setDispatchModalOrder(null);
   };
 
   const handleDispatchNoChange = (orderId: string, orderNumber: string, newLlr: string) => {
@@ -679,6 +690,87 @@ export default function PackingPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Dispatch Order Modal (Requirement 18) */}
+      {dispatchModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden animate-in zoom-in-95">
+            <div className="px-5 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-orange-100" />
+                <h3 className="font-bold text-sm">Dispatch to Courier Hub</h3>
+              </div>
+              <button
+                onClick={() => setDispatchModalOrder(null)}
+                className="text-white/80 hover:text-white text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs text-slate-600">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-slate-900 text-sm">
+                    {dispatchModalOrder.orderNumber}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800">
+                    Ready to Dispatch
+                  </span>
+                </div>
+                <div className="text-slate-600">
+                  Customer: <strong className="text-slate-800">{dispatchModalOrder.customer.name}</strong>
+                  {dispatchModalOrder.customer.city && ` · ${dispatchModalOrder.customer.city}`}
+                </div>
+                <div className="text-slate-500 text-[11px]">
+                  Items: {dispatchModalOrder.items.length} · Total: {formatINR(dispatchModalOrder.totalAmount)}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  Select Courier Partner:
+                </label>
+                <select
+                  value={selectedCourierPartner}
+                  onChange={(e) => setSelectedCourierPartner(e.target.value)}
+                  className="w-full text-xs font-semibold py-2 px-3 rounded-lg border border-slate-300 bg-white text-slate-800 shadow-xs focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 outline-none cursor-pointer"
+                >
+                  {courierPartners
+                    .filter((c) => c.active)
+                    .map((c) => (
+                      <option key={c.id} value={c.code}>
+                        {c.name} {c.isStCourier ? "(Primary)" : ""}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
+                ℹ A unique <strong>Dispatch ID</strong> will be automatically generated. The order will be immediately transferred to <strong>Courier Hub</strong> with status <em>"Waiting for Pickup"</em>.
+              </div>
+            </div>
+
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setDispatchModalOrder(null)}
+                className="px-3.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-medium cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDispatch}
+                className="px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Truck className="w-3.5 h-3.5" />
+                <span>Confirm Dispatch</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Inspect Order Drawer */}
       <OrderDetailsDrawer

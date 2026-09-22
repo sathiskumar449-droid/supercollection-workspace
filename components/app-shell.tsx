@@ -51,7 +51,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "Packing Station" }],
       };
     }
-    if (pathname.startsWith("/couriers/st-courier")) {
+    if (pathname.startsWith("/couriers")) {
       return {
         title: "Courier Hub",
         breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "Courier Hub" }],
@@ -136,6 +136,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onUpdateStatus={updateOrderStatus}
         onUpdateCourier={updateCourierDetails}
         userRole={user.role}
+        courierPartnerId={user.courierPartnerId}
       />
     </div>
   );

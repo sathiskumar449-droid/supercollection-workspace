@@ -79,9 +79,13 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
       const dispatchInfo: DispatchInfo = {
         courierId: rawDispatch?.courier_id || rawDispatch?.courierId || raw.courier_id || "cour-1",
         courierName: rawDispatch?.courier_name || rawDispatch?.courierName || "ST Courier",
+        courierPartnerId: rawDispatch?.courier_partner_id || rawDispatch?.courierPartnerId || (rawDispatch?.courier_name === "Professional Courier" ? "PROFESSIONAL" : rawDispatch?.courier_name === "DTDC" ? "DTDC" : "ST_COURIER"),
+        dispatchId: rawDispatch?.dispatch_id || rawDispatch?.dispatchId || undefined,
         llrNumber: rawDispatch?.llr_number || rawDispatch?.llrNumber || undefined,
-        courierStatus: (rawDispatch?.courier_status || rawDispatch?.courierStatus || "PENDING") as CourierStatus,
+        pickupPhone: rawDispatch?.pickup_phone || rawDispatch?.pickupPhone || undefined,
+        courierStatus: (rawDispatch?.courier_status || rawDispatch?.courierStatus || "WAITING_FOR_PICKUP") as CourierStatus,
         dispatchedAt: rawDispatch?.dispatched_at || rawDispatch?.dispatchedAt || raw.dispatched_at,
+        pickedUpAt: rawDispatch?.picked_up_at || rawDispatch?.pickedUpAt,
         deliveredAt: rawDispatch?.shipped_at || rawDispatch?.delivered_at || rawDispatch?.deliveredAt || raw.shipped_at,
         notes: rawDispatch?.notes,
       };
@@ -237,9 +241,19 @@ export async function updateSupabaseCourierDetails(
       updated_at: new Date().toISOString(),
     };
 
+    if (details.dispatchId !== undefined) updates.dispatch_id = details.dispatchId;
+    if (details.pickupPhone !== undefined) updates.pickup_phone = details.pickupPhone;
+    if (details.courierPartnerId !== undefined) updates.courier_partner_id = details.courierPartnerId;
     if (details.llrNumber !== undefined) updates.llr_number = details.llrNumber;
-    if (details.courierStatus) updates.courier_status = details.courierStatus;
-    if (details.courierStatus === "SHIPPED") updates.shipped_at = new Date().toISOString();
+    if (details.courierStatus) {
+      updates.courier_status = details.courierStatus;
+      if (details.courierStatus === "PICKED_UP" || details.courierStatus === "SHIPPED") {
+        updates.picked_up_at = new Date().toISOString();
+      }
+      if (details.courierStatus === "DELIVERED") {
+        updates.shipped_at = new Date().toISOString();
+      }
+    }
 
     // Check if dispatch record exists
     const { data: existingDispatch } = await db
