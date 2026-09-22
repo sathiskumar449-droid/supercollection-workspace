@@ -54,6 +54,18 @@ export function initStore(): Order[] {
             localStorage.removeItem(STORAGE_KEY_ORDERS);
             globalOrders = [];
           } else {
+            if (Array.isArray(parsed)) {
+              parsed.forEach((ord: any) => {
+                if (Array.isArray(ord?.items) && ord.items.length > 1) {
+                  const map = new Map();
+                  ord.items.forEach((it: any) => {
+                    const k = `${(it.sku || "").trim().toLowerCase()}__${(it.size || "").trim().toLowerCase()}__${(it.productName || it.product_name || "").trim().toLowerCase()}`;
+                    if (!map.has(k)) map.set(k, it);
+                  });
+                  ord.items = Array.from(map.values());
+                }
+              });
+            }
             globalOrders = parsed;
           }
         } catch {
@@ -137,6 +149,17 @@ export function initStore(): Order[] {
 }
 
 function persistOrders(orders: Order[]) {
+  // Ensure items are deduplicated before storing
+  orders.forEach((ord) => {
+    if (Array.isArray(ord?.items) && ord.items.length > 1) {
+      const map = new Map<string, OrderItem>();
+      ord.items.forEach((it) => {
+        const k = `${(it.sku || "").trim().toLowerCase()}__${(it.size || "").trim().toLowerCase()}__${(it.productName || "").trim().toLowerCase()}`;
+        if (!map.has(k)) map.set(k, it);
+      });
+      ord.items = Array.from(map.values());
+    }
+  });
   globalOrders = [...orders];
   if (typeof window !== "undefined") {
     try {

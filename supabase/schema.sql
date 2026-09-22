@@ -256,10 +256,15 @@ CREATE POLICY "Public Update Access" ON dispatches FOR UPDATE USING (true);
 CREATE POLICY "Public Read Access" ON order_items FOR SELECT USING (true);
 CREATE POLICY "Public Insert Access" ON order_items FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public Update Access" ON order_items FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Access" ON order_items FOR DELETE USING (true);
+
+CREATE POLICY "Public Delete Access" ON orders FOR DELETE USING (true);
+CREATE POLICY "Public Delete Access" ON dispatches FOR DELETE USING (true);
 
 CREATE POLICY "Public Read Access" ON sms_logs FOR SELECT USING (true);
 CREATE POLICY "Public Insert Access" ON sms_logs FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public Update Access" ON sms_logs FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Access" ON sms_logs FOR DELETE USING (true);
 
 CREATE POLICY "Public Read Access" ON couriers FOR SELECT USING (true);
 CREATE POLICY "Public Read Access" ON users FOR SELECT USING (true);

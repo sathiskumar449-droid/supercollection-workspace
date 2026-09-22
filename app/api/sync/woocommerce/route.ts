@@ -212,11 +212,23 @@ export async function POST(req: NextRequest) {
       if (!orderError && order) {
         syncedCount++;
 
-        // 3. Insert Items
+        // 3. Insert Items (idempotent, safe deduplication)
         if (wc.line_items && wc.line_items.length > 0) {
-          await supabase.from("order_items").delete().eq("order_id", order.id);
-          await supabase.from("order_items").insert(
-            wc.line_items.map((it: any, idx: number) => ({
+          await (db as any).from("order_items").delete().eq("order_id", order.id);
+
+          const { data: remainingItems } = await (db as any)
+            .from("order_items")
+            .select("id, sku, size, product_name")
+            .eq("order_id", order.id);
+
+          const existingKeySet = new Set(
+            (remainingItems || []).map((r: any) =>
+              `${(r.sku || "").trim().toLowerCase()}__${(r.size || "").trim().toLowerCase()}__${(r.product_name || "").trim().toLowerCase()}`
+            )
+          );
+
+          const itemsToInsert = wc.line_items
+            .map((it: any, idx: number) => ({
               order_id: order.id,
               product_name: it.name || "Product",
               sku: it.sku || `SKU-${idx + 1}`,
@@ -225,7 +237,14 @@ export async function POST(req: NextRequest) {
               unit_price: parseFloat(it.price || "0") || 0,
               subtotal: parseFloat(it.total || "0") || 0,
             }))
-          );
+            .filter((it: any) => {
+              const key = `${it.sku.trim().toLowerCase()}__${it.size.trim().toLowerCase()}__${it.product_name.trim().toLowerCase()}`;
+              return !existingKeySet.has(key);
+            });
+
+          if (itemsToInsert.length > 0) {
+            await (db as any).from("order_items").insert(itemsToInsert);
+          }
         }
 
         // 4. Ensure Dispatch record exists without overwriting staff updates

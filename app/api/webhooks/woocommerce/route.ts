@@ -167,15 +167,34 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: orderError.message }, { status: 500 });
       }
 
-      // 3. Insert items (idempotent replacement)
+      // 3. Insert items (idempotent replacement, safe deduplication)
       if (order && items.length > 0) {
         await db.from("order_items").delete().eq("order_id", order.id);
-        await db.from("order_items").insert(
-          items.map((it: any) => ({
+
+        const { data: remainingItems } = await db
+          .from("order_items")
+          .select("id, sku, size, product_name")
+          .eq("order_id", order.id);
+
+        const existingKeySet = new Set(
+          (remainingItems || []).map((r: any) =>
+            `${(r.sku || "").trim().toLowerCase()}__${(r.size || "").trim().toLowerCase()}__${(r.product_name || "").trim().toLowerCase()}`
+          )
+        );
+
+        const itemsToInsert = items
+          .map((it: any) => ({
             order_id: order.id,
             ...it,
           }))
-        );
+          .filter((it: any) => {
+            const key = `${(it.sku || "").trim().toLowerCase()}__${(it.size || "").trim().toLowerCase()}__${(it.product_name || "").trim().toLowerCase()}`;
+            return !existingKeySet.has(key);
+          });
+
+        if (itemsToInsert.length > 0) {
+          await db.from("order_items").insert(itemsToInsert);
+        }
       }
 
       // 4. Initial Dispatch record

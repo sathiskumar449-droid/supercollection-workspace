@@ -107,16 +107,24 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         newValue: t.new_value || undefined,
       }));
 
-      const items: OrderItem[] = (raw.items || []).map((it: any): OrderItem => ({
-        id: it.id,
-        productId: it.product_id || it.id,
-        productName: it.product_name,
-        sku: it.sku || "OF-ITEM",
-        size: it.size || "M",
-        quantity: it.quantity || 1,
-        unitPrice: Number(it.unit_price) || 0,
-        subtotal: Number(it.subtotal) || 0,
-      }));
+      // Safely deduplicate items against duplicate sync rows
+      const uniqueItemsMap = new Map<string, OrderItem>();
+      (raw.items || []).forEach((it: any) => {
+        const itemKey = `${(it.sku || "").trim().toLowerCase()}__${(it.size || "").trim().toLowerCase()}__${(it.product_name || "").trim().toLowerCase()}`;
+        if (!uniqueItemsMap.has(itemKey)) {
+          uniqueItemsMap.set(itemKey, {
+            id: it.id,
+            productId: it.product_id || it.id,
+            productName: it.product_name,
+            sku: it.sku || "OF-ITEM",
+            size: it.size || "M",
+            quantity: Number(it.quantity) || 1,
+            unitPrice: Number(it.unit_price) || 0,
+            subtotal: Number(it.subtotal) || 0,
+          });
+        }
+      });
+      const items: OrderItem[] = Array.from(uniqueItemsMap.values());
 
       return {
         id: raw.id,
