@@ -23,7 +23,7 @@ import {
 import { useOrderFlow } from "@/lib/hooks";
 import { SourceBadge, OrderStatusBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
-import { formatINR, formatTimeAgo, formatDate, cn } from "@/lib/utils";
+import { formatINR, formatTimeAgo, formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { Order, OrderStatus } from "@/types/orderflow";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
@@ -100,7 +100,7 @@ function InlineDispatchInput({
 }
 
 export default function PackingPage() {
-  const { orders, user, updateOrderStatus, updateCourierDetails } = useOrderFlow();
+  const { orders, user, updateOrderStatus, updateCourierDetails, dateFilter, customDate } = useOrderFlow();
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
 
   // Filtering & Search
@@ -154,9 +154,15 @@ export default function PackingPage() {
 
   // Orders eligible for Packing Station (WooCommerce completed/processing or active packing flow)
   // Strictly excludes "NEW" (Pending) and "RETURN" (Failed/Cancelled)
+  // Filtered by global TopBar date filter / calendar picker
   const packingEligibleOrders = useMemo(() => {
-    return orders.filter((o) => o.orderStatus !== "NEW" && o.orderStatus !== "RETURN");
-  }, [orders]);
+    return orders.filter(
+      (o) =>
+        o.orderStatus !== "NEW" &&
+        o.orderStatus !== "RETURN" &&
+        matchesDateFilter(o.createdAt, dateFilter, customDate)
+    );
+  }, [orders, dateFilter, customDate]);
 
   // Filtered orders list
   const filteredOrders = useMemo(() => {

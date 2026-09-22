@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -25,7 +25,7 @@ import {
 import { useOrderFlow } from "@/lib/hooks";
 import { OrderStatusBadge, SourceBadge, SmsStatusBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
-import { formatINR, cn } from "@/lib/utils";
+import { formatINR, cn, matchesDateFilter } from "@/lib/utils";
 import { Order } from "@/types/orderflow";
 
 // --- Greeting helper ---
@@ -209,19 +209,26 @@ export default function DashboardPage() {
     user,
     updateOrderStatus,
     updateCourierDetails,
+    dateFilter,
+    customDate,
   } = useOrderFlow();
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
 
+  // Date filtered orders
+  const dateFilteredOrders = useMemo(() => {
+    return orders.filter((o) => matchesDateFilter(o.createdAt, dateFilter, customDate));
+  }, [orders, dateFilter, customDate]);
+
   // Recent 5 orders for the bottom table
-  const recentOrders = orders.slice(0, 5);
+  const recentOrders = dateFilteredOrders.slice(0, 5);
 
   // Source breakdown
-  const websiteCount = orders.filter((o) => o.source === "WEBSITE").length;
-  const whatsappCount = orders.filter((o) => o.source === "WHATSAPP").length;
-  const totalOrders = orders.length;
+  const websiteCount = dateFilteredOrders.filter((o) => o.source === "WEBSITE").length;
+  const whatsappCount = dateFilteredOrders.filter((o) => o.source === "WHATSAPP").length;
+  const totalOrders = dateFilteredOrders.length;
 
   // SMS counts
-  const smsSent = orders.filter((o) => o.sms.status === "SENT").length;
+  const smsSent = dateFilteredOrders.filter((o) => o.sms.status === "SENT").length;
 
   // Pending fulfillment = NEW + CONFIRMED + PACKING
   const pendingFulfillment = metrics.newOrders + metrics.confirmedOrders + metrics.packingOrders;

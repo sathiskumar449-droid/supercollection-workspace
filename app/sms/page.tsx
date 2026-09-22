@@ -22,7 +22,7 @@ import { useOrderFlow } from "@/lib/hooks";
 import { SmsStatusBadge, SourceBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { BulkToolbar } from "@/components/bulk-actions/bulk-toolbar";
-import { formatDate, cn } from "@/lib/utils";
+import { formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { Order, SmsStatus } from "@/types/orderflow";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 
@@ -30,7 +30,7 @@ function SmsMonitoringContent() {
   const searchParams = useSearchParams();
   const initialStatus = searchParams.get("status") || "ALL";
 
-  const { orders, user, syncPing4SmsStatus, bulkSyncPing4SmsStatus, updateOrderStatus, updateCourierDetails } = useOrderFlow();
+  const { orders, user, syncPing4SmsStatus, bulkSyncPing4SmsStatus, updateOrderStatus, updateCourierDetails, dateFilter, customDate } = useOrderFlow();
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -42,12 +42,14 @@ function SmsMonitoringContent() {
   const [isBulkRefreshing, setIsBulkRefreshing] = useState(false);
 
   // ONLY orders that have been marked as "SHIPPED" in Courier Hub (after being dispatched from packing)
+  // Filtered by global TopBar date filter / calendar picker
   const shippedOrders = useMemo(() => {
     return orders.filter((o) => 
+      matchesDateFilter(o.sms.sentAt || o.createdAt, dateFilter, customDate) &&
       (o.dispatch.courierStatus === "SHIPPED" || (o.dispatch.courierStatus as string) === "DELIVERED") &&
       (Boolean(o.dispatchedAt) || Boolean(o.dispatch.dispatchedAt))
     );
-  }, [orders]);
+  }, [orders, dateFilter, customDate]);
 
   // Orders that have SMS logged (shipped orders)
   const smsOrders = useMemo(() => {

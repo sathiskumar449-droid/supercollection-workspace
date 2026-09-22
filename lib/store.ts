@@ -1,5 +1,6 @@
 import { Order, OrderStatus, CourierStatus, SmsStatus, Role, UserSession, ActivityLog, DashboardMetrics, ActionRequiredItem } from "@/types/orderflow";
 import { generateMockOrders, CURRENT_USER, INITIAL_COURIERS, STAFF_USERS } from "./mock-data";
+import { matchesDateFilter } from "./utils";
 import { 
   isSupabaseConfigured, 
   fetchSupabaseOrders, 
@@ -727,7 +728,8 @@ export const orderflowStore = {
 
   // Calculate Dashboard Metrics & Action Required Items
   getMetrics(): DashboardMetrics {
-    const orders = globalOrders.length > 0 ? globalOrders : initStore();
+    const rawOrders = globalOrders.length > 0 ? globalOrders : initStore();
+    const orders = rawOrders.filter((o) => matchesDateFilter(o.createdAt, globalDateFilter, globalCustomDate));
 
     let newOrders = 0;
     let confirmedOrders = 0;

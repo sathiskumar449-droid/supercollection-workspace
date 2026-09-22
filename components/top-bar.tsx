@@ -81,38 +81,47 @@ export function TopBar({
       <div className="flex items-center gap-2.5 min-w-0 justify-end">
         {/* Date Filter & Calendar Selector (On all pages) */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Preset Buttons */}
-          <div className="hidden xl:flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-0.5 text-xs">
-            {["All", "Today", "Last 7 Days", "This Month"].map((opt) => (
-              <button
-                key={opt}
-                onClick={() => {
-                  onDateFilterChange?.(opt);
-                  onCustomDateChange?.("");
-                }}
-                className={cn(
-                  "px-2.5 py-1 rounded-md font-medium transition-all text-xs",
-                  (dateFilter === opt || (!dateFilter && opt === "All")) && !customDate
-                    ? "bg-white text-slate-900 shadow-xs border border-slate-200/60 font-semibold"
-                    : "text-slate-500 hover:text-slate-800"
-                )}
-              >
-                {opt}
-              </button>
-            ))}
+          {/* Preset Buttons with Vibrant Distinct Colors */}
+          <div className="flex items-center gap-0.5 bg-slate-100 border border-slate-200 rounded-lg p-0.5 text-xs">
+            {[
+              { key: "All", label: "All", activeClass: "bg-slate-900 text-white shadow-xs font-semibold" },
+              { key: "Today", label: "Today", activeClass: "bg-orange-600 text-white shadow-xs font-semibold" },
+              { key: "Yesterday", label: "Yesterday", activeClass: "bg-amber-600 text-white shadow-xs font-semibold" },
+              { key: "Last 7 Days", label: "Last 7 Days", activeClass: "bg-blue-600 text-white shadow-xs font-semibold" },
+              { key: "This Month", label: "This Month", activeClass: "bg-emerald-600 text-white shadow-xs font-semibold" },
+            ].map((opt) => {
+              const isSelected = (dateFilter === opt.key || (!dateFilter && opt.key === "All")) && !customDate;
+              return (
+                <button
+                  key={opt.key}
+                  onClick={() => {
+                    onDateFilterChange?.(opt.key);
+                    onCustomDateChange?.("");
+                  }}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md font-medium transition-all text-xs whitespace-nowrap",
+                    isSelected
+                      ? opt.activeClass
+                      : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Calendar Date Picker right next to date filter */}
           <div
             className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all",
+              "flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-medium transition-all",
               customDate
-                ? "bg-orange-50 border-orange-400 text-orange-950 font-semibold shadow-xs ring-1 ring-orange-200"
+                ? "bg-orange-600 text-white border-orange-600 font-semibold shadow-xs"
                 : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
             )}
             title="Pick a specific date from calendar"
           >
-            <Calendar className={cn("w-3.5 h-3.5 shrink-0", customDate ? "text-orange-600" : "text-slate-500")} />
+            <Calendar className={cn("w-3.5 h-3.5 shrink-0", customDate ? "text-white" : "text-slate-500")} />
             <input
               type="date"
               value={customDate}
@@ -125,7 +134,10 @@ export function TopBar({
                   onDateFilterChange?.("All");
                 }
               }}
-              className="bg-transparent text-xs text-slate-700 font-medium outline-none cursor-pointer w-[118px]"
+              className={cn(
+                "bg-transparent text-xs font-medium outline-none cursor-pointer w-[118px]",
+                customDate ? "text-white" : "text-slate-700"
+              )}
             />
             {customDate && (
               <button
@@ -133,10 +145,10 @@ export function TopBar({
                   onCustomDateChange?.("");
                   onDateFilterChange?.("All");
                 }}
-                className="p-0.5 text-slate-400 hover:text-red-600 rounded transition-colors"
+                className="p-0.5 text-white/80 hover:text-white rounded transition-colors"
                 title="Clear date"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>

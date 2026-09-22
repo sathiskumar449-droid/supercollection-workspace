@@ -17,7 +17,7 @@ import { useOrderFlow } from "@/lib/hooks";
 import { Order, CourierStatus } from "@/types/orderflow";
 import { SourceBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
-import { formatDate, cn } from "@/lib/utils";
+import { formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
@@ -86,7 +86,7 @@ function StCourierContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") || "all";
 
-  const { orders, user, updateCourierDetails, updateOrderStatus } = useOrderFlow();
+  const { orders, user, updateCourierDetails, updateOrderStatus, dateFilter, customDate } = useOrderFlow();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchQuery, setSearchQuery] = useState("");
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
@@ -100,8 +100,11 @@ function StCourierContent() {
   };
 
   // ONLY orders that have been marked as "DISPATCHED" in Packing Station (or subsequently SHIPPED in Courier Hub)
+  // Filtered by global TopBar date filter / calendar picker
   const courierOrders = useMemo(() => {
     return orders.filter((o) => {
+      if (!matchesDateFilter(o.createdAt, dateFilter, customDate)) return false;
+
       // Must be currently DISPATCHED in Packing Station
       if (o.orderStatus === "DISPATCHED") return true;
       // Or was dispatched from Packing Station and subsequently marked as SHIPPED in Courier Hub
@@ -113,7 +116,7 @@ function StCourierContent() {
       }
       return false;
     });
-  }, [orders]);
+  }, [orders, dateFilter, customDate]);
 
   // Metric counts across dispatched orders
   const totalOrders = courierOrders.length;

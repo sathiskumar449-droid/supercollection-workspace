@@ -26,7 +26,7 @@ import { Order, OrderStatus, CourierStatus, SmsStatus, OrderSource } from "@/typ
 import { OrderStatusBadge, CourierStatusBadge, SmsStatusBadge, SourceBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { SyncWooCommerceDialog } from "@/components/sync-woocommerce-dialog";
-import { formatINR, formatDate, cn } from "@/lib/utils";
+import { formatINR, formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
@@ -112,20 +112,8 @@ function OrdersContent() {
       }
 
       // Date Filter from TopBar / Calendar
-      if (customDate) {
-        if (order.createdAt.slice(0, 10) !== customDate) return false;
-      } else if (dateFilter === "Today") {
-        const orderDateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(order.createdAt));
-        const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
-        if (orderDateStr !== todayStr) return false;
-      } else if (dateFilter === "Last 7 Days") {
-        const orderTime = new Date(order.createdAt).getTime();
-        const sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000;
-        if (orderTime < sevenDaysAgo) return false;
-      } else if (dateFilter === "This Month") {
-        const orderMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(order.createdAt)).slice(0, 7);
-        const thisMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()).slice(0, 7);
-        if (orderMonth !== thisMonth) return false;
+      if (!matchesDateFilter(order.createdAt, dateFilter, customDate)) {
+        return false;
       }
 
       return true;

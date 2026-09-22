@@ -16,38 +16,44 @@ import {
   PieChart 
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
-import { formatINR, cn } from "@/lib/utils";
+import { formatINR, cn, matchesDateFilter } from "@/lib/utils";
 
 export default function ReportsPage() {
-  const { orders } = useOrderFlow();
-  const [timeRange, setTimeRange] = useState<"Today" | "Yesterday" | "Last 7 Days" | "Last 30 Days">("Today");
+  const { orders, dateFilter, setDateFilter, customDate } = useOrderFlow();
+  const timeRange = dateFilter || "Today";
+  const setTimeRange = (range: string) => setDateFilter(range);
+
+  // Date filtered orders based on TopBar date selector
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => matchesDateFilter(o.createdAt, dateFilter, customDate));
+  }, [orders, dateFilter, customDate]);
 
   // Breakdown statistics
-  const totalOrders = orders.length;
-  const totalValue = orders.reduce((sum, o) => sum + o.totalAmount, 0);
+  const totalOrders = filteredOrders.length;
+  const totalValue = filteredOrders.reduce((sum, o) => sum + o.totalAmount, 0);
 
   // Source Split
-  const websiteOrders = orders.filter((o) => o.source === "WEBSITE");
-  const whatsappOrders = orders.filter((o) => o.source === "WHATSAPP");
+  const websiteOrders = filteredOrders.filter((o) => o.source === "WEBSITE");
+  const whatsappOrders = filteredOrders.filter((o) => o.source === "WHATSAPP");
 
   // Status Split
-  const newCount = orders.filter((o) => o.orderStatus === "NEW").length;
-  const confirmedCount = orders.filter((o) => o.orderStatus === "CONFIRMED").length;
-  const packingCount = orders.filter((o) => o.orderStatus === "PACKING").length;
-  const packedCount = orders.filter((o) => o.orderStatus === "PACKED").length;
-  const dispatchedCount = orders.filter((o) => o.orderStatus === "DISPATCHED").length;
+  const newCount = filteredOrders.filter((o) => o.orderStatus === "NEW").length;
+  const confirmedCount = filteredOrders.filter((o) => o.orderStatus === "CONFIRMED").length;
+  const packingCount = filteredOrders.filter((o) => o.orderStatus === "PACKING").length;
+  const packedCount = filteredOrders.filter((o) => o.orderStatus === "PACKED").length;
+  const dispatchedCount = filteredOrders.filter((o) => o.orderStatus === "DISPATCHED").length;
 
   // Courier Breakdown
   const courierCounts: Record<string, number> = {};
-  orders.forEach((o) => {
+  filteredOrders.forEach((o) => {
     const name = o.dispatch.courierName || "Unassigned";
     courierCounts[name] = (courierCounts[name] || 0) + 1;
   });
 
   // SMS Breakdown
-  const smsSent = orders.filter((o) => o.sms.status === "SENT").length;
-  const smsPending = orders.filter((o) => o.sms.status === "PENDING").length;
-  const smsFailed = orders.filter((o) => o.sms.status === "FAILED").length;
+  const smsSent = filteredOrders.filter((o) => o.sms.status === "SENT").length;
+  const smsPending = filteredOrders.filter((o) => o.sms.status === "PENDING").length;
+  const smsFailed = filteredOrders.filter((o) => o.sms.status === "FAILED").length;
 
   // Hourly volume distribution (simulated for today)
   const hourlyBuckets = [
