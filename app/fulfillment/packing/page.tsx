@@ -470,8 +470,20 @@ export default function PackingPage() {
             </div>
           )}
 
-          {/* Export Actions (Excel & PDF) */}
-          <div className="flex items-center gap-2">
+          <span className="text-slate-500 font-medium whitespace-nowrap">
+            Showing <strong>{filteredOrders.length}</strong> orders
+          </span>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="text-xs text-red-600 hover:text-red-700 font-medium px-1"
+            >
+              Clear
+            </button>
+          )}
+
+          {/* Export Actions (Excel & PDF) - Placed at the end */}
+          <div className="flex items-center gap-2 pl-1 border-l border-slate-200">
             <button
               onClick={handleExportExcel}
               title="Download filtered orders as Excel Spreadsheet (.csv)"
@@ -489,18 +501,6 @@ export default function PackingPage() {
               <span>Export PDF</span>
             </button>
           </div>
-
-          <span className="text-slate-500 font-medium whitespace-nowrap pl-1 border-l border-slate-200">
-            Showing <strong>{filteredOrders.length}</strong> orders
-          </span>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="text-xs text-red-600 hover:text-red-700 font-medium px-1"
-            >
-              Clear
-            </button>
-          )}
         </div>
       </div>
 

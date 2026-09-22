@@ -411,26 +411,6 @@ function OrdersContent() {
       <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-subtle flex flex-wrap items-center justify-between gap-3">
         {/* Filter Dropdowns */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Export Actions */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleExportExcel}
-              title="Download filtered orders as Excel Spreadsheet (.csv)"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Export Excel</span>
-            </button>
-            <button
-              onClick={handleExportPdf}
-              title="Print or Save PDF Report"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Export PDF</span>
-            </button>
-          </div>
-
           {/* Order Status Filter */}
           <select
             value={statusFilter}
@@ -515,6 +495,26 @@ function OrdersContent() {
               <span>Clear ({activeFilterCount})</span>
             </button>
           )}
+        </div>
+
+        {/* Export Actions (Last/Rightmost) */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportExcel}
+            title="Download filtered orders as Excel Spreadsheet (.csv)"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Export Excel</span>
+          </button>
+          <button
+            onClick={handleExportPdf}
+            title="Print or Save PDF Report"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Export PDF</span>
+          </button>
         </div>
       </div>
 

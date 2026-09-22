@@ -463,7 +463,18 @@ function StCourierContent() {
               </div>
             )}
 
-            {/* Export Actions */}
+            <div className="relative w-full sm:w-60">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by Order #, Name, Mobile, LLR..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-orange-500 transition-all"
+              />
+            </div>
+
+            {/* Export Actions (Last/Rightmost) */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleExportExcel}
@@ -481,17 +492,6 @@ function StCourierContent() {
                 <FileText className="w-3.5 h-3.5" />
                 <span>Export PDF</span>
               </button>
-            </div>
-
-            <div className="relative w-full sm:w-60">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by Order #, Name, Mobile, LLR..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-orange-500 transition-all"
-              />
             </div>
           </div>
         </div>

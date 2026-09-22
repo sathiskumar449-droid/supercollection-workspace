@@ -319,7 +319,27 @@ function SmsMonitoringContent() {
               </span>
             )}
 
-            {/* Export Actions */}
+            <div className="relative w-full sm:w-60">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by Mobile, Order #, LLR..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-orange-500"
+              />
+            </div>
+
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-700 hover:bg-orange-800 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
+              <span>{isRefreshing ? "Checking..." : "Refresh Status"}</span>
+            </button>
+
+            {/* Export Actions (Last/Rightmost) */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleExportExcel}
@@ -337,26 +357,6 @@ function SmsMonitoringContent() {
                 <FileText className="w-3.5 h-3.5" />
                 <span>Export PDF</span>
               </button>
-            </div>
-
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-700 hover:bg-orange-800 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs"
-            >
-              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
-              <span>{isRefreshing ? "Checking..." : "Refresh Status"}</span>
-            </button>
-
-            <div className="relative w-full sm:w-60">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by Mobile, Order #, LLR..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-orange-500"
-              />
             </div>
           </div>
         </div>
