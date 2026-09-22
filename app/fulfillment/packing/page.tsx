@@ -26,6 +26,8 @@ import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { formatINR, formatTimeAgo, formatDate, cn } from "@/lib/utils";
 import { Order, OrderStatus } from "@/types/orderflow";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
+import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
+import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
 
 // Status definitions mapping to the exact terms requested by user:
 // "porcessing pending completed pacakaging packed dispatched nu"
@@ -137,6 +139,19 @@ export default function PackingPage() {
     );
   };
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState<string>("");
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+
+  const BULK_STATUS_OPTIONS: StatusOption[] = [
+    { value: "CONFIRMED", label: "Processing" },
+    { value: "PACKING", label: "Packaging" },
+    { value: "PACKED", label: "Packed" },
+    { value: "DISPATCHED", label: "Dispatched" },
+  ];
+
   // Orders eligible for Packing Station (WooCommerce completed/processing or active packing flow)
   // Strictly excludes "NEW" (Pending) and "RETURN" (Failed/Cancelled)
   const packingEligibleOrders = useMemo(() => {
@@ -166,6 +181,96 @@ export default function PackingPage() {
       return true;
     });
   }, [packingEligibleOrders, statusFilter, searchQuery]);
+
+  // Validate selected orders against chosen bulk target status
+  const { validOrders, skippedOrders } = useMemo(() => {
+    if (!bulkStatus || selectedIds.length === 0) {
+      return { validOrders: [], skippedOrders: [] };
+    }
+    const targetStatus = bulkStatus as OrderStatus;
+    const targetLabel = STATUS_OPTIONS.find((s) => s.key === targetStatus)?.label || targetStatus;
+
+    const valid: Order[] = [];
+    const skipped: { orderNumber: string; reason: string }[] = [];
+
+    selectedIds.forEach((id) => {
+      const ord = orders.find((o) => o.id === id);
+      if (!ord) return;
+
+      if (ord.orderStatus === targetStatus) {
+        skipped.push({
+          orderNumber: ord.orderNumber,
+          reason: `Already in ${targetLabel} status`,
+        });
+        return;
+      }
+
+      if (targetStatus === "PACKING" && (ord.orderStatus === "PACKED" || ord.orderStatus === "DISPATCHED")) {
+        skipped.push({
+          orderNumber: ord.orderNumber,
+          reason: `Cannot move backwards from ${ord.orderStatus} to Packaging`,
+        });
+        return;
+      }
+
+      if (targetStatus === "PACKED" && ord.orderStatus === "DISPATCHED") {
+        skipped.push({
+          orderNumber: ord.orderNumber,
+          reason: `Cannot move backwards from Dispatched to Packed`,
+        });
+        return;
+      }
+
+      valid.push(ord);
+    });
+
+    return { validOrders: valid, skippedOrders: skipped };
+  }, [selectedIds, bulkStatus, orders]);
+
+  const isAllFilteredSelected =
+    filteredOrders.length > 0 &&
+    filteredOrders.every((o) => selectedIds.includes(o.id));
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      // Filter-aware: select all currently filtered orders
+      const newIds = Array.from(new Set([...selectedIds, ...filteredOrders.map((o) => o.id)]));
+      setSelectedIds(newIds);
+    } else {
+      // Deselect currently filtered orders
+      const filteredIdSet = new Set(filteredOrders.map((o) => o.id));
+      setSelectedIds(selectedIds.filter((id) => !filteredIdSet.has(id)));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleConfirmBulkUpdate = () => {
+    if (validOrders.length === 0 || !bulkStatus) return;
+    setIsBulkUpdating(true);
+    const targetStatus = bulkStatus as OrderStatus;
+    const targetLabel = STATUS_OPTIONS.find((s) => s.key === targetStatus)?.label || targetStatus;
+
+    validOrders.forEach((order) => {
+      updateOrderStatus(order.id, targetStatus, `Bulk status updated to ${targetLabel}`);
+      if (targetStatus === "DISPATCHED") {
+        updateCourierDetails(order.id, {
+          courierStatus: "PENDING",
+          courierName: order.dispatch.courierName || "ST Courier",
+        });
+      }
+    });
+
+    setIsBulkUpdating(false);
+    setIsConfirmDialogOpen(false);
+    setSelectedIds([]);
+    setBulkStatus("");
+    triggerToast(`${validOrders.length} ${validOrders.length === 1 ? "order" : "orders"} updated to ${targetLabel} successfully.`);
+  };
 
   // Stage counts for KPI pills (Packing Station)
   const completedCount = packingEligibleOrders.filter((o) => o.orderStatus === "COMPLETED").length;
@@ -403,29 +508,62 @@ export default function PackingPage() {
         </div>
       </div>
 
+      {/* Bulk Action Toolbar */}
+      <BulkToolbar
+        selectedCount={selectedIds.length}
+        onClearSelection={() => setSelectedIds([])}
+        statusOptions={BULK_STATUS_OPTIONS}
+        selectedStatus={bulkStatus}
+        onStatusChange={setBulkStatus}
+        onApplyAction={() => setIsConfirmDialogOpen(true)}
+        isActionDisabled={!bulkStatus || validOrders.length === 0}
+        isLoading={isBulkUpdating}
+      />
+
+      {/* Bulk Confirmation Modal */}
+      <BulkConfirmDialog
+        isOpen={isConfirmDialogOpen}
+        targetStatusLabel={STATUS_OPTIONS.find((s) => s.key === bulkStatus)?.label || bulkStatus}
+        totalSelected={selectedIds.length}
+        validCount={validOrders.length}
+        skippedOrders={skippedOrders}
+        onConfirm={handleConfirmBulkUpdate}
+        onCancel={() => setIsConfirmDialogOpen(false)}
+        isLoading={isBulkUpdating}
+      />
+
       {/* EXCEL SPREADSHEET TABLE VIEW */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
         <table className="w-full table-fixed text-left text-[11px] border-collapse border border-slate-300">
           <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10px] uppercase tracking-tight">
             <tr>
+              <th className="py-2 px-1 w-[2.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
+                <input
+                  type="checkbox"
+                  checked={isAllFilteredSelected}
+                  onChange={handleSelectAll}
+                  className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+                  title={isAllFilteredSelected ? "Deselect all" : "Select all filtered orders"}
+                />
+              </th>
               <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
               <th className="py-2 px-1.5 w-[7%] border-r border-b-2 border-slate-300 bg-slate-100">Date</th>
               <th className="py-2 px-1 w-[5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Payment</th>
               <th className="py-2 px-1.5 w-[9%] border-r border-b-2 border-slate-300 bg-slate-100">Phone Number</th>
-              <th className="py-2 px-1.5 w-[12%] border-r border-b-2 border-slate-300 bg-slate-100">Name</th>
+              <th className="py-2 px-1.5 w-[11.5%] border-r border-b-2 border-slate-300 bg-slate-100">Name</th>
               <th className="py-2 px-1.5 w-[6%] border-r border-b-2 border-slate-300 bg-slate-100">Amount</th>
-              <th className="py-2 px-1.5 w-[17%] border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
+              <th className="py-2 px-1.5 w-[16%] border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
               <th className="py-2 px-1 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Size</th>
               <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Qty</th>
               <th className="py-2 px-1.5 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">Order Taken</th>
-              <th className="py-2 px-1.5 w-[12%] border-r border-b-2 border-slate-300 bg-slate-100">Dispatch No</th>
+              <th className="py-2 px-1.5 w-[11%] border-r border-b-2 border-slate-300 bg-slate-100">Dispatch No</th>
               <th className="py-2 px-1 w-[12%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">Update Status</th>
             </tr>
           </thead>
           <tbody>
             {filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan={12} className="py-14 text-center text-slate-400 border-b border-slate-300">
+                <td colSpan={13} className="py-14 text-center text-slate-400 border-b border-slate-300">
                   <Box className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                   <p className="text-sm font-semibold text-slate-700">No orders match your filter criteria</p>
                   <p className="text-xs text-slate-400 mt-1">Try selecting "All Orders" or clearing the search query.</p>
@@ -445,8 +583,24 @@ export default function PackingPage() {
                   <tr
                     key={order.id}
                     onClick={() => setInspectOrder(order)}
-                    className="hover:bg-orange-50/40 transition-colors cursor-pointer group"
+                    className={cn(
+                      "hover:bg-orange-50/40 transition-colors cursor-pointer group",
+                      selectedIds.includes(order.id) && "bg-orange-50/60"
+                    )}
                   >
+                    {/* Checkbox */}
+                    <td
+                      className="py-2 px-1 text-center bg-slate-50/70 border-r border-b border-slate-300"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(order.id)}
+                        onChange={() => handleToggleSelect(order.id)}
+                        className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+                      />
+                    </td>
+
                     {/* 1. S.No (Spreadsheet row index) */}
                     <td className="py-2 px-1 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-b border-slate-300">
                       {index + 1}

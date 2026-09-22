@@ -583,18 +583,19 @@ export const orderflowStore = {
   },
 
   // 6. Refresh / Sync Ping4SMS status (Read-only status sync)
-  syncPing4SmsStatus(orderId?: string) {
+  syncPing4SmsStatus(orderIds?: string | string[]) {
     const now = new Date().toISOString();
     let updatedCount = 0;
+    const targetIds = Array.isArray(orderIds) ? orderIds : orderIds ? [orderIds] : null;
 
     const newOrders = globalOrders.map((order) => {
-      if (orderId && order.id !== orderId) return order;
+      if (targetIds && !targetIds.includes(order.id)) return order;
 
       // Only refresh dispatched orders that have pending or failed status
-      if (order.orderStatus === "DISPATCHED" && order.sms.status === "PENDING") {
+      if (order.orderStatus === "DISPATCHED" && (order.sms.status === "PENDING" || order.sms.status === "FAILED")) {
         updatedCount++;
         // Simulate real telemetry sync: most resolve to SENT, small fraction remain or fail
-        const newSmsStatus: SmsStatus = Math.random() > 0.3 ? "SENT" : "PENDING";
+        const newSmsStatus: SmsStatus = Math.random() > 0.15 ? "SENT" : "PENDING";
         return {
           ...order,
           updatedAt: now,
@@ -615,7 +616,7 @@ export const orderflowStore = {
               role: "ADMIN" as const,
               action: "Ping4SMS Telemetry Refreshed",
               details: `Synced delivery status: ${newSmsStatus}`,
-              oldValue: "PENDING",
+              oldValue: order.sms.status,
               newValue: newSmsStatus,
             },
           ],
@@ -626,6 +627,33 @@ export const orderflowStore = {
 
     persistOrders(newOrders);
     return { success: true, updatedCount };
+  },
+
+  // 7. Bulk Update Order Status
+  bulkUpdateOrderStatus(orderIds: string[], newStatus: OrderStatus, reason?: string): { successCount: number; failCount: number } {
+    let successCount = 0;
+    let failCount = 0;
+    for (const id of orderIds) {
+      const res = this.updateOrderStatus(id, newStatus, reason || `Bulk status update to ${newStatus}`);
+      if (res.success) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+    }
+    return { successCount, failCount };
+  },
+
+  // 8. Bulk Update Courier Status
+  bulkUpdateCourierStatus(orderIds: string[], targetStatus: CourierStatus): { successCount: number } {
+    let successCount = 0;
+    for (const id of orderIds) {
+      const res = this.updateCourierDetails(id, { courierStatus: targetStatus });
+      if (res.success) {
+        successCount++;
+      }
+    }
+    return { successCount };
   },
 
   // Ingest order from Webhook (WooCommerce or WhatsApp)

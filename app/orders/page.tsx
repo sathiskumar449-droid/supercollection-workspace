@@ -28,6 +28,8 @@ import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { SyncWooCommerceDialog } from "@/components/sync-woocommerce-dialog";
 import { formatINR, formatDate, cn } from "@/lib/utils";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
+import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
+import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
 
 function OrdersContent() {
   const searchParams = useSearchParams();
@@ -61,17 +63,14 @@ function OrdersContent() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
 
-  // Bulk selection
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
   // Only Processing & Completed orders are shown in Orders page (strictly exclude NEW and RETURN)
-  const validOrders = useMemo(() => {
+  const baseOrders = useMemo(() => {
     return orders.filter((o) => o.orderStatus !== "NEW" && o.orderStatus !== "RETURN");
   }, [orders]);
 
   // Filtered & Sorted orders calculation
   const filteredOrders = useMemo(() => {
-    return validOrders.filter((order) => {
+    return baseOrders.filter((order) => {
       // Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -141,7 +140,7 @@ function OrdersContent() {
       }
       return sortAsc ? comparison : -comparison;
     });
-  }, [validOrders, searchQuery, dateFilter, customDate, statusFilter, sourceFilter, courierFilter, courierStatusFilter, smsStatusFilter, sortField, sortAsc]);
+  }, [baseOrders, searchQuery, dateFilter, customDate, statusFilter, sourceFilter, courierFilter, courierStatusFilter, smsStatusFilter, sortField, sortAsc]);
 
   // Paginated orders
   const totalPages = Math.ceil(filteredOrders.length / pageSize) || 1;
@@ -150,13 +149,86 @@ function OrdersContent() {
     return filteredOrders.slice(start, start + pageSize);
   }, [filteredOrders, page, pageSize]);
 
-  // Bulk actions
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState<string>("");
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const BULK_STATUS_OPTIONS: StatusOption[] = [
+    { value: "CONFIRMED", label: "Processing" },
+    { value: "PACKING", label: "Packaging" },
+    { value: "PACKED", label: "Packed" },
+    { value: "DISPATCHED", label: "Dispatched" },
+  ];
+
+  // Bulk actions validation
+  const { validOrders, skippedOrders } = useMemo(() => {
+    if (!bulkStatus || selectedIds.length === 0) {
+      return { validOrders: [], skippedOrders: [] };
+    }
+    const targetStatus = bulkStatus as OrderStatus;
+    const targetLabel = BULK_STATUS_OPTIONS.find((s) => s.value === targetStatus)?.label || targetStatus;
+
+    const valid: Order[] = [];
+    const skipped: { orderNumber: string; reason: string }[] = [];
+
+    selectedIds.forEach((id) => {
+      const ord = orders.find((o) => o.id === id);
+      if (!ord) return;
+
+      if (ord.orderStatus === targetStatus) {
+        skipped.push({
+          orderNumber: ord.orderNumber,
+          reason: `Already in ${targetLabel} status`,
+        });
+        return;
+      }
+
+      if (targetStatus === "PACKING" && (ord.orderStatus === "PACKED" || ord.orderStatus === "DISPATCHED")) {
+        skipped.push({
+          orderNumber: ord.orderNumber,
+          reason: `Cannot move backwards from ${ord.orderStatus} to Packaging`,
+        });
+        return;
+      }
+
+      if (targetStatus === "PACKED" && ord.orderStatus === "DISPATCHED") {
+        skipped.push({
+          orderNumber: ord.orderNumber,
+          reason: `Cannot move backwards from Dispatched to Packed`,
+        });
+        return;
+      }
+
+      valid.push(ord);
+    });
+
+    return { validOrders: valid, skippedOrders: skipped };
+  }, [selectedIds, bulkStatus, orders]);
+
+  const isAllPageSelected =
+    paginatedOrders.length > 0 &&
+    paginatedOrders.every((o) => selectedIds.includes(o.id));
+
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedIds(paginatedOrders.map((o) => o.id));
+      const newIds = Array.from(new Set([...selectedIds, ...paginatedOrders.map((o) => o.id)]));
+      setSelectedIds(newIds);
     } else {
-      setSelectedIds([]);
+      const pageIdSet = new Set(paginatedOrders.map((o) => o.id));
+      setSelectedIds(selectedIds.filter((id) => !pageIdSet.has(id)));
     }
+  };
+
+  const handleSelectAllFiltered = () => {
+    setSelectedIds(filteredOrders.map((o) => o.id));
   };
 
   const handleToggleSelect = (id: string) => {
@@ -165,14 +237,27 @@ function OrdersContent() {
     );
   };
 
-  const handleBulkConfirm = () => {
-    selectedIds.forEach((id) => {
-      const ord = orders.find((o) => o.id === id);
-      if (ord && ord.orderStatus === "NEW") {
-        updateOrderStatus(id, "CONFIRMED", "Bulk confirmed by staff");
+  const handleConfirmBulkUpdate = () => {
+    if (validOrders.length === 0 || !bulkStatus) return;
+    setIsBulkUpdating(true);
+    const targetStatus = bulkStatus as OrderStatus;
+    const targetLabel = BULK_STATUS_OPTIONS.find((s) => s.value === targetStatus)?.label || targetStatus;
+
+    validOrders.forEach((order) => {
+      updateOrderStatus(order.id, targetStatus, `Bulk status updated to ${targetLabel}`);
+      if (targetStatus === "DISPATCHED") {
+        updateCourierDetails(order.id, {
+          courierStatus: "PENDING",
+          courierName: order.dispatch.courierName || "ST Courier",
+        });
       }
     });
+
+    setIsBulkUpdating(false);
+    setIsConfirmDialogOpen(false);
     setSelectedIds([]);
+    setBulkStatus("");
+    triggerToast(`${validOrders.length} ${validOrders.length === 1 ? "order" : "orders"} updated to ${targetLabel} successfully.`);
   };
 
   const handleResetFilters = () => {
@@ -274,28 +359,53 @@ function OrdersContent() {
 
   return (
     <div className="space-y-3.5 max-w-full mx-auto">
-      {/* Bulk Actions Banner */}
-      {selectedIds.length > 0 && (
-        <div className="flex items-center justify-between bg-orange-50 border border-orange-200 px-3.5 py-2 rounded-xl text-xs animate-in fade-in">
-          <span className="font-semibold text-orange-900">
-            {selectedIds.length} orders selected
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleBulkConfirm}
-              className="px-3 py-1 bg-orange-700 hover:bg-orange-800 text-white font-medium rounded-lg transition-colors"
-            >
-              Bulk Confirm
-            </button>
-            <button
-              onClick={() => setSelectedIds([])}
-              className="text-slate-500 hover:text-slate-800 px-2 py-1"
-            >
-              Deselect
-            </button>
-          </div>
+      {/* Toast Feedback */}
+      {toastMessage && (
+        <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <span>{toastMessage}</span>
         </div>
       )}
+
+      {/* Bulk Actions Toolbar */}
+      <BulkToolbar
+        selectedCount={selectedIds.length}
+        onClearSelection={() => setSelectedIds([])}
+        statusOptions={BULK_STATUS_OPTIONS}
+        selectedStatus={bulkStatus}
+        onStatusChange={setBulkStatus}
+        onApplyAction={() => setIsConfirmDialogOpen(true)}
+        isActionDisabled={!bulkStatus || validOrders.length === 0}
+        isLoading={isBulkUpdating}
+      />
+
+      {/* Select All Across Pages Banner */}
+      {selectedIds.length > 0 && isAllPageSelected && filteredOrders.length > paginatedOrders.length && selectedIds.length < filteredOrders.length && (
+        <div className="bg-slate-100 border border-slate-200 px-3.5 py-1.5 rounded-lg text-xs text-slate-700 flex items-center justify-between">
+          <span>
+            All <strong>{paginatedOrders.length}</strong> orders on this page selected.
+          </span>
+          <button
+            type="button"
+            onClick={handleSelectAllFiltered}
+            className="text-orange-700 font-bold hover:underline ml-2 cursor-pointer"
+          >
+            Select all {filteredOrders.length} filtered orders
+          </button>
+        </div>
+      )}
+
+      {/* Bulk Confirmation Modal */}
+      <BulkConfirmDialog
+        isOpen={isConfirmDialogOpen}
+        targetStatusLabel={BULK_STATUS_OPTIONS.find((s) => s.value === bulkStatus)?.label || bulkStatus}
+        totalSelected={selectedIds.length}
+        validCount={validOrders.length}
+        skippedOrders={skippedOrders}
+        onConfirm={handleConfirmBulkUpdate}
+        onCancel={() => setIsConfirmDialogOpen(false)}
+        isLoading={isBulkUpdating}
+      />
 
       {/* Filter Toolbar (Search is cleanly unified in TopBar) */}
       <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-subtle flex flex-wrap items-center justify-between gap-3">
@@ -418,8 +528,9 @@ function OrdersContent() {
                   <input
                     type="checkbox"
                     onChange={handleSelectAll}
-                    checked={paginatedOrders.length > 0 && selectedIds.length === paginatedOrders.length}
-                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                    checked={isAllPageSelected}
+                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+                    title={isAllPageSelected ? "Deselect page" : "Select all orders on this page"}
                   />
                 </th>
                 <th className="py-2 px-1 w-[3.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">

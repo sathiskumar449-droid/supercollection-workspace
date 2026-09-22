@@ -21,6 +21,7 @@ import {
 import { useOrderFlow } from "@/lib/hooks";
 import { SmsStatusBadge, SourceBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
+import { BulkToolbar } from "@/components/bulk-actions/bulk-toolbar";
 import { formatDate, cn } from "@/lib/utils";
 import { Order, SmsStatus } from "@/types/orderflow";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
@@ -29,12 +30,16 @@ function SmsMonitoringContent() {
   const searchParams = useSearchParams();
   const initialStatus = searchParams.get("status") || "ALL";
 
-  const { orders, user, syncPing4SmsStatus, updateOrderStatus, updateCourierDetails } = useOrderFlow();
+  const { orders, user, syncPing4SmsStatus, bulkSyncPing4SmsStatus, updateOrderStatus, updateCourierDetails } = useOrderFlow();
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshBanner, setRefreshBanner] = useState<string | null>(null);
+
+  // Bulk Selection State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkRefreshing, setIsBulkRefreshing] = useState(false);
 
   // ONLY orders that have been marked as "SHIPPED" in Courier Hub (after being dispatched from packing)
   const shippedOrders = useMemo(() => {
@@ -74,6 +79,37 @@ function SmsMonitoringContent() {
   const pendingCount = shippedOrders.filter((o) => o.sms.status === "PENDING").length;
   const failedCount = shippedOrders.filter((o) => o.sms.status === "FAILED").length;
   const deliveryRate = totalSms > 0 ? Math.round((sentCount / totalSms) * 100) : 0;
+
+  // Bulk selection state helpers
+  const isAllSelected = smsOrders.length > 0 && selectedIds.length === smsOrders.length;
+  const isIndeterminate = selectedIds.length > 0 && selectedIds.length < smsOrders.length;
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(smsOrders.map((o) => o.id));
+    }
+  };
+
+  const handleToggleSelect = (orderId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedIds((prev) =>
+      prev.includes(orderId) ? prev.filter((id) => id !== orderId) : [...prev, orderId]
+    );
+  };
+
+  const handleBulkRefreshSms = async () => {
+    if (selectedIds.length === 0) return;
+    setIsBulkRefreshing(true);
+    try {
+      const res = bulkSyncPing4SmsStatus(selectedIds);
+      triggerToast(`Polled Ping4SMS gateway. ${res.updatedCount} delivery receipts updated for ${selectedIds.length} orders.`);
+      setSelectedIds([]);
+    } finally {
+      setIsBulkRefreshing(false);
+    }
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -227,6 +263,22 @@ function SmsMonitoringContent() {
         </div>
       </div>
 
+      {/* Bulk Selection Toolbar */}
+      <BulkToolbar
+        selectedCount={selectedIds.length}
+        onClearSelection={() => setSelectedIds([])}
+        customAction={
+          <button
+            onClick={handleBulkRefreshSms}
+            disabled={isBulkRefreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-semibold text-xs transition-colors shadow-xs"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", isBulkRefreshing && "animate-spin")} />
+            <span>{isBulkRefreshing ? "Polling Gateway..." : `Refresh Selected (${selectedIds.length})`}</span>
+          </button>
+        }
+      />
+
       {/* Main Table */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
         {/* Controls */}
@@ -314,18 +366,30 @@ function SmsMonitoringContent() {
           <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300">
             <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[11px] uppercase tracking-tight">
               <tr>
-                <th className="py-2.5 px-2 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
+                <th className="py-2.5 px-2 w-[4%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all orders"
+                    checked={isAllSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = isIndeterminate;
+                    }}
+                    onChange={handleSelectAll}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer align-middle"
+                  />
+                </th>
+                <th className="py-2.5 px-2 w-[5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
                 <th className="py-2.5 px-3 w-[16%] border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
-                <th className="py-2.5 px-3 w-[24%] border-r border-b-2 border-slate-300 bg-slate-100">Customer Name</th>
+                <th className="py-2.5 px-3 w-[23%] border-r border-b-2 border-slate-300 bg-slate-100">Customer Name</th>
                 <th className="py-2.5 px-3 w-[18%] border-r border-b-2 border-slate-300 bg-slate-100">Customer Phone Number</th>
-                <th className="py-2.5 px-3 w-[18%] border-r border-b-2 border-slate-300 bg-slate-100">LLR Number</th>
-                <th className="py-2.5 px-2 w-[18%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">SMS Status</th>
+                <th className="py-2.5 px-3 w-[17%] border-r border-b-2 border-slate-300 bg-slate-100">LLR Number</th>
+                <th className="py-2.5 px-2 w-[17%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">SMS Status</th>
               </tr>
             </thead>
             <tbody>
               {smsOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400 border-b border-slate-300">
+                  <td colSpan={7} className="py-12 text-center text-slate-400 border-b border-slate-300">
                     <Send className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     <p className="text-sm font-semibold text-slate-700">No Shipped Orders for SMS Tracking</p>
                     <p className="text-xs text-slate-500 mt-1">
@@ -340,8 +404,25 @@ function SmsMonitoringContent() {
                   <tr
                     key={order.id}
                     onClick={() => setInspectOrder(order)}
-                    className="hover:bg-orange-50/40 transition-colors cursor-pointer group"
+                    className={cn(
+                      "hover:bg-orange-50/40 transition-colors cursor-pointer group",
+                      selectedIds.includes(order.id) && "bg-orange-50/60"
+                    )}
                   >
+                    {/* Checkbox */}
+                    <td
+                      className="py-2.5 px-2 text-center border-r border-b border-slate-300"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        aria-label={`Select order ${order.orderNumber}`}
+                        checked={selectedIds.includes(order.id)}
+                        onChange={() => handleToggleSelect(order.id)}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer align-middle"
+                      />
+                    </td>
+
                     {/* 1. S.No (Spreadsheet row index) */}
                     <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-b border-slate-300">
                       {index + 1}

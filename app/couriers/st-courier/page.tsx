@@ -19,6 +19,8 @@ import { SourceBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { formatDate, cn } from "@/lib/utils";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
+import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
+import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
 
 // Inline LLR editor component for quick manual entry and auto-save
 function InlineCourierLlrInput({
@@ -120,6 +122,18 @@ function StCourierContent() {
   const shippedCourierCount = courierOrders.filter((o) => o.dispatch.courierStatus === "SHIPPED" || (o.dispatch.courierStatus as string) === "DELIVERED").length;
   const pendingCourierStatusCount = totalOrders - shippedCourierCount;
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkCourierStatus, setBulkCourierStatus] = useState<string>("");
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+
+  const BULK_COURIER_OPTIONS: StatusOption[] = [
+    { value: "PENDING", label: "Pending" },
+    { value: "SHIPPED", label: "Shipped" },
+    { value: "DELIVERED", label: "Delivered" },
+  ];
+
   // Filter by active tab and search
   const displayedOrders = useMemo(() => {
     return courierOrders.filter((o) => {
@@ -146,6 +160,74 @@ function StCourierContent() {
       return true;
     });
   }, [courierOrders, activeTab, searchQuery]);
+
+  // Bulk validation for courier status
+  const { validOrders, skippedOrders } = useMemo(() => {
+    if (!bulkCourierStatus || selectedIds.length === 0) {
+      return { validOrders: [], skippedOrders: [] };
+    }
+    const targetStatus = bulkCourierStatus as CourierStatus;
+    const targetLabel = BULK_COURIER_OPTIONS.find((s) => s.value === targetStatus)?.label || targetStatus;
+
+    const valid: Order[] = [];
+    const skipped: { orderNumber: string; reason: string }[] = [];
+
+    selectedIds.forEach((id) => {
+      const ord = orders.find((o) => o.id === id);
+      if (!ord) return;
+
+      if (ord.dispatch.courierStatus === targetStatus) {
+        skipped.push({
+          orderNumber: ord.orderNumber,
+          reason: `Already in ${targetLabel} status`,
+        });
+        return;
+      }
+
+      valid.push(ord);
+    });
+
+    return { validOrders: valid, skippedOrders: skipped };
+  }, [selectedIds, bulkCourierStatus, orders]);
+
+  const isAllDisplayedSelected =
+    displayedOrders.length > 0 &&
+    displayedOrders.every((o) => selectedIds.includes(o.id));
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      const newIds = Array.from(new Set([...selectedIds, ...displayedOrders.map((o) => o.id)]));
+      setSelectedIds(newIds);
+    } else {
+      const displayedIdSet = new Set(displayedOrders.map((o) => o.id));
+      setSelectedIds(selectedIds.filter((id) => !displayedIdSet.has(id)));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleConfirmBulkCourierUpdate = () => {
+    if (validOrders.length === 0 || !bulkCourierStatus) return;
+    setIsBulkUpdating(true);
+    const targetStatus = bulkCourierStatus as CourierStatus;
+    const targetLabel = BULK_COURIER_OPTIONS.find((s) => s.value === targetStatus)?.label || targetStatus;
+
+    validOrders.forEach((order) => {
+      updateCourierDetails(order.id, {
+        courierStatus: targetStatus,
+      });
+    });
+
+    setIsBulkUpdating(false);
+    setIsConfirmDialogOpen(false);
+    setSelectedIds([]);
+    setBulkCourierStatus("");
+    triggerToast(`${validOrders.length} ${validOrders.length === 1 ? "order" : "orders"} updated to ${targetLabel} successfully.`);
+  };
 
   // Handler for saving LLR number
   const handleLlrSave = (orderId: string, orderNumber: string, newLlr: string) => {
@@ -318,6 +400,32 @@ function StCourierContent() {
         </div>
       </div>
 
+      {/* Bulk Action Toolbar */}
+      <BulkToolbar
+        selectedCount={selectedIds.length}
+        onClearSelection={() => setSelectedIds([])}
+        statusOptions={BULK_COURIER_OPTIONS}
+        selectedStatus={bulkCourierStatus}
+        onStatusChange={setBulkCourierStatus}
+        onApplyAction={() => setIsConfirmDialogOpen(true)}
+        isActionDisabled={!bulkCourierStatus || validOrders.length === 0}
+        isLoading={isBulkUpdating}
+        itemTypeLabel="orders"
+      />
+
+      {/* Bulk Confirmation Modal */}
+      <BulkConfirmDialog
+        isOpen={isConfirmDialogOpen}
+        targetStatusLabel={BULK_COURIER_OPTIONS.find((s) => s.value === bulkCourierStatus)?.label || bulkCourierStatus}
+        totalSelected={selectedIds.length}
+        validCount={validOrders.length}
+        skippedOrders={skippedOrders}
+        onConfirm={handleConfirmBulkCourierUpdate}
+        onCancel={() => setIsConfirmDialogOpen(false)}
+        isLoading={isBulkUpdating}
+        itemTypeLabel="orders"
+      />
+
       {/* Main Operations Table Box */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
         {/* Controls Toolbar */}
@@ -393,19 +501,28 @@ function StCourierContent() {
           <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300">
             <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[11px] uppercase tracking-tight">
               <tr>
-                <th className="py-2.5 px-2 w-[5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
-                <th className="py-2.5 px-3 w-[12%] border-r border-b-2 border-slate-300 bg-slate-100">Date</th>
-                <th className="py-2.5 px-3 w-[14%] border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
-                <th className="py-2.5 px-3 w-[22%] border-r border-b-2 border-slate-300 bg-slate-100">Name</th>
+                <th className="py-2.5 px-2 w-[3.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
+                  <input
+                    type="checkbox"
+                    checked={isAllDisplayedSelected}
+                    onChange={handleSelectAll}
+                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+                    title={isAllDisplayedSelected ? "Deselect all" : "Select all displayed orders"}
+                  />
+                </th>
+                <th className="py-2.5 px-2 w-[4.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
+                <th className="py-2.5 px-3 w-[11%] border-r border-b-2 border-slate-300 bg-slate-100">Date</th>
+                <th className="py-2.5 px-3 w-[13%] border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
+                <th className="py-2.5 px-3 w-[20%] border-r border-b-2 border-slate-300 bg-slate-100">Name</th>
                 <th className="py-2.5 px-3 w-[15%] border-r border-b-2 border-slate-300 bg-slate-100">Phone Number</th>
-                <th className="py-2.5 px-3 w-[16%] border-r border-b-2 border-slate-300 bg-slate-100">LLR Number</th>
+                <th className="py-2.5 px-3 w-[17%] border-r border-b-2 border-slate-300 bg-slate-100">LLR Number</th>
                 <th className="py-2.5 px-2 w-[16%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">Status</th>
               </tr>
             </thead>
             <tbody>
               {displayedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400 border-b border-slate-300">
+                  <td colSpan={8} className="py-12 text-center text-slate-400 border-b border-slate-300">
                     <Truck className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     <p className="text-sm font-semibold text-slate-700">No Dispatched Orders for Courier</p>
                     <p className="text-xs text-slate-500 mt-1">
@@ -421,8 +538,24 @@ function StCourierContent() {
                     <tr
                       key={order.id}
                       onClick={() => setInspectOrder(order)}
-                      className="hover:bg-orange-50/40 transition-colors cursor-pointer group"
+                      className={cn(
+                        "hover:bg-orange-50/40 transition-colors cursor-pointer group",
+                        selectedIds.includes(order.id) && "bg-orange-50/60"
+                      )}
                     >
+                      {/* Checkbox */}
+                      <td
+                        className="py-2 px-2 text-center bg-slate-50/70 border-r border-b border-slate-300"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(order.id)}
+                          onChange={() => handleToggleSelect(order.id)}
+                          className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+                        />
+                      </td>
+
                       {/* 1. S.No (Spreadsheet row index) */}
                       <td className="py-2 px-2 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-b border-slate-300">
                         {index + 1}
