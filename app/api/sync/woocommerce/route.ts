@@ -14,9 +14,12 @@ export async function POST(req: NextRequest) {
       // Body is optional if env variables exist
     }
 
-    const storeUrl = (body.storeUrl || process.env.WOOCOMMERCE_STORE_URL || "https://supercollections.in").replace(/\/+$/, "");
-    const consumerKey = body.consumerKey || process.env.WOOCOMMERCE_CONSUMER_KEY;
-    const consumerSecret = body.consumerSecret || process.env.WOOCOMMERCE_CONSUMER_SECRET;
+    let storeUrl = (body.storeUrl || process.env.WOOCOMMERCE_STORE_URL || "https://supercollections.in").trim().replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(storeUrl)) {
+      storeUrl = `https://${storeUrl}`;
+    }
+    const consumerKey = (body.consumerKey || process.env.WOOCOMMERCE_CONSUMER_KEY || "").trim();
+    const consumerSecret = (body.consumerSecret || process.env.WOOCOMMERCE_CONSUMER_SECRET || "").trim();
 
     if (!consumerKey || !consumerSecret) {
       return NextResponse.json({
@@ -25,15 +28,16 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Call WooCommerce REST API
+    // Call WooCommerce REST API using BOTH query params and Basic Auth header for maximum compatibility
     const authHeader = "Basic " + Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
-    const wcApiUrl = `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=any`;
+    const wcApiUrl = `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=any&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`;
 
     const res = await fetch(wcApiUrl, {
       headers: {
         Authorization: authHeader,
         "Content-Type": "application/json",
       },
+      cache: "no-store",
     });
 
     if (!res.ok) {
@@ -68,7 +72,7 @@ export async function POST(req: NextRequest) {
     for (const wc of wcOrders) {
       const wcId = String(wc.id || wc.number);
       const customerName = `${wc.billing?.first_name || ""} ${wc.billing?.last_name || ""}`.trim() || wc.shipping?.first_name || "Online Customer";
-      const mobile = wc.billing?.phone || wc.shipping?.phone || "+91 98000 00000";
+      const mobile = (wc.billing?.phone || wc.shipping?.phone || "+91 98000 00000").trim();
       const address = [wc.shipping?.address_1, wc.shipping?.address_2].filter(Boolean).join(", ") || wc.billing?.address_1 || "Customer Address";
       const city = wc.shipping?.city || wc.billing?.city || "Chennai";
       const state = wc.shipping?.state || wc.billing?.state || "Tamil Nadu";
@@ -85,22 +89,63 @@ export async function POST(req: NextRequest) {
       const paymentStatus = wc.status === "processing" || wc.status === "completed" ? "PAID" : wc.payment_method === "cod" ? "COD" : "PENDING";
       const courierStatus = orderStatus === "COMPLETED" ? "SHIPPED" : "PENDING";
 
-      // 1. Upsert Customer
-      const { data: customer } = await supabase
-        .from("customers")
-        .upsert({
-          name: customerName,
-          mobile,
-          address,
-          city,
-          state,
-          pincode,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "mobile" })
-        .select()
-        .single();
+      // 1. Safe Customer Lookup / Upsert (avoid 42P10 constraint error)
+      let customerId: string | null = null;
+      if (mobile) {
+        const { data: existingCustomer } = await supabase
+          .from("customers")
+          .select("id")
+          .eq("mobile", mobile)
+          .maybeSingle();
 
-      const customerId = customer?.id;
+        if (existingCustomer?.id) {
+          customerId = existingCustomer.id;
+          await supabase
+            .from("customers")
+            .update({
+              name: customerName,
+              address,
+              city,
+              state,
+              pincode,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", customerId);
+        }
+      }
+
+      if (!customerId) {
+        const { data: newCust, error: newCustErr } = await supabase
+          .from("customers")
+          .insert({
+            name: customerName,
+            mobile,
+            address,
+            city,
+            state,
+            pincode,
+            updated_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+
+        if (!newCustErr && newCust) {
+          customerId = newCust.id;
+        } else {
+          console.error("Failed to insert customer:", newCustErr);
+        }
+      }
+
+      // Fallback customer if needed
+      if (!customerId) {
+        const { data: fallbackCust } = await supabase.from("customers").select("id").limit(1).maybeSingle();
+        customerId = fallbackCust?.id || null;
+      }
+
+      if (!customerId) {
+        console.error("Cannot insert order without customer ID for wcId:", wcId);
+        continue;
+      }
 
       // 2. Upsert Order
       const orderNumber = `SC-WC-${wcId}`;
@@ -154,6 +199,8 @@ export async function POST(req: NextRequest) {
           action: "Orders Synced",
           details: `Order #${wcId} synced from supercollections.in`,
         });
+      } else if (orderError) {
+        console.error("Order upsert error for wcId", wcId, orderError);
       }
     }
 

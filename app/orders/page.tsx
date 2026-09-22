@@ -18,12 +18,14 @@ import {
   Layers, 
   X,
   FileSpreadsheet,
-  FileText
+  FileText,
+  Globe
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
 import { Order, OrderStatus, CourierStatus, SmsStatus, OrderSource } from "@/types/orderflow";
 import { OrderStatusBadge, CourierStatusBadge, SmsStatusBadge, SourceBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
+import { SyncWooCommerceDialog } from "@/components/sync-woocommerce-dialog";
 import { formatINR, formatDate, cn } from "@/lib/utils";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 
@@ -42,6 +44,7 @@ function OrdersContent() {
     customDate,
   } = useOrderFlow();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
 
   // Filters state
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
@@ -108,15 +111,17 @@ function OrdersContent() {
       if (customDate) {
         if (order.createdAt.slice(0, 10) !== customDate) return false;
       } else if (dateFilter === "Today") {
-        const todayStr = "2026-09-21";
-        if (order.createdAt.slice(0, 10) !== todayStr) return false;
+        const orderDateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(order.createdAt));
+        const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+        if (orderDateStr !== todayStr) return false;
       } else if (dateFilter === "Last 7 Days") {
         const orderTime = new Date(order.createdAt).getTime();
-        const sevenDaysAgo = new Date("2026-09-21T23:59:59+05:30").getTime() - 7 * 24 * 3600 * 1000;
+        const sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000;
         if (orderTime < sevenDaysAgo) return false;
       } else if (dateFilter === "This Month") {
-        const orderMonth = order.createdAt.slice(0, 7);
-        if (orderMonth !== "2026-09") return false;
+        const orderMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(order.createdAt)).slice(0, 7);
+        const thisMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()).slice(0, 7);
+        if (orderMonth !== thisMonth) return false;
       }
 
       return true;
@@ -470,8 +475,21 @@ function OrdersContent() {
                 <tr>
                   <td colSpan={14} className="py-12 text-center text-slate-400 border-b border-slate-300">
                     <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    <p className="text-sm font-medium text-slate-600">No matching orders found</p>
-                    <p className="text-xs mt-1">Try adjusting your filters or search query.</p>
+                    <p className="text-sm font-semibold text-slate-700">No matching orders found</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {orders.length === 0 
+                        ? "No orders imported yet from WooCommerce." 
+                        : "Try adjusting your filters or search query."}
+                    </p>
+                    {orders.length === 0 && (
+                      <button
+                        onClick={() => setSyncDialogOpen(true)}
+                        className="mt-3.5 inline-flex items-center gap-1.5 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                      >
+                        <Globe className="w-3.5 h-3.5" />
+                        <span>Sync Orders from WooCommerce</span>
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -668,6 +686,12 @@ function OrdersContent() {
         onUpdateStatus={updateOrderStatus}
         onUpdateCourier={updateCourierDetails}
         userRole={user.role}
+      />
+
+      {/* Sync WooCommerce Dialog */}
+      <SyncWooCommerceDialog
+        isOpen={syncDialogOpen}
+        onClose={() => setSyncDialogOpen(false)}
       />
     </div>
   );

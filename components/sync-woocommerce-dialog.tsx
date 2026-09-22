@@ -172,6 +172,21 @@ export function SyncWooCommerceDialog({
             </div>
           </div>
 
+          <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200/70 text-[11px] text-amber-900 space-y-1">
+            <div className="font-semibold flex items-center gap-1.5 text-amber-800">
+              <span>⚡ Automatic Real-Time Sync (Webhook)</span>
+            </div>
+            <p className="text-slate-600 leading-normal">
+              To make new orders appear automatically in real time without clicking sync:
+            </p>
+            <div className="text-[10px] font-mono bg-white px-2 py-1 rounded border border-amber-200 break-all select-all text-slate-800">
+              https://supercollection-workspace.vercel.app/api/webhooks/woocommerce
+            </div>
+            <p className="text-[10px] text-slate-500">
+              Add in: <b>WooCommerce → Settings → Advanced → Webhooks</b> (Topic: <i>Order created</i>)
+            </p>
+          </div>
+
           {/* Feedback Status */}
           {statusMessage && (
             <div
