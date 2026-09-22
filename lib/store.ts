@@ -223,28 +223,17 @@ export const orderflowStore = {
     const newEntries: ActivityLog[] = [];
 
     if (newStatus === "CONFIRMED") {
-      if (!order.timeline.some((t) => t.action === "Order confirmed")) {
+      if (!order.timeline.some((t) => t.action === "Order processing")) {
         newEntries.push({
-          id: `tl-${Date.now()}-conf`,
+          id: `tl-${Date.now()}-proc`,
           orderId: order.id,
           timestamp: now,
           user: globalUser.name,
           role: globalUser.role,
-          action: "Order confirmed",
-          details: "Order confirmed",
+          action: "Order processing",
+          details: "Order is being processed",
           oldValue: oldStatus,
           newValue: newStatus,
-        });
-      }
-      if (!order.timeline.some((t) => t.action === "Waiting for packing")) {
-        newEntries.push({
-          id: `tl-${Date.now() + 100}-waitpack`,
-          orderId: order.id,
-          timestamp: new Date(Date.now() + 100).toISOString(),
-          user: "Packing Station",
-          role: "PACKING_STAFF",
-          action: "Waiting for packing",
-          details: "Order is ready for packing",
         });
       }
     } else if (newStatus === "PACKING") {
@@ -310,9 +299,20 @@ export const orderflowStore = {
           user: globalUser.name,
           role: globalUser.role,
           action: "Order completed",
-          details: "Delivered to customer",
+          details: "Order completed in WooCommerce",
           oldValue: oldStatus,
           newValue: newStatus,
+        });
+      }
+      if (!order.timeline.some((t) => t.action === "Waiting for packing")) {
+        newEntries.push({
+          id: `tl-${Date.now() + 100}-waitpack`,
+          orderId: order.id,
+          timestamp: new Date(Date.now() + 100).toISOString(),
+          user: "Packing Station",
+          role: "PACKING_STAFF",
+          action: "Waiting for packing",
+          details: "Order is ready for packing",
         });
       }
     }
@@ -320,10 +320,6 @@ export const orderflowStore = {
     const updatedTimeline: ActivityLog[] = [...order.timeline, ...newEntries];
 
     const isDispatched = newStatus === "DISPATCHED";
-    const isShipped = newStatus === "COMPLETED";
-    const newCourierStatus: CourierStatus = isShipped
-      ? "SHIPPED"
-      : "PENDING";
 
     const updatedOrder: Order = {
       ...order,
@@ -337,19 +333,11 @@ export const orderflowStore = {
       packingStaff: newStatus === "PACKING" ? globalUser.name : order.packingStaff,
       dispatch: {
         ...order.dispatch,
-        courierStatus: newCourierStatus,
         dispatchedAt: isDispatched && !order.dispatch.dispatchedAt ? now : order.dispatch.dispatchedAt,
-        deliveredAt: isShipped && !order.dispatch.deliveredAt ? now : order.dispatch.deliveredAt,
         courierName: order.dispatch.courierName || "ST Courier",
       },
       sms: {
         ...order.sms,
-        status: isShipped ? "SENT" : order.sms.status,
-        lastCheckedAt: now,
-        deliveredAt: isShipped ? now : order.sms.deliveredAt,
-        sentAt: isShipped ? (order.sms.sentAt || now) : order.sms.sentAt,
-        providerMessageId: isShipped ? (order.sms.providerMessageId || `P4S-DEL-${order.orderNumber.replace(/[^a-zA-Z0-9]/g, "")}`) : order.sms.providerMessageId,
-        responseSnippet: isShipped ? "DELIVRD: Handset acknowledged (Delivered to customer)" : order.sms.responseSnippet,
       },
     };
 

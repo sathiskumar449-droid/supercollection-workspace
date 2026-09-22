@@ -78,15 +78,29 @@ function buildTrackingPipeline(order: Order): { stages: TrackingStage[]; current
   };
 
   const createdTime = order.createdAt || new Date().toISOString();
-  const confirmedTime = getTimelineTime("Order confirmed") || order.confirmedAt || createdTime;
-  const waitingPackingTime = getTimelineTime("Waiting for packing") || confirmedTime;
+
+  // Order completed in WooCommerce
+  // ONLY mark completed when WooCommerce has updated status to "completed" (or downstream fulfillment: PACKING, PACKED, DISPATCHED)
+  const isOrderCompleted =
+    order.orderStatus === "COMPLETED" ||
+    order.orderStatus === "PACKING" ||
+    order.orderStatus === "PACKED" ||
+    order.orderStatus === "DISPATCHED";
+
+  const completedTime =
+    getTimelineTime("Order completed") ||
+    getTimelineTime("Order confirmed") ||
+    (isOrderCompleted ? order.updatedAt : undefined);
+
+  const waitingPackingTime =
+    getTimelineTime("Waiting for packing") ||
+    (isOrderCompleted ? completedTime : undefined);
 
   // Determine packing stage completion
   const isPackingStarted =
     order.orderStatus === "PACKING" ||
     order.orderStatus === "PACKED" ||
     order.orderStatus === "DISPATCHED" ||
-    order.orderStatus === "COMPLETED" ||
     Boolean(order.packingStartedAt) ||
     Boolean(getTimelineTime("Packing started"));
   const packingStartedTime = getTimelineTime("Packing started") || order.packingStartedAt;
@@ -94,7 +108,6 @@ function buildTrackingPipeline(order: Order): { stages: TrackingStage[]; current
   const isPacked =
     order.orderStatus === "PACKED" ||
     order.orderStatus === "DISPATCHED" ||
-    order.orderStatus === "COMPLETED" ||
     Boolean(order.packedAt) ||
     Boolean(getTimelineTime("Order packed"));
   const packedTime = getTimelineTime("Order packed") || order.packedAt;
@@ -102,7 +115,6 @@ function buildTrackingPipeline(order: Order): { stages: TrackingStage[]; current
   // Determine dispatch stage completion
   const isDispatched =
     order.orderStatus === "DISPATCHED" ||
-    order.orderStatus === "COMPLETED" ||
     Boolean(order.dispatchedAt) ||
     Boolean(getTimelineTime("Order dispatched"));
   const dispatchedTime = getTimelineTime("Order dispatched") || order.dispatchedAt;
@@ -154,28 +166,32 @@ function buildTrackingPipeline(order: Order): { stages: TrackingStage[]; current
       timestamp: getTimelineTime("Order processing") || createdTime,
       completed: true,
     },
-    // 3. Order confirmed
+    // 3. Order completed (Updates when status is completed in WooCommerce)
     {
-      key: "CONFIRMED",
-      title: "Order confirmed",
-      description: "Order confirmed",
-      timestamp: confirmedTime,
-      completed: order.orderStatus !== "NEW",
+      key: "ORDER_COMPLETED",
+      title: "Order completed",
+      description: isOrderCompleted 
+        ? "Order completed in WooCommerce" 
+        : "Waiting for WooCommerce completion",
+      timestamp: isOrderCompleted ? completedTime : undefined,
+      completed: isOrderCompleted,
     },
     // 4. Waiting for packing
     {
       key: "WAITING_PACKING",
       title: "Waiting for packing",
-      description: "Order is ready for packing",
-      timestamp: waitingPackingTime,
-      completed: order.orderStatus !== "NEW",
+      description: isOrderCompleted 
+        ? "Order is ready for packing" 
+        : "Pending order completion",
+      timestamp: isOrderCompleted ? waitingPackingTime : undefined,
+      completed: isOrderCompleted,
     },
     // 5. Packing started
     {
       key: "PACKING_STARTED",
       title: "Packing started",
       description: "Packing started",
-      timestamp: packingStartedTime,
+      timestamp: isPackingStarted ? packingStartedTime : undefined,
       completed: Boolean(isPackingStarted),
     },
     // 6. Order packed
@@ -183,7 +199,7 @@ function buildTrackingPipeline(order: Order): { stages: TrackingStage[]; current
       key: "ORDER_PACKED",
       title: "Order packed",
       description: "Order packed successfully",
-      timestamp: packedTime,
+      timestamp: isPacked ? packedTime : undefined,
       completed: Boolean(isPacked),
     },
     // 7. Order dispatched
@@ -191,7 +207,7 @@ function buildTrackingPipeline(order: Order): { stages: TrackingStage[]; current
       key: "ORDER_DISPATCHED",
       title: "Order dispatched",
       description: "Order dispatched",
-      timestamp: dispatchedTime,
+      timestamp: isDispatched ? dispatchedTime : undefined,
       completed: Boolean(isDispatched),
     },
     // 8. Waiting for shipment (Courier Hub)
@@ -199,7 +215,7 @@ function buildTrackingPipeline(order: Order): { stages: TrackingStage[]; current
       key: "WAITING_SHIPMENT",
       title: "Waiting for shipment",
       description: `Order moved to ${courierName}${order.dispatch.llrNumber ? ` · LLR: ${order.dispatch.llrNumber}` : ""}`,
-      timestamp: waitingShipmentTime,
+      timestamp: isMovedToCourier ? waitingShipmentTime : undefined,
       completed: Boolean(isMovedToCourier),
     },
     // 9. Shipped
@@ -207,7 +223,7 @@ function buildTrackingPipeline(order: Order): { stages: TrackingStage[]; current
       key: "SHIPPED",
       title: "Shipped",
       description: `${courierName} marked the order as shipped`,
-      timestamp: shippedTime,
+      timestamp: isShipped ? shippedTime : undefined,
       completed: Boolean(isShipped),
     },
     // 10. Waiting for SMS
@@ -215,7 +231,7 @@ function buildTrackingPipeline(order: Order): { stages: TrackingStage[]; current
       key: "WAITING_SMS",
       title: "Waiting for SMS",
       description: "Customer notification pending",
-      timestamp: waitingSmsTime,
+      timestamp: isWaitingSms ? waitingSmsTime : undefined,
       completed: Boolean(isWaitingSms),
     },
     // 11. SMS notification
@@ -602,29 +618,36 @@ export function OrderDetailsDrawer({
               <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Order Tracking
               </h3>
-              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                {stages[currentIndex]?.title || "In Progress"}
-              </span>
+              {(() => {
+                const isAllCompleted = stages.length > 0 && stages.every((s) => s.completed);
+                return (
+                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    {isAllCompleted ? "Completed" : stages[currentIndex]?.title || "In Progress"}
+                  </span>
+                );
+              })()}
             </div>
 
             <div className="relative pl-6 space-y-4 ml-1 mt-3">
-              {stages.map((stage, idx) => {
-                const isCompleted = idx < currentIndex;
-                const isCurrent = idx === currentIndex;
-                const isUpcoming = idx > currentIndex;
-                const isLast = idx === stages.length - 1;
+              {(() => {
+                const isAllCompleted = stages.length > 0 && stages.every((s) => s.completed);
+                return stages.map((stage, idx) => {
+                  const isCompleted = isAllCompleted ? true : idx < currentIndex;
+                  const isCurrent = !isAllCompleted && idx === currentIndex;
+                  const isUpcoming = !isAllCompleted && idx > currentIndex;
+                  const isLast = idx === stages.length - 1;
 
-                return (
-                  <div key={stage.key} className="relative group">
-                    {/* Vertical connecting line to next item */}
-                    {!isLast && (
-                      <div
-                        className={cn(
-                          "absolute -left-[17px] top-4 w-0.5 h-[calc(100%+8px)] transition-colors",
-                          idx < currentIndex ? "bg-emerald-500" : "bg-slate-200"
-                        )}
-                      />
-                    )}
+                  return (
+                    <div key={stage.key} className="relative group">
+                      {/* Vertical connecting line to next item */}
+                      {!isLast && (
+                        <div
+                          className={cn(
+                            "absolute -left-[17px] top-4 w-0.5 h-[calc(100%+8px)] transition-colors",
+                            (isAllCompleted || idx < currentIndex) ? "bg-emerald-500" : "bg-slate-200"
+                          )}
+                        />
+                      )}
 
                     {/* Status Dot */}
                     <div
@@ -677,7 +700,8 @@ export function OrderDetailsDrawer({
                     </div>
                   </div>
                 );
-              })}
+              });
+            })()}
             </div>
           </div>
 

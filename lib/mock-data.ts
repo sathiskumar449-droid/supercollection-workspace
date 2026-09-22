@@ -255,15 +255,34 @@ export function generateMockOrders(): Order[] {
       },
     ];
 
-    if (confirmedAt) {
+    if (orderStatus === "CONFIRMED") {
       timeline.push({
         id: `tl-${i}-2`,
         orderId: `ord-${i}`,
-        timestamp: confirmedAt,
-        user: "Deepa Verma",
+        timestamp: confirmedAt || createdAt,
+        user: "Orders System",
         role: "ORDER_STAFF" as const,
-        action: "Order Confirmed",
-        details: "Customer address and items verified",
+        action: "Order processing",
+        details: "Order is being processed",
+      });
+    } else if (orderStatus !== "NEW") {
+      timeline.push({
+        id: `tl-${i}-2`,
+        orderId: `ord-${i}`,
+        timestamp: confirmedAt || createdAt,
+        user: "WooCommerce",
+        role: "ORDER_STAFF" as const,
+        action: "Order completed",
+        details: "Order completed in WooCommerce",
+      });
+      timeline.push({
+        id: `tl-${i}-2-pack`,
+        orderId: `ord-${i}`,
+        timestamp: new Date(new Date(confirmedAt || createdAt).getTime() + 1000).toISOString(),
+        user: "Packing Station",
+        role: "PACKING_STAFF" as const,
+        action: "Waiting for packing",
+        details: "Order is ready for packing",
       });
     }
 

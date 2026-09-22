@@ -226,18 +226,17 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 5. Activity Log (Only for initial order creation, avoid duplicate sync logs)
+        // 5. Activity Log (Only log Order completed when WooCommerce status is actually completed)
         const { data: existingLogs } = await supabase
           .from("activity_logs")
-          .select("id")
-          .eq("order_id", order.id)
-          .limit(1);
+          .select("id, action")
+          .eq("order_id", order.id);
+
+        const createdAtTime = wc.date_created ? new Date(wc.date_created).toISOString() : new Date().toISOString();
+        const baseTime = new Date(createdAtTime).getTime();
 
         if (!existingLogs || existingLogs.length === 0) {
-          const createdAtTime = wc.date_created ? new Date(wc.date_created).toISOString() : new Date().toISOString();
-          const baseTime = new Date(createdAtTime).getTime();
-
-          const initialLogs = [
+          const initialLogs: any[] = [
             {
               order_id: order.id,
               user_name: "Website",
@@ -254,29 +253,82 @@ export async function POST(req: NextRequest) {
               details: "Order is being processed",
               created_at: new Date(baseTime + 1000).toISOString(),
             },
-            {
-              order_id: order.id,
-              user_name: "Orders System",
-              user_role: "ORDER_STAFF",
-              action: "Order confirmed",
-              details: "Order confirmed",
-              created_at: new Date(baseTime + 2000).toISOString(),
-            },
-            {
-              order_id: order.id,
-              user_name: "Packing Station",
-              user_role: "PACKING_STAFF",
-              action: "Waiting for packing",
-              details: "Order is ready for packing",
-              created_at: new Date(baseTime + 3000).toISOString(),
-            },
           ];
 
+          if (wc.status === "completed") {
+            const completedTimestamp = wc.date_modified ? new Date(wc.date_modified).toISOString() : new Date(baseTime + 2000).toISOString();
+            initialLogs.push(
+              {
+                order_id: order.id,
+                user_name: "WooCommerce",
+                user_role: "ORDER_STAFF",
+                action: "Order completed",
+                details: "Order completed in WooCommerce",
+                created_at: completedTimestamp,
+              },
+              {
+                order_id: order.id,
+                user_name: "Packing Station",
+                user_role: "PACKING_STAFF",
+                action: "Waiting for packing",
+                details: "Order is ready for packing",
+                created_at: new Date(new Date(completedTimestamp).getTime() + 1000).toISOString(),
+              }
+            );
+          }
+
           await supabase.from("activity_logs").insert(initialLogs);
+        } else if (wc.status === "completed") {
+          // If order already existed in DB and WooCommerce now marks it completed
+          const hasCompletedLog = existingLogs.some(
+            (l: any) => l.action?.toLowerCase() === "order completed"
+          );
+          if (!hasCompletedLog) {
+            const completedTimestamp = wc.date_modified ? new Date(wc.date_modified).toISOString() : new Date().toISOString();
+            await supabase.from("activity_logs").insert([
+              {
+                order_id: order.id,
+                user_name: "WooCommerce",
+                user_role: "ORDER_STAFF",
+                action: "Order completed",
+                details: "Order completed in WooCommerce",
+                created_at: completedTimestamp,
+              },
+              {
+                order_id: order.id,
+                user_name: "Packing Station",
+                user_role: "PACKING_STAFF",
+                action: "Waiting for packing",
+                details: "Order is ready for packing",
+                created_at: new Date(new Date(completedTimestamp).getTime() + 1000).toISOString(),
+              },
+            ]);
+          }
         }
       } else if (orderError) {
         console.error("Order upsert error for wcId", wcId, orderError);
       }
+    }
+
+    // Clean up legacy "Order confirmed" logs and convert to "Order completed"
+    await db
+      .from("activity_logs")
+      .update({ action: "Order completed", details: "Order completed in WooCommerce" })
+      .eq("action", "Order confirmed");
+
+    // Clean up premature logs for orders still in CONFIRMED (processing) or NEW status
+    const { data: pendingOrders } = await db
+      .from("orders")
+      .select("id")
+      .in("status", ["CONFIRMED", "NEW"]);
+
+    if (pendingOrders && pendingOrders.length > 0) {
+      const pendingIds = pendingOrders.map((o) => o.id);
+      await db
+        .from("activity_logs")
+        .delete()
+        .in("order_id", pendingIds)
+        .in("action", ["Order completed", "Order confirmed", "Waiting for packing"]);
     }
 
     return NextResponse.json({
