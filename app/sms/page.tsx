@@ -40,7 +40,9 @@ function SmsMonitoringContent() {
   const shippedOrders = useMemo(() => {
     return orders.filter((o) => 
       o.dispatch.courierStatus === "SHIPPED" || 
-      (o.dispatch.courierStatus as string) === "DELIVERED"
+      (o.dispatch.courierStatus as string) === "DELIVERED" ||
+      Boolean(o.dispatch.deliveredAt) ||
+      (o.orderStatus === "COMPLETED" && (Boolean(o.dispatchedAt) || Boolean(o.dispatch.dispatchedAt)))
     );
   }, [orders]);
 

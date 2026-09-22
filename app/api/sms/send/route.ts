@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 
 /**
  * Ping4SMS Outbound Dispatch/Shipped SMS Trigger
@@ -47,23 +47,43 @@ export async function POST(req: NextRequest) {
     }
 
     // Persist SMS log into Supabase if configured
-    if (isSupabaseConfigured() && supabase && orderId) {
-      await supabase.from("sms_logs").upsert({
-        order_id: orderId,
-        mobile: customerMobile,
-        provider: "Ping4SMS",
-        provider_message_id: providerMessageId,
-        status: smsStatus,
-        sent_at: new Date().toISOString(),
-      }, { onConflict: "order_id" });
+    if (isSupabaseConfigured() && orderId) {
+      const db = supabaseAdmin || supabase;
+      if (db) {
+        const { data: existingSms } = await db
+          .from("sms_logs")
+          .select("id")
+          .eq("order_id", orderId)
+          .maybeSingle();
 
-      await supabase.from("activity_logs").insert({
-        order_id: orderId,
-        user_name: "Ping4SMS Gateway",
-        user_role: "DISPATCH_STAFF",
-        action: "SMS Sent",
-        details: `Dispatched SMS ${smsStatus === "SENT" ? "sent successfully" : "failed"} to ${customerMobile} (ID: ${providerMessageId})`,
-      });
+        if (existingSms) {
+          await db.from("sms_logs").update({
+            mobile: customerMobile,
+            provider: "Ping4SMS",
+            provider_message_id: providerMessageId,
+            status: smsStatus,
+            sent_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq("id", existingSms.id);
+        } else {
+          await db.from("sms_logs").insert({
+            order_id: orderId,
+            mobile: customerMobile,
+            provider: "Ping4SMS",
+            provider_message_id: providerMessageId,
+            status: smsStatus,
+            sent_at: new Date().toISOString(),
+          });
+        }
+
+        await db.from("activity_logs").insert({
+          order_id: orderId,
+          user_name: "Ping4SMS Gateway",
+          user_role: "DISPATCH_STAFF",
+          action: "SMS Sent",
+          details: `Dispatched SMS ${smsStatus === "SENT" ? "sent successfully" : "failed"} to ${customerMobile} (ID: ${providerMessageId})`,
+        });
+      }
     }
 
     return NextResponse.json({

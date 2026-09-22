@@ -102,7 +102,9 @@ function StCourierContent() {
     return orders.filter((o) => 
       o.orderStatus === "DISPATCHED" || 
       o.dispatch.courierStatus === "SHIPPED" || 
-      (o.dispatch.courierStatus as string) === "DELIVERED"
+      (o.dispatch.courierStatus as string) === "DELIVERED" ||
+      Boolean(o.dispatchedAt) ||
+      Boolean(o.dispatch.dispatchedAt)
     );
   }, [orders]);
 
@@ -163,12 +165,6 @@ function StCourierContent() {
     updateCourierDetails(order.id, {
       courierStatus: targetStatus,
     });
-
-    if (isShipped && order.orderStatus !== "COMPLETED") {
-      updateOrderStatus(order.id, "COMPLETED", `Order marked as Shipped in Courier Hub`);
-    } else if (!isShipped && order.orderStatus === "COMPLETED") {
-      updateOrderStatus(order.id, "DISPATCHED", `Courier status reverted to Pending`);
-    }
 
     const label = isShipped ? "Shipped" : "Pending";
     triggerToast(`Order ${order.orderNumber} status updated to ${label}`);

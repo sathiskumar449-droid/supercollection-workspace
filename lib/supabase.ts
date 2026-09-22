@@ -75,16 +75,24 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         totalOrders: 1,
       };
 
-      const dispatchInfo: DispatchInfo = raw.dispatch?.[0] || raw.dispatch || {
-        courierId: raw.courier_id || "cour-1",
-        courierName: "ST Courier",
-        llrNumber: undefined,
-        courierStatus: "PENDING",
+      const rawDispatch = Array.isArray(raw.dispatch) ? raw.dispatch[0] : raw.dispatch;
+      const dispatchInfo: DispatchInfo = {
+        courierId: rawDispatch?.courier_id || rawDispatch?.courierId || raw.courier_id || "cour-1",
+        courierName: rawDispatch?.courier_name || rawDispatch?.courierName || "ST Courier",
+        llrNumber: rawDispatch?.llr_number || rawDispatch?.llrNumber || undefined,
+        courierStatus: (rawDispatch?.courier_status || rawDispatch?.courierStatus || "PENDING") as CourierStatus,
+        dispatchedAt: rawDispatch?.dispatched_at || rawDispatch?.dispatchedAt || raw.dispatched_at,
+        deliveredAt: rawDispatch?.shipped_at || rawDispatch?.delivered_at || rawDispatch?.deliveredAt || raw.shipped_at,
+        notes: rawDispatch?.notes,
       };
 
-      const smsInfo: SmsInfo = raw.sms?.[0] || raw.sms || {
-        status: "PENDING",
-        provider: "Ping4SMS",
+      const rawSms = Array.isArray(raw.sms) ? raw.sms[0] : raw.sms;
+      const smsInfo: SmsInfo = {
+        status: (rawSms?.status || (dispatchInfo.courierStatus === "SHIPPED" ? "SENT" : "PENDING")) as SmsStatus,
+        provider: rawSms?.provider || "Ping4SMS",
+        providerMessageId: rawSms?.provider_message_id || rawSms?.providerMessageId,
+        sentAt: rawSms?.sent_at || rawSms?.sentAt,
+        deliveredAt: rawSms?.delivered_at || rawSms?.deliveredAt,
       };
 
       const timeline: ActivityLog[] = (raw.timeline || []).map((t: any): ActivityLog => ({
@@ -142,6 +150,7 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         packingStartedAt: raw.packing_started_at,
         packedAt: raw.packed_at,
         dispatchedAt: raw.dispatched_at,
+        notes: raw.notes,
         timeline,
       };
     });
@@ -159,7 +168,8 @@ export async function updateSupabaseOrderStatus(
   newStatus: OrderStatus,
   activity?: ActivityLog
 ): Promise<boolean> {
-  if (!supabase) return false;
+  const db = supabaseAdmin || supabase;
+  if (!db) return false;
 
   try {
     const updates: any = {
@@ -173,7 +183,7 @@ export async function updateSupabaseOrderStatus(
     if (newStatus === "DISPATCHED") updates.dispatched_at = updates.updated_at;
     if (newStatus === "COMPLETED") updates.shipped_at = updates.updated_at;
 
-    const { error: orderError } = await supabase
+    const { error: orderError } = await db
       .from("orders")
       .update(updates)
       .eq("id", orderId);
@@ -184,7 +194,7 @@ export async function updateSupabaseOrderStatus(
     }
 
     if (activity) {
-      await supabase.from("activity_logs").insert({
+      await db.from("activity_logs").insert({
         order_id: orderId,
         user_name: activity.user,
         user_role: activity.role,
@@ -211,7 +221,8 @@ export async function updateSupabaseCourierDetails(
   details: Partial<DispatchInfo>,
   activity?: ActivityLog
 ): Promise<boolean> {
-  if (!supabase) return false;
+  const db = supabaseAdmin || supabase;
+  if (!db) return false;
 
   try {
     const updates: any = {
@@ -222,20 +233,63 @@ export async function updateSupabaseCourierDetails(
     if (details.courierStatus) updates.courier_status = details.courierStatus;
     if (details.courierStatus === "SHIPPED") updates.shipped_at = new Date().toISOString();
 
-    const { error } = await supabase
+    // Check if dispatch record exists
+    const { data: existingDispatch } = await db
       .from("dispatches")
-      .upsert({
-        order_id: orderId,
-        ...updates,
-      }, { onConflict: "order_id" });
+      .select("id")
+      .eq("order_id", orderId)
+      .maybeSingle();
 
-    if (error) {
-      console.error("Error updating dispatch in Supabase:", error);
-      return false;
+    if (existingDispatch) {
+      const { error: updateErr } = await db
+        .from("dispatches")
+        .update(updates)
+        .eq("order_id", orderId);
+      if (updateErr) console.error("Error updating dispatch in Supabase:", updateErr);
+    } else {
+      const { error: insertErr } = await db
+        .from("dispatches")
+        .insert({
+          order_id: orderId,
+          courier_id: details.courierId || "1646c4ed-2883-4f72-b3c8-aab24f7631b6",
+          ...updates,
+        });
+      if (insertErr) console.error("Error inserting dispatch in Supabase:", insertErr);
+    }
+
+    // If marked as SHIPPED, also update order status to COMPLETED and log SMS sent
+    if (details.courierStatus === "SHIPPED") {
+      await db.from("orders").update({
+        status: "COMPLETED",
+        shipped_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", orderId);
+
+      const { data: existingSms } = await db
+        .from("sms_logs")
+        .select("id")
+        .eq("order_id", orderId)
+        .maybeSingle();
+
+      if (existingSms) {
+        await db.from("sms_logs").update({
+          status: "SENT",
+          sent_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq("id", existingSms.id);
+      } else {
+        await db.from("sms_logs").insert({
+          order_id: orderId,
+          mobile: "N/A",
+          provider: "Ping4SMS",
+          status: "SENT",
+          sent_at: new Date().toISOString(),
+        });
+      }
     }
 
     if (activity) {
-      await supabase.from("activity_logs").insert({
+      await db.from("activity_logs").insert({
         order_id: orderId,
         user_name: activity.user,
         user_role: activity.role,
