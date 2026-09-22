@@ -144,9 +144,9 @@ export function generateMockOrders(): Order[] {
     // - 5 ST Courier orders missing LLR
 
     let orderStatus: Order["orderStatus"] = "NEW";
-    let courierId = "cour-1"; // ST Courier by default for many
-    let courierName = "ST Courier";
-    let isSt = true;
+    let courierId: string | undefined = undefined;
+    let courierName: string | undefined = undefined;
+    let isSt = false;
     let llrNumber: string | undefined = undefined;
     let courierStatus: Order["dispatch"]["courierStatus"] = "PENDING";
     let smsStatus: Order["sms"]["status"] = "PENDING";
@@ -156,21 +156,6 @@ export function generateMockOrders(): Order[] {
     let packedAt: string | undefined = undefined;
     let dispatchedAt: string | undefined = undefined;
     let packingStaff: string | undefined = undefined;
-
-    // Courier selection
-    if (i % 3 === 0) {
-      courierId = "cour-2";
-      courierName = "Delhivery";
-      isSt = false;
-    } else if (i % 5 === 0) {
-      courierId = "cour-3";
-      courierName = "DTDC";
-      isSt = false;
-    } else if (i % 7 === 0) {
-      courierId = "cour-4";
-      courierName = "Blue Dart";
-      isSt = false;
-    }
 
     // Explicit Status Assignment:
     if (i <= 12) {
@@ -353,7 +338,7 @@ export function generateMockOrders(): Order[] {
           id: `tl-${i}-6`,
           orderId: `ord-${i}`,
           timestamp: new Date(new Date(dispatchedAt).getTime() + 20 * 60 * 1000).toISOString(),
-          user: courierName,
+          user: courierName || "Courier Staff",
           role: "DISPATCH_STAFF",
           action: "Courier picked up",
           details: `LLR: ${llrNumber || "N/A"}${courierName ? ` · ${courierName}` : ""}`,
@@ -377,7 +362,7 @@ export function generateMockOrders(): Order[] {
           id: `tl-${i}-8`,
           orderId: `ord-${i}`,
           timestamp: new Date(new Date(dispatchedAt).getTime() + 24 * 3600 * 1000).toISOString(),
-          user: courierName,
+          user: courierName || "Courier Staff",
           role: "DISPATCH_STAFF",
           action: "Delivered",
           details: "Parcel delivered to customer",

@@ -41,8 +41,8 @@ export interface OrderItem {
 }
 
 export interface DispatchInfo {
-  courierId: string;
-  courierName: string;
+  courierId?: string;
+  courierName?: string;
   courierPartnerId?: string; // e.g. "ST_COURIER" | "PROFESSIONAL" | "DTDC" | "UNASSIGNED"
   dispatchId?: string; // Auto-generated e.g. "DSP-260922-001"
   llrNumber?: string;

@@ -457,7 +457,7 @@ export const orderflowStore = {
         });
       }
       if (!order.timeline.some((t) => t.action === "Waiting for shipment")) {
-        const courierName = order.dispatch.courierName || "ST Courier";
+        const courierName = order.dispatch.courierName || "Courier";
         newEntries.push({
           id: `tl-${Date.now() + 100}-waitship`,
           orderId: order.id,
@@ -512,7 +512,7 @@ export const orderflowStore = {
       dispatch: {
         ...order.dispatch,
         dispatchedAt: isDispatched && !order.dispatch.dispatchedAt ? now : order.dispatch.dispatchedAt,
-        courierName: order.dispatch.courierName || "ST Courier",
+        courierName: order.dispatch.courierName,
       },
       sms: {
         ...order.sms,
@@ -677,7 +677,7 @@ export const orderflowStore = {
       }
     }
 
-    const courierName = params.courierName || order.dispatch.courierName || "ST Courier";
+    const courierName = params.courierName !== undefined ? params.courierName : order.dispatch.courierName;
     const timelineEntries: ActivityLog[] = [];
 
     // Pickup Phone entry (read-only customer phone is preserved; pickup phone is strictly separate)
@@ -720,7 +720,7 @@ export const orderflowStore = {
             id: `tl-${Date.now()}-pickedup`,
             orderId: order.id,
             timestamp: now,
-            user: globalUser.name || courierName,
+            user: globalUser.name || courierName || "Dispatch Staff",
             role: "DISPATCH_STAFF",
             action: "Courier picked up",
             details: `LLR: ${params.llrNumber || order.dispatch.llrNumber || "N/A"}${courierName ? ` · ${courierName}` : ""}`,
@@ -749,7 +749,7 @@ export const orderflowStore = {
             id: `tl-${Date.now()}-deliv`,
             orderId: order.id,
             timestamp: now,
-            user: globalUser.name || courierName,
+            user: globalUser.name || courierName || "Dispatch Staff",
             role: "DISPATCH_STAFF",
             action: "Delivered",
             details: "Parcel delivered to customer",
@@ -765,7 +765,7 @@ export const orderflowStore = {
           user: globalUser.name,
           role: globalUser.role,
           action: "Courier pickup waiting",
-          details: `Courier: ${courierName}`,
+          details: courierName ? `Courier: ${courierName}` : "Courier pickup waiting",
           oldValue: oldCourierStatus,
           newValue: "WAITING_FOR_PICKUP",
         });

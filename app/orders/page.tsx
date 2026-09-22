@@ -295,7 +295,7 @@ function OrdersContent() {
       order.items.length,
       order.totalAmount,
       order.orderStatus,
-      order.dispatch.courierName,
+      order.dispatch.courierName || "-",
       order.dispatch.llrNumber || "",
       order.dispatch.courierStatus,
       order.sms.status,
@@ -328,7 +328,7 @@ function OrdersContent() {
       order.customer.mobile,
       formatINR(order.totalAmount),
       order.orderStatus,
-      order.dispatch.courierName,
+      order.dispatch.courierName || "-",
       order.dispatch.llrNumber || "-",
       order.dispatch.courierStatus,
       order.sms.status,
@@ -665,18 +665,24 @@ function OrdersContent() {
                       </td>
 
                       {/* Courier */}
-                      <td className="py-2 px-1 text-center text-slate-700 font-medium truncate border-r border-b border-slate-300 text-[11px]" title={order.dispatch.courierName}>
-                        {order.dispatch.courierName}
+                      <td className="py-2 px-1 text-center text-slate-700 font-medium truncate border-r border-b border-slate-300 text-[11px]" title={order.dispatch.courierName || "Unassigned"}>
+                        {order.dispatch.courierName ? (
+                          <span className="font-semibold text-slate-800">{order.dispatch.courierName}</span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">-</span>
+                        )}
                       </td>
 
                       {/* LLR */}
                       <td className="py-2 px-1 text-center font-mono text-slate-700 truncate border-r border-b border-slate-300 text-[11px]">
                         {order.dispatch.llrNumber ? (
                           <span className="truncate block" title={order.dispatch.llrNumber}>{order.dispatch.llrNumber}</span>
-                        ) : (
+                        ) : order.dispatch.courierName ? (
                           <span className="text-amber-600 text-[10px] italic font-normal truncate block">
                             {order.dispatch.courierName === "ST Courier" ? "LLR Required" : "-"}
                           </span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">-</span>
                         )}
                       </td>
 

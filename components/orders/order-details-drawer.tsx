@@ -29,6 +29,7 @@ interface OrderDetailsDrawerProps {
       pickupPhone?: string; 
       courierStatus?: CourierStatus;
       courierPartnerId?: string;
+      courierName?: string;
     }
   ) => void;
   userRole?: Role;
@@ -79,6 +80,8 @@ export function OrderDetailsDrawer({
 }: OrderDetailsDrawerProps) {
   const [llrInput, setLlrInput] = useState("");
   const [pickupPhoneInput, setPickupPhoneInput] = useState("");
+  const [courierPartnerInput, setCourierPartnerInput] = useState("");
+  const [courierNameInput, setCourierNameInput] = useState("");
   const [courierStatusInput, setCourierStatusInput] = useState<CourierStatus>("WAITING_FOR_PICKUP");
   const [isEditingCourier, setIsEditingCourier] = useState(false);
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
@@ -89,6 +92,8 @@ export function OrderDetailsDrawer({
     if (order) {
       setLlrInput(order.dispatch.llrNumber || "");
       setPickupPhoneInput(order.dispatch.pickupPhone || "");
+      setCourierPartnerInput(order.dispatch.courierPartnerId || "");
+      setCourierNameInput(order.dispatch.courierName || "");
       
       const currentCStatus = order.dispatch.courierStatus;
       if (currentCStatus === "SHIPPED" || currentCStatus === "PICKED_UP") {
@@ -144,6 +149,8 @@ export function OrderDetailsDrawer({
       llrNumber: llrInput.trim() || undefined,
       pickupPhone: pickupPhoneInput.trim() || undefined,
       courierStatus: courierStatusInput,
+      courierPartnerId: courierPartnerInput || undefined,
+      courierName: courierNameInput || undefined,
     });
     setIsEditingCourier(false);
     setSaveSuccessNotice(true);
@@ -309,10 +316,36 @@ export function OrderDetailsDrawer({
                 {/* Courier Partner */}
                 <div>
                   <span className="text-slate-400 block mb-1">Courier Partner</span>
-                  <span className="font-semibold text-slate-900 text-sm flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-orange-500" />
-                    {order.dispatch.courierName || "ST Courier"}
-                  </span>
+                  {isEditingCourier ? (
+                    <select
+                      value={courierPartnerInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCourierPartnerInput(val);
+                        if (val === "PROFESSIONAL") setCourierNameInput("Professional Courier");
+                        else if (val === "DTDC") setCourierNameInput("DTDC");
+                        else if (val === "ST_COURIER") setCourierNameInput("ST Courier");
+                        else setCourierNameInput("");
+                      }}
+                      className="w-full text-xs font-semibold px-2 py-1 bg-white border border-slate-300 rounded outline-none focus:border-orange-500 text-slate-800"
+                    >
+                      <option value="">Unassigned (-)</option>
+                      <option value="ST_COURIER">ST Courier</option>
+                      <option value="PROFESSIONAL">Professional Courier</option>
+                      <option value="DTDC">DTDC</option>
+                    </select>
+                  ) : (
+                    <span className="font-semibold text-slate-900 text-sm flex items-center gap-1.5">
+                      {order.dispatch.courierName ? (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-orange-500" />
+                          {order.dispatch.courierName}
+                        </>
+                      ) : (
+                        <span className="text-slate-400 font-normal italic">Unassigned (-)</span>
+                      )}
+                    </span>
+                  )}
                 </div>
 
                 {/* Dispatch ID */}

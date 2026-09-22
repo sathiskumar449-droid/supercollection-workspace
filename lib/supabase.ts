@@ -50,7 +50,7 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         *,
         customer:customers(*),
         items:order_items(*),
-        dispatch:dispatches(*),
+        dispatch:dispatches(*, courier:couriers(*)),
         sms:sms_logs(*),
         timeline:activity_logs(*)
       `)
@@ -76,14 +76,38 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
       };
 
       const rawDispatch = Array.isArray(raw.dispatch) ? raw.dispatch[0] : raw.dispatch;
+      const defaultCourierStatus: CourierStatus = raw.status === "DISPATCHED" ? "WAITING_FOR_PICKUP" : "PENDING";
+      const courierObj = rawDispatch?.courier;
+
+      // Check if courier was explicitly assigned or order is dispatched
+      const notesStr = String(rawDispatch?.notes || "");
+      const explicitCourierMatch = notesStr.match(/assigned_courier:([a-zA-Z0-9_\s]+)/);
+      const explicitCourierName = explicitCourierMatch ? explicitCourierMatch[1].trim() : undefined;
+
+      const isActivelyAssigned = raw.status === "DISPATCHED" || 
+                                (rawDispatch?.courier_status && rawDispatch.courier_status !== "PENDING") ||
+                                Boolean(rawDispatch?.llr_number) ||
+                                Boolean(rawDispatch?.dispatched_at) ||
+                                Boolean(explicitCourierName) ||
+                                Boolean(rawDispatch?.courier_partner_id);
+
+      let resolvedCourierName: string | undefined = undefined;
+      let resolvedPartnerCode: string | undefined = undefined;
+
+      if (isActivelyAssigned) {
+        resolvedCourierName = explicitCourierName || rawDispatch?.courier_name || courierObj?.name || "ST Courier";
+        resolvedPartnerCode = rawDispatch?.courier_partner_id || courierObj?.code || 
+          (resolvedCourierName?.includes("Professional") ? "PROFESSIONAL" : resolvedCourierName?.includes("DTDC") ? "DTDC" : "ST_COURIER");
+      }
+
       const dispatchInfo: DispatchInfo = {
-        courierId: rawDispatch?.courier_id || rawDispatch?.courierId || raw.courier_id || "cour-1",
-        courierName: rawDispatch?.courier_name || rawDispatch?.courierName || "ST Courier",
-        courierPartnerId: rawDispatch?.courier_partner_id || rawDispatch?.courierPartnerId || (rawDispatch?.courier_name === "Professional Courier" ? "PROFESSIONAL" : rawDispatch?.courier_name === "DTDC" ? "DTDC" : "ST_COURIER"),
+        courierId: isActivelyAssigned ? (rawDispatch?.courier_id || courierObj?.id) : undefined,
+        courierName: resolvedCourierName,
+        courierPartnerId: resolvedPartnerCode,
         dispatchId: rawDispatch?.dispatch_id || rawDispatch?.dispatchId || undefined,
         llrNumber: rawDispatch?.llr_number || rawDispatch?.llrNumber || undefined,
         pickupPhone: rawDispatch?.pickup_phone || rawDispatch?.pickupPhone || undefined,
-        courierStatus: (rawDispatch?.courier_status || rawDispatch?.courierStatus || (raw.status === "DISPATCHED" ? "WAITING_FOR_PICKUP" : "PENDING")) as CourierStatus,
+        courierStatus: (rawDispatch?.courier_status || rawDispatch?.courierStatus || defaultCourierStatus) as CourierStatus,
         dispatchedAt: rawDispatch?.dispatched_at || rawDispatch?.dispatchedAt || raw.dispatched_at,
         pickedUpAt: rawDispatch?.picked_up_at || rawDispatch?.pickedUpAt,
         deliveredAt: rawDispatch?.shipped_at || rawDispatch?.delivered_at || rawDispatch?.deliveredAt || raw.shipped_at,
@@ -248,6 +272,22 @@ export async function updateSupabaseCourierDetails(
     if (details.pickupPhone !== undefined) updates.pickup_phone = details.pickupPhone;
     if (details.courierPartnerId !== undefined) updates.courier_partner_id = details.courierPartnerId;
     if (details.llrNumber !== undefined) updates.llr_number = details.llrNumber;
+
+    if (details.courierName || details.courierPartnerId) {
+      const cName = details.courierName || (details.courierPartnerId === "PROFESSIONAL" ? "Professional Courier" : details.courierPartnerId === "DTDC" ? "DTDC" : "ST Courier");
+      if (details.courierPartnerId === "PROFESSIONAL" || cName.includes("Professional")) {
+        updates.courier_id = "b0b76513-6d16-42e1-849c-486afc2f43f6"; // Professional Couriers
+        updates.courier_partner_id = "PROFESSIONAL";
+      } else if (details.courierPartnerId === "DTDC" || cName.includes("DTDC")) {
+        updates.courier_id = "07e42475-8a09-4b2f-8f04-8821c7356f7d"; // DTDC
+        updates.courier_partner_id = "DTDC";
+      } else if (details.courierPartnerId === "ST_COURIER" || cName.includes("ST")) {
+        updates.courier_id = "1646c4ed-2883-4f72-b3c8-aab24f7631b6"; // ST Courier
+        updates.courier_partner_id = "ST_COURIER";
+      }
+      updates.notes = `assigned_courier:${cName}`;
+    }
+
     if (details.courierStatus) {
       updates.courier_status = details.courierStatus;
       if (details.courierStatus === "PICKED_UP" || details.courierStatus === "SHIPPED") {
@@ -276,7 +316,7 @@ export async function updateSupabaseCourierDetails(
         .from("dispatches")
         .insert({
           order_id: orderId,
-          courier_id: details.courierId || "1646c4ed-2883-4f72-b3c8-aab24f7631b6",
+          courier_id: updates.courier_id || "1646c4ed-2883-4f72-b3c8-aab24f7631b6",
           ...updates,
         });
       if (insertErr) console.error("Error inserting dispatch in Supabase:", insertErr);
