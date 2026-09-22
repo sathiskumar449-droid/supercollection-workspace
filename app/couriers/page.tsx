@@ -202,8 +202,8 @@ function CourierHubContent() {
   // 1. Base eligibility: Orders marked as DISPATCHED in Packing Station
   const eligibleDispatchedOrders = useMemo(() => {
     return orders.filter((o) => {
-      // Must be dispatched from packing station
-      if (o.orderStatus !== "DISPATCHED" && !o.dispatchedAt && !o.dispatch?.dispatchedAt) {
+      // Must be currently in DISPATCHED status from packing station
+      if (o.orderStatus !== "DISPATCHED") {
         return false;
       }
 

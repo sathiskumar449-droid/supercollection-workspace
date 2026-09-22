@@ -66,8 +66,8 @@ export function sanitizeOrders(orders: Order[]): Order[] {
       ord.items = Array.from(map.values());
     }
 
-    // 2. Ensure dispatched orders have valid courierPartnerId, courierName, dispatchId, and courierStatus
-    if (ord.orderStatus === "DISPATCHED" || ord.dispatchedAt || ord.dispatch?.dispatchedAt) {
+    // 2. Ensure actively dispatched orders have valid courierPartnerId, courierName, dispatchId, and courierStatus
+    if (ord.orderStatus === "DISPATCHED") {
       const cName = (ord.dispatch?.courierName || "").toLowerCase();
       let partnerCode = ord.dispatch?.courierPartnerId;
 
@@ -100,7 +100,6 @@ export function sanitizeOrders(orders: Order[]): Order[] {
         courierStatus = "WAITING_FOR_PICKUP";
       }
 
-      ord.orderStatus = "DISPATCHED";
       ord.dispatch = {
         ...ord.dispatch,
         courierPartnerId: partnerCode,
