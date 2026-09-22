@@ -430,11 +430,23 @@ function OrdersContent() {
                   }}
                 >
                   <div className="flex items-center gap-1">
-                    <span>Order #</span>
+                    <span>Order ID</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
                 </th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer</th>
+                <th
+                  className="py-2.5 px-3 cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
+                  onClick={() => {
+                    setSortField("createdAt");
+                    setSortAsc(!sortAsc);
+                  }}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Order Created Date</span>
+                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer Name</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Source</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
                 <th
@@ -451,21 +463,9 @@ function OrdersContent() {
                 </th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Order Status</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">LLR #</th>
+                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">LLR</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">SMS Status</th>
-                <th
-                  className="py-2.5 px-3 cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
-                  onClick={() => {
-                    setSortField("createdAt");
-                    setSortAsc(!sortAsc);
-                  }}
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Created</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                  </div>
-                </th>
                 <th className="py-2.5 px-3 text-right border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">Actions</th>
               </tr>
             </thead>
@@ -520,10 +520,17 @@ function OrdersContent() {
                         {serialNo}
                       </td>
 
+                      {/* Order ID */}
                       <td className="py-2.5 px-3 font-mono font-semibold text-slate-900 whitespace-nowrap border-r border-b border-slate-300">
                         {order.orderNumber}
                       </td>
 
+                      {/* Order Created Date */}
+                      <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap border-r border-b border-slate-300 font-medium">
+                        {formatDate(order.createdAt)}
+                      </td>
+
+                      {/* Customer Name */}
                       <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300">
                         <span className="font-semibold text-slate-800 block">
                           {order.customer.name}
@@ -533,26 +540,32 @@ function OrdersContent() {
                         </span>
                       </td>
 
+                      {/* Source */}
                       <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300">
                         <SourceBadge source={order.source} />
                       </td>
 
+                      {/* Items */}
                       <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap border-r border-b border-slate-300">
                         {order.items.length} {order.items.length === 1 ? "Item" : "Items"}
                       </td>
 
+                      {/* Amount */}
                       <td className="py-2.5 px-3 font-semibold text-slate-900 whitespace-nowrap border-r border-b border-slate-300">
                         {formatINR(order.totalAmount)}
                       </td>
 
+                      {/* Order Status */}
                       <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300">
                         <OrderStatusBadge status={order.orderStatus} />
                       </td>
 
+                      {/* Courier */}
                       <td className="py-2.5 px-3 text-slate-700 font-medium whitespace-nowrap border-r border-b border-slate-300">
                         {order.dispatch.courierName}
                       </td>
 
+                      {/* LLR */}
                       <td className="py-2.5 px-3 font-mono text-slate-700 whitespace-nowrap border-r border-b border-slate-300">
                         {order.dispatch.llrNumber || (
                           <span className="text-amber-600 text-[11px] italic font-normal">
@@ -561,18 +574,17 @@ function OrdersContent() {
                         )}
                       </td>
 
+                      {/* Courier Status */}
                       <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300">
                         <CourierStatusBadge status={order.dispatch.courierStatus} />
                       </td>
 
+                      {/* SMS Status */}
                       <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300">
                         <SmsStatusBadge status={order.sms.status} />
                       </td>
 
-                      <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap border-r border-b border-slate-300">
-                        {formatDate(order.createdAt)}
-                      </td>
-
+                      {/* Actions */}
                       <td className="py-2.5 px-3 text-right whitespace-nowrap border-b border-slate-300 bg-slate-50/50" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => setSelectedOrder(order)}
