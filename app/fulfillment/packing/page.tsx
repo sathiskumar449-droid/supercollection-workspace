@@ -285,7 +285,6 @@ export default function PackingPage() {
       "S.No",
       "Date",
       "Order ID",
-      "Payment",
       "Phone Number",
       "Customer Name",
       "Amount (INR)",
@@ -311,7 +310,6 @@ export default function PackingPage() {
         index + 1,
         formatDate(order.createdAt),
         order.orderNumber,
-        order.paymentStatus,
         order.customer.mobile,
         order.customer.name,
         order.totalAmount,
@@ -334,7 +332,6 @@ export default function PackingPage() {
       "S.No",
       "Date",
       "Order ID",
-      "Pay",
       "Phone",
       "Customer Name",
       "Amount",
@@ -358,7 +355,6 @@ export default function PackingPage() {
         index + 1,
         formatDate(order.createdAt),
         order.orderNumber,
-        order.paymentStatus,
         order.customer.mobile,
         order.customer.name,
         formatINR(order.totalAmount),
@@ -548,16 +544,16 @@ export default function PackingPage() {
               </th>
               <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
               <th className="py-2 px-1.5 w-[7%] border-r border-b-2 border-slate-300 bg-slate-100">Date</th>
-              <th className="py-2 px-1 w-[5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Payment</th>
-              <th className="py-2 px-1.5 w-[9%] border-r border-b-2 border-slate-300 bg-slate-100">Phone Number</th>
-              <th className="py-2 px-1.5 w-[11.5%] border-r border-b-2 border-slate-300 bg-slate-100">Name</th>
+              <th className="py-2 px-1.5 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
+              <th className="py-2 px-1.5 w-[8.5%] border-r border-b-2 border-slate-300 bg-slate-100">Phone Number</th>
+              <th className="py-2 px-1.5 w-[10.5%] border-r border-b-2 border-slate-300 bg-slate-100">Name</th>
               <th className="py-2 px-1.5 w-[6%] border-r border-b-2 border-slate-300 bg-slate-100">Amount</th>
               <th className="py-2 px-1.5 w-[16%] border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
               <th className="py-2 px-1 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Size</th>
               <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Qty</th>
-              <th className="py-2 px-1.5 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">Order Taken</th>
+              <th className="py-2 px-1.5 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100">Order Taken</th>
               <th className="py-2 px-1.5 w-[11%] border-r border-b-2 border-slate-300 bg-slate-100">Dispatch No</th>
-              <th className="py-2 px-1 w-[12%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">Update Status</th>
+              <th className="py-2 px-1 w-[11.5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">Update Status</th>
             </tr>
           </thead>
           <tbody>
@@ -611,18 +607,9 @@ export default function PackingPage() {
                       {formatDate(order.createdAt)}
                     </td>
 
-                    {/* 3. Payment */}
-                    <td className="py-2 px-1 text-center whitespace-nowrap border-r border-b border-slate-300">
-                      <span
-                        className={cn(
-                          "px-1.5 py-0.2 rounded text-[10px] font-bold inline-block",
-                          order.paymentStatus === "PAID" && "bg-emerald-50 text-emerald-700 border border-emerald-200",
-                          order.paymentStatus === "COD" && "bg-amber-50 text-amber-700 border border-amber-200",
-                          order.paymentStatus === "PENDING" && "bg-slate-100 text-slate-600 border border-slate-200"
-                        )}
-                      >
-                        {order.paymentStatus}
-                      </span>
+                    {/* 3. Order ID */}
+                    <td className="py-2 px-1.5 whitespace-nowrap font-mono font-semibold text-slate-900 border-r border-b border-slate-300 text-[10px]">
+                      {order.orderNumber}
                     </td>
 
                     {/* 4. Phone Number */}
@@ -635,9 +622,11 @@ export default function PackingPage() {
                       <span className="font-semibold text-slate-800 truncate block leading-tight" title={order.customer.name}>
                         {order.customer.name}
                       </span>
-                      <span className="text-[9px] text-slate-400 font-mono block">
-                        {order.orderNumber}
-                      </span>
+                      {order.customer.city && (
+                        <span className="text-[9px] text-slate-400 block truncate">
+                          {order.customer.city}
+                        </span>
+                      )}
                     </td>
 
                     {/* 6. Amount */}
