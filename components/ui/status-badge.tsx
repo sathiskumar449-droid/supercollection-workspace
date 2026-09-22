@@ -21,12 +21,12 @@ export function OrderStatusBadge({ status, className }: { status: OrderStatus; c
       icon: <Clock className="w-3.5 h-3.5 text-slate-500" />,
     },
     CONFIRMED: {
-      label: "Confirmed",
-      text: "text-blue-600",
-      icon: <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />,
+      label: "Processing",
+      text: "text-sky-600",
+      icon: <CheckCircle2 className="w-3.5 h-3.5 text-sky-600" />,
     },
     PACKING: {
-      label: "Packing",
+      label: "Packaging",
       text: "text-orange-600",
       icon: <Box className="w-3.5 h-3.5 text-orange-600 animate-pulse" />,
     },
@@ -41,7 +41,7 @@ export function OrderStatusBadge({ status, className }: { status: OrderStatus; c
       icon: <Truck className="w-3.5 h-3.5 text-emerald-600" />,
     },
     COMPLETED: {
-      label: "Shipped",
+      label: "Completed",
       text: "text-emerald-600",
       icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />,
     },
