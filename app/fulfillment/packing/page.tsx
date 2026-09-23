@@ -26,6 +26,7 @@ import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { formatINR, formatTimeAgo, formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { Order, OrderStatus, ReturnCase, ReturnReplacement } from "@/types/orderflow";
 import { ReturnDetailsDrawer } from "@/components/returns/return-details-drawer";
+import { CreateReturnModal } from "@/components/returns/create-return-modal";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
@@ -134,6 +135,9 @@ export default function PackingPage() {
   const [dispatchModalReplacement, setDispatchModalReplacement] = useState<{ returnCase: ReturnCase; replacement: ReturnReplacement } | null>(null);
   const [replacementLlr, setReplacementLlr] = useState("");
 
+  // Create Return Modal State (Packing -> Update Status -> Return -> Create Return)
+  const [returnModalOrder, setReturnModalOrder] = useState<Order | null>(null);
+
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -144,6 +148,11 @@ export default function PackingPage() {
     if (newStatus === "DISPATCHED") {
       setDispatchModalOrder(order);
       setSelectedCourierPartner(order.dispatch?.courierPartnerId || "ST_COURIER");
+      return;
+    }
+    if (newStatus === "RETURN") {
+      // Sole entry point: Packing -> Update Status -> Return -> Create Return
+      setReturnModalOrder(order);
       return;
     }
     const targetLabel = STATUS_OPTIONS.find((s) => s.key === newStatus)?.label || newStatus;
@@ -1220,6 +1229,20 @@ export default function PackingPage() {
         isOpen={Boolean(inspectReturn)}
         onClose={() => setInspectReturn(null)}
       />
+
+      {/* Create Return Modal (Packing -> Update Status -> Return -> Create Return) */}
+      {returnModalOrder && (
+        <CreateReturnModal
+          isOpen={Boolean(returnModalOrder)}
+          onClose={() => setReturnModalOrder(null)}
+          preselectedOrderId={returnModalOrder.id}
+          onSuccess={(returnId) => {
+            updateOrderStatus(returnModalOrder.id, "RETURN", `Return case ${returnId} initiated from Packing Station`);
+            triggerToast(`Return case ${returnId} created for Order ${returnModalOrder.orderNumber}`);
+            setReturnModalOrder(null);
+          }}
+        />
+      )}
     </div>
   );
 }

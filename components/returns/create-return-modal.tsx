@@ -332,13 +332,15 @@ export function CreateReturnModal({
                   <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
                     SECTION A — Original Order Details
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedOrder(null)}
-                    className="text-xs text-orange-600 hover:text-orange-700 font-medium"
-                  >
-                    Change Order
-                  </button>
+                  {!preselectedOrderId && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrder(null)}
+                      className="text-xs text-orange-600 hover:text-orange-700 font-medium"
+                    >
+                      Change Order
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">

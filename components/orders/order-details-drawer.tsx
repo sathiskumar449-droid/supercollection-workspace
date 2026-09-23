@@ -14,14 +14,12 @@ import {
   AlertTriangle,
   Send,
   RotateCcw,
-  PlusCircle,
   Eye
 } from "lucide-react";
 import { OrderStatusBadge, SmsStatusBadge } from "@/components/ui/status-badge";
 import { formatINR, cn } from "@/lib/utils";
 import { useOrderFlow } from "@/lib/hooks";
 import { ReturnStatusBadge } from "@/components/returns/return-status-badge";
-import { CreateReturnModal } from "@/components/returns/create-return-modal";
 import { ReturnDetailsDrawer } from "@/components/returns/return-details-drawer";
 
 interface OrderDetailsDrawerProps {
@@ -94,9 +92,8 @@ export function OrderDetailsDrawer({
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
   const [showTechDetails, setShowTechDetails] = useState(false);
 
-  // Return Management Integration
+  // Return Management Integration (VIEW ONLY for return history)
   const { getReturnsByOrderId, returns } = useOrderFlow();
-  const [isCreateReturnOpen, setIsCreateReturnOpen] = useState(false);
   const [selectedReturnCase, setSelectedReturnCase] = useState<ReturnCase | null>(null);
 
   const orderReturns = useMemo(() => {
@@ -497,22 +494,12 @@ export function OrderDetailsDrawer({
                   </span>
                 )}
               </div>
-
-              {canEditCourier && (
-                <button
-                  onClick={() => setIsCreateReturnOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100/80 border border-purple-200 rounded-md transition-colors shadow-2xs cursor-pointer"
-                >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Create Return</span>
-                </button>
-              )}
             </div>
 
             {orderReturns.length === 0 ? (
               <div className="py-4 text-center text-xs text-slate-400">
                 <p>No return or replacement cases for this order.</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Click "Create Return" above if customer requests a return or replacement.</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Returns can be initiated from the Packing station when updating order status.</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden">
@@ -640,14 +627,7 @@ export function OrderDetailsDrawer({
         </div>
       </aside>
 
-      {/* Create Return Modal prefilled with this order */}
-      <CreateReturnModal
-        isOpen={isCreateReturnOpen}
-        onClose={() => setIsCreateReturnOpen(false)}
-        preselectedOrderId={order.id}
-      />
-
-      {/* Return Details Slide-Over Drawer */}
+      {/* Return Details Slide-Over Drawer (View Only) */}
       <ReturnDetailsDrawer
         returnCase={selectedReturnCase}
         isOpen={Boolean(selectedReturnCase)}

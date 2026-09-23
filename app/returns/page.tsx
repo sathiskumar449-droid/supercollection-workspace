@@ -6,13 +6,11 @@ import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { useOrderFlow } from "@/lib/hooks";
 import { ReturnCase, ReturnStatus, ReturnType, ReturnReason, RefundStatus } from "@/types/orderflow";
 import { ReturnStatusBadge, RefundStatusBadge } from "@/components/returns/return-status-badge";
-import { CreateReturnModal } from "@/components/returns/create-return-modal";
 import { ReturnDetailsDrawer } from "@/components/returns/return-details-drawer";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { formatINR, formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { 
   RotateCcw, 
-  Plus, 
   Search, 
   Filter, 
   X, 
@@ -48,7 +46,6 @@ function ReturnsContent() {
   } = useOrderFlow();
 
   // Modals & Drawers
-  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<ReturnCase | null>(null);
   const [inspectedOrder, setInspectedOrder] = useState<any | null>(null);
 
@@ -548,15 +545,6 @@ function ReturnsContent() {
             <FileText className="w-3.5 h-3.5" />
             <span>PDF</span>
           </button>
-
-          {/* + Create Return Button */}
-          <button
-            onClick={() => setCreateModalOpen(true)}
-            className="inline-flex items-center justify-center gap-1 px-3 py-1 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-semibold text-xs rounded transition-colors shadow-2xs cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Create Return</span>
-          </button>
         </div>
       </div>
 
@@ -812,16 +800,6 @@ function ReturnsContent() {
           </div>
         )}
       </div>
-
-      {/* CREATE RETURN MODAL / DRAWER */}
-      <CreateReturnModal
-        isOpen={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
-        onSuccess={(returnId) => {
-          const created = returns.find((r) => r.returnId === returnId);
-          if (created) setSelectedReturn(created);
-        }}
-      />
 
       {/* RETURN DETAILS DRAWER */}
       <ReturnDetailsDrawer
