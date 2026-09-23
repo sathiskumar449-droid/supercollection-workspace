@@ -187,7 +187,7 @@ export default function DashboardPage() {
       {/* MODULE CARDS (PACKING | COURIER | SMS) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* PACKING CARD */}
-        <div className="bg-white border border-orange-400/90 hover:border-orange-500 transition-colors rounded-xl p-5 shadow-xs flex flex-col">
+        <div className="bg-white border border-blue-300 hover:border-blue-400 transition-colors rounded-xl p-5 shadow-xs flex flex-col">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-2">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-blue-50 text-blue-600">
@@ -290,7 +290,7 @@ export default function DashboardPage() {
         </div>
 
         {/* COURIER CARD */}
-        <div className="bg-white border border-orange-400/90 hover:border-orange-500 transition-colors rounded-xl p-5 shadow-xs flex flex-col">
+        <div className="bg-white border border-amber-300 hover:border-amber-400 transition-colors rounded-xl p-5 shadow-xs flex flex-col">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-2">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-amber-50 text-amber-600">
@@ -380,7 +380,7 @@ export default function DashboardPage() {
         </div>
 
         {/* SMS CARD */}
-        <div className="bg-white border border-orange-400/90 hover:border-orange-500 transition-colors rounded-xl p-5 shadow-xs flex flex-col">
+        <div className="bg-white border border-emerald-300 hover:border-emerald-400 transition-colors rounded-xl p-5 shadow-xs flex flex-col">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-2">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-emerald-50 text-emerald-600">

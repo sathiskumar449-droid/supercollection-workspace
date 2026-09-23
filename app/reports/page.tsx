@@ -135,9 +135,9 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Top 4 Executive Metrics */}
+      {/* Top 4 Executive Metrics (with matching border colors) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-subtle">
+        <div className="p-4 bg-white rounded-xl border border-blue-300 hover:border-blue-400 transition-colors shadow-subtle">
           <span className="text-xs font-medium text-slate-500">Total Orders Processed</span>
           <span className="text-2xl font-bold text-slate-900 font-mono block mt-1">
             {totalOrders}
@@ -147,7 +147,7 @@ export default function ReportsPage() {
           </span>
         </div>
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-subtle">
+        <div className="p-4 bg-white rounded-xl border border-purple-300 hover:border-purple-400 transition-colors shadow-subtle">
           <span className="text-xs font-medium text-slate-500">Gross Merchandise Value</span>
           <span className="text-2xl font-bold text-slate-900 font-mono block mt-1">
             {formatINR(totalValue)}
@@ -157,7 +157,7 @@ export default function ReportsPage() {
           </span>
         </div>
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-subtle">
+        <div className="p-4 bg-white rounded-xl border border-orange-300 hover:border-orange-400 transition-colors shadow-subtle">
           <span className="text-xs font-medium text-slate-500">Dispatch Fulfillment Rate</span>
           <span className="text-2xl font-bold text-orange-700 font-mono block mt-1">
             {Math.round((dispatchedCount / totalOrders) * 100)}%
@@ -167,7 +167,7 @@ export default function ReportsPage() {
           </span>
         </div>
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-subtle">
+        <div className="p-4 bg-white rounded-xl border border-emerald-300 hover:border-emerald-400 transition-colors shadow-subtle">
           <span className="text-xs font-medium text-slate-500">SMS Delivery Reliability</span>
           <span className="text-2xl font-bold text-emerald-700 font-mono block mt-1">
             {Math.round((smsSent / totalOrders) * 100)}%

@@ -195,21 +195,25 @@ function SmsMonitoringContent() {
   };
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto">
-      {/* Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div className="space-y-4 max-w-full pb-16">
+      {/* Metric Cards (Compact matching Courier page with themed border colors) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         {/* Total SMS */}
         <div
           onClick={() => setStatusFilter("ALL")}
           className={cn(
-            "p-4 rounded-xl border bg-white shadow-subtle cursor-pointer transition-all",
-            statusFilter === "ALL" ? "border-orange-600 ring-2 ring-orange-500/20" : "border-slate-200 hover:border-slate-300"
+            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
+            statusFilter === "ALL" 
+              ? "border-orange-500 ring-1 ring-orange-500/20 bg-orange-50/10" 
+              : "border-slate-300 hover:border-orange-400"
           )}
         >
-          <span className="text-xs font-medium text-slate-500 block">Total Messages Tracked</span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-bold text-slate-900 font-mono">{totalSms}</span>
-            <span className="text-xs text-emerald-600 font-semibold">{deliveryRate}% Delivered</span>
+          <div className="flex items-center justify-between">
+            <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">Total Messages</span>
+            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">{deliveryRate}% Delivered</span>
+          </div>
+          <div className="text-xl font-black text-slate-900 mt-0.5 tracking-tight font-mono">
+            {totalSms}
           </div>
         </div>
 
@@ -217,51 +221,57 @@ function SmsMonitoringContent() {
         <div
           onClick={() => setStatusFilter("SENT")}
           className={cn(
-            "p-4 rounded-xl border bg-white shadow-subtle cursor-pointer transition-all",
-            statusFilter === "SENT" ? "border-emerald-600 ring-2 ring-emerald-500/20" : "border-slate-200 hover:border-emerald-300"
+            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
+            statusFilter === "SENT" 
+              ? "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/10" 
+              : "border-emerald-300 hover:border-emerald-400"
           )}
         >
-          <div className="flex items-center justify-between text-xs font-medium text-emerald-700">
+          <div className="flex items-center justify-between text-[10.5px] font-bold text-emerald-700 uppercase tracking-wider">
             <span>Delivered (SENT)</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
           </div>
-          <span className="text-2xl font-bold text-emerald-700 font-mono mt-1 block">
+          <div className="text-xl font-black text-emerald-600 font-mono mt-0.5 tracking-tight">
             {sentCount}
-          </span>
+          </div>
         </div>
 
         {/* Pending */}
         <div
           onClick={() => setStatusFilter("PENDING")}
           className={cn(
-            "p-4 rounded-xl border bg-white shadow-subtle cursor-pointer transition-all",
-            statusFilter === "PENDING" ? "border-amber-500 ring-2 ring-amber-500/20" : "border-slate-200 hover:border-amber-300"
+            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
+            statusFilter === "PENDING" 
+              ? "border-amber-500 ring-1 ring-amber-500/20 bg-amber-50/10" 
+              : "border-amber-300 hover:border-amber-400"
           )}
         >
-          <div className="flex items-center justify-between text-xs font-medium text-amber-700">
+          <div className="flex items-center justify-between text-[10.5px] font-bold text-amber-700 uppercase tracking-wider">
             <span>Awaiting Carrier DLR</span>
-            <Clock className="w-4 h-4 text-amber-600" />
+            <Clock className="w-3.5 h-3.5 text-amber-600" />
           </div>
-          <span className="text-2xl font-bold text-amber-600 font-mono mt-1 block">
+          <div className="text-xl font-black text-amber-600 font-mono mt-0.5 tracking-tight">
             {pendingCount}
-          </span>
+          </div>
         </div>
 
         {/* Failed */}
         <div
           onClick={() => setStatusFilter("FAILED")}
           className={cn(
-            "p-4 rounded-xl border bg-white shadow-subtle cursor-pointer transition-all",
-            statusFilter === "FAILED" ? "border-red-500 ring-2 ring-red-500/20" : "border-slate-200 hover:border-red-300"
+            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
+            statusFilter === "FAILED" 
+              ? "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/10" 
+              : "border-rose-300 hover:border-rose-400"
           )}
         >
-          <div className="flex items-center justify-between text-xs font-medium text-red-700">
+          <div className="flex items-center justify-between text-[10.5px] font-bold text-rose-700 uppercase tracking-wider">
             <span>Delivery Failed</span>
-            <AlertCircle className="w-4 h-4 text-red-600" />
+            <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
           </div>
-          <span className="text-2xl font-bold text-red-600 font-mono mt-1 block">
+          <div className="text-xl font-black text-rose-600 font-mono mt-0.5 tracking-tight">
             {failedCount}
-          </span>
+          </div>
         </div>
       </div>
 

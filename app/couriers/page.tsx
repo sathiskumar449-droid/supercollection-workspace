@@ -481,14 +481,16 @@ function CourierHubContent() {
         </div>
       )}
 
-      {/* Metric Cards (Compact at the top) */}
+      {/* Metric Cards (Compact at the top with matching border colors) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
         {/* Total Orders */}
         <div 
           onClick={() => { setStatusFilter("ALL"); setPage(1); }}
           className={cn(
             "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "ALL" ? "border-orange-500 ring-1 ring-orange-500/20 bg-orange-50/10" : "border-slate-200 hover:border-slate-300"
+            statusFilter === "ALL" 
+              ? "border-orange-500 ring-1 ring-orange-500/20 bg-orange-50/10" 
+              : "border-slate-300 hover:border-orange-400"
           )}
         >
           <span className="text-[10.5px] font-bold text-slate-500 block uppercase tracking-wider">
@@ -504,7 +506,9 @@ function CourierHubContent() {
           onClick={() => { setStatusFilter("WAITING_FOR_PICKUP"); setPage(1); }}
           className={cn(
             "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "WAITING_FOR_PICKUP" ? "border-amber-500 ring-1 ring-amber-500/20 bg-amber-50/10" : "border-slate-200 hover:border-slate-300"
+            statusFilter === "WAITING_FOR_PICKUP" 
+              ? "border-amber-500 ring-1 ring-amber-500/20 bg-amber-50/10" 
+              : "border-amber-300 hover:border-amber-400"
           )}
         >
           <span className="text-[10.5px] font-bold text-amber-700 block uppercase tracking-wider">
@@ -520,7 +524,9 @@ function CourierHubContent() {
           onClick={() => { setStatusFilter("PICKED_UP"); setPage(1); }}
           className={cn(
             "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "PICKED_UP" ? "border-blue-500 ring-1 ring-blue-500/20 bg-blue-50/10" : "border-slate-200 hover:border-slate-300"
+            statusFilter === "PICKED_UP" 
+              ? "border-blue-500 ring-1 ring-blue-500/20 bg-blue-50/10" 
+              : "border-blue-300 hover:border-blue-400"
           )}
         >
           <span className="text-[10.5px] font-bold text-blue-700 block uppercase tracking-wider">
@@ -536,7 +542,9 @@ function CourierHubContent() {
           onClick={() => { setStatusFilter("DELIVERED"); setPage(1); }}
           className={cn(
             "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "DELIVERED" ? "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/10" : "border-slate-200 hover:border-slate-300"
+            statusFilter === "DELIVERED" 
+              ? "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/10" 
+              : "border-emerald-300 hover:border-emerald-400"
           )}
         >
           <span className="text-[10.5px] font-bold text-emerald-700 block uppercase tracking-wider">
@@ -553,7 +561,9 @@ function CourierHubContent() {
             onClick={() => { setStatusFilter("MISSING_LLR"); setPage(1); }}
             className={cn(
               "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
-              statusFilter === "MISSING_LLR" ? "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/10" : "border-slate-200 hover:border-slate-300"
+              statusFilter === "MISSING_LLR" 
+                ? "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/10" 
+                : "border-rose-300 hover:border-rose-400"
             )}
           >
             <span className="text-[10.5px] font-bold text-rose-700 block uppercase tracking-wider">

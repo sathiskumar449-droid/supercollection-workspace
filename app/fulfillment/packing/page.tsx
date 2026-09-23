@@ -383,24 +383,28 @@ export default function PackingPage() {
 
   return (
     <div className="space-y-3.5 max-w-full mx-auto">
-      {/* KPI Status Filter Buttons Row */}
+      {/* KPI Status Filter Buttons Row (with matching border colors) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         <button
           onClick={() => setStatusFilter("ALL")}
           className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs",
-            statusFilter === "ALL" ? "border-orange-600 ring-2 ring-orange-500/20" : "border-slate-200 hover:border-slate-300"
+            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
+            statusFilter === "ALL" 
+              ? "border-orange-600 ring-2 ring-orange-500/20 bg-orange-50/10" 
+              : "border-slate-300 hover:border-orange-400"
           )}
         >
-          <span className="text-[11px] text-slate-500 block">All Packing Orders</span>
+          <span className="text-[11px] text-slate-500 block font-medium">All Packing Orders</span>
           <span className="text-base font-bold text-slate-900 font-mono mt-0.5 block">{packingEligibleOrders.length}</span>
         </button>
 
         <button
           onClick={() => setStatusFilter("COMPLETED")}
           className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs",
-            statusFilter === "COMPLETED" ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-blue-300"
+            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
+            statusFilter === "COMPLETED" 
+              ? "border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/10" 
+              : "border-blue-300 hover:border-blue-400"
           )}
         >
           <span className="text-[11px] text-blue-800 font-medium block">Completed (Ready)</span>
@@ -410,8 +414,10 @@ export default function PackingPage() {
         <button
           onClick={() => setStatusFilter("CONFIRMED")}
           className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs",
-            statusFilter === "CONFIRMED" ? "border-sky-600 ring-2 ring-sky-500/20" : "border-slate-200 hover:border-sky-300"
+            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
+            statusFilter === "CONFIRMED" 
+              ? "border-sky-600 ring-2 ring-sky-500/20 bg-sky-50/10" 
+              : "border-sky-300 hover:border-sky-400"
           )}
         >
           <span className="text-[11px] text-sky-700 font-medium block">Processing</span>
@@ -421,8 +427,10 @@ export default function PackingPage() {
         <button
           onClick={() => setStatusFilter("PACKING")}
           className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs",
-            statusFilter === "PACKING" ? "border-orange-600 ring-2 ring-orange-500/20" : "border-slate-200 hover:border-orange-300"
+            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
+            statusFilter === "PACKING" 
+              ? "border-orange-600 ring-2 ring-orange-500/20 bg-orange-50/10" 
+              : "border-orange-300 hover:border-orange-400"
           )}
         >
           <span className="text-[11px] text-orange-700 font-medium block">Packaging</span>
@@ -432,8 +440,10 @@ export default function PackingPage() {
         <button
           onClick={() => setStatusFilter("PACKED")}
           className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs",
-            statusFilter === "PACKED" ? "border-purple-600 ring-2 ring-purple-500/20" : "border-slate-200 hover:border-purple-300"
+            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
+            statusFilter === "PACKED" 
+              ? "border-purple-600 ring-2 ring-purple-500/20 bg-purple-50/10" 
+              : "border-purple-300 hover:border-purple-400"
           )}
         >
           <span className="text-[11px] text-purple-700 font-medium block">Packed</span>
@@ -443,8 +453,10 @@ export default function PackingPage() {
         <button
           onClick={() => setStatusFilter("DISPATCHED")}
           className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs",
-            statusFilter === "DISPATCHED" ? "border-emerald-600 ring-2 ring-emerald-500/20" : "border-slate-200 hover:border-emerald-300"
+            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
+            statusFilter === "DISPATCHED" 
+              ? "border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/10" 
+              : "border-emerald-300 hover:border-emerald-400"
           )}
         >
           <span className="text-[11px] text-emerald-700 font-medium block">Dispatched</span>
