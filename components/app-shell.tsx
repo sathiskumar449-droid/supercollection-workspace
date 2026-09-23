@@ -13,6 +13,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const {
     orders,
+    activeReturnsCount,
     user,
     metrics,
     switchRole,
@@ -49,6 +50,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return {
         title: "Packing Station",
         breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "Packing Station" }],
+      };
+    }
+    if (pathname.startsWith("/returns")) {
+      return {
+        title: "Returns",
+        breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "Returns" }],
       };
     }
     if (pathname.startsWith("/couriers")) {
@@ -95,6 +102,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           dispatchCount: metrics.packedOrders,
           stMissingLlr: metrics.stCourierMissingLlr,
           smsFailed: metrics.smsFailed,
+          returnsCount: activeReturnsCount,
         }}
       />
 

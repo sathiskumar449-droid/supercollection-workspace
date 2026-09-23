@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { 
   Bell, 
   Calendar, 
@@ -200,9 +201,20 @@ export function TopBar({
             <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
                 <span className="text-xs font-semibold text-slate-800">Operational Alerts</span>
-                <span className="text-[11px] text-orange-600 font-medium">3 New</span>
+                <span className="text-[11px] text-orange-600 font-medium">4 New</span>
               </div>
               <div className="space-y-2 text-xs">
+                <Link
+                  href="/returns?status=QC Pending"
+                  onClick={() => setNotificationsOpen(false)}
+                  className="block p-2 bg-purple-50 rounded-lg border border-purple-200/60 text-purple-950 hover:bg-purple-100/60 transition-colors"
+                >
+                  <span className="font-semibold flex items-center justify-between">
+                    <span>Return Parcels In Warehouse</span>
+                    <span className="text-[9px] bg-purple-200 text-purple-800 px-1.5 py-0.2 rounded font-bold uppercase">QC Action</span>
+                  </span>
+                  <span className="text-slate-600 text-[11px] block mt-0.5">Parcels received waiting for inspection & disposition.</span>
+                </Link>
                 <div className="p-2 bg-amber-50 rounded-lg border border-amber-200/60 text-amber-900">
                   <span className="font-semibold block">5 ST Courier Parcels Waiting LLR</span>
                   <span className="text-slate-600 text-[11px]">Enter LLR numbers before driver arrives.</span>

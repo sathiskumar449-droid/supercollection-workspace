@@ -29,7 +29,7 @@ export default function DashboardPage() {
     setMounted(true);
   }, []);
 
-  const { orders, dateFilter, customDate } = useOrderFlow();
+  const { orders, returns, dateFilter, customDate } = useOrderFlow();
 
   // 1. Packing Station Counts (matches Packing Station's exact criteria: non-NEW, non-RETURN)
   const packingEligibleOrders = useMemo(() => {
@@ -109,7 +109,19 @@ export default function DashboardPage() {
     };
   }, [shippedOrders]);
 
-  // 5. Actionable items for "Needs Attention" section
+  // 5. Return Management Metrics (filtered by global date filter)
+  const returnMetrics = useMemo(() => {
+    const filteredReturns = returns.filter((r) => matchesDateFilter(r.createdAt, dateFilter, customDate));
+    return {
+      returnRequested: filteredReturns.filter((r) => r.status === "Return Requested").length,
+      awaitingReturn: filteredReturns.filter((r) => r.status === "Awaiting Return" || r.status === "Return Approved").length,
+      receivedQcPending: filteredReturns.filter((r) => r.status === "Return Received" || r.status === "QC Pending").length,
+      refundPending: filteredReturns.filter((r) => r.status === "Refund Pending").length,
+      replacementPending: filteredReturns.filter((r) => r.status === "Replacement Pending" || (r.replacement && r.replacement.status === "Waiting for Packing")).length,
+    };
+  }, [returns, dateFilter, customDate]);
+
+  // 6. Actionable items for "Needs Attention" section
   const attentionItems = useMemo(() => {
     const items: {
       id: string;
@@ -126,6 +138,51 @@ export default function DashboardPage() {
           packingCounts.processing === 1 ? "order" : "orders"
         } waiting for packing`,
         href: "/fulfillment/packing?status=CONFIRMED",
+      });
+    }
+
+    // Returns awaiting physical receipt
+    if (returnMetrics.awaitingReturn > 0) {
+      items.push({
+        id: "returns-awaiting-receipt",
+        text: `⚠️ ${returnMetrics.awaitingReturn} ${
+          returnMetrics.awaitingReturn === 1 ? "return" : "returns"
+        } awaiting physical receipt`,
+        href: "/returns?status=Awaiting Return",
+      });
+    }
+
+    // Returns pending QC inspection
+    if (returnMetrics.receivedQcPending > 0) {
+      items.push({
+        id: "returns-qc-pending",
+        text: `⚠️ ${returnMetrics.receivedQcPending} ${
+          returnMetrics.receivedQcPending === 1 ? "return" : "returns"
+        } pending QC inspection`,
+        href: "/returns?status=QC Pending",
+      });
+    }
+
+    // Refunds pending payout
+    if (returnMetrics.refundPending > 0) {
+      items.push({
+        id: "returns-refund-pending",
+        text: `⚠️ ${returnMetrics.refundPending} ${
+          returnMetrics.refundPending === 1 ? "refund" : "refunds"
+        } pending processing`,
+        href: "/returns?status=Refund Pending",
+        urgent: true,
+      });
+    }
+
+    // Replacements waiting for packing
+    if (returnMetrics.replacementPending > 0) {
+      items.push({
+        id: "returns-replacement-pending",
+        text: `⚠️ ${returnMetrics.replacementPending} ${
+          returnMetrics.replacementPending === 1 ? "replacement" : "replacements"
+        } waiting for packing`,
+        href: "/fulfillment/packing",
       });
     }
 
@@ -153,7 +210,7 @@ export default function DashboardPage() {
     }
 
     return items;
-  }, [packingCounts.processing, courierCounts.missingLlr, smsCounts.failed]);
+  }, [packingCounts.processing, courierCounts.missingLlr, smsCounts.failed, returnMetrics]);
 
   return (
     <div className="max-w-[1200px] mx-auto space-y-6 pb-12">

@@ -1,5 +1,33 @@
-import { Order, OrderItem, OrderStatus, OrderSource, CourierStatus, SmsStatus, Role, UserSession, ActivityLog, DashboardMetrics, ActionRequiredItem, Courier } from "@/types/orderflow";
-import { generateMockOrders, CURRENT_USER, INITIAL_COURIERS, STAFF_USERS } from "./mock-data";
+import { 
+  Order, 
+  OrderItem, 
+  OrderStatus, 
+  OrderSource, 
+  CourierStatus, 
+  SmsStatus, 
+  Role, 
+  UserSession, 
+  ActivityLog, 
+  DashboardMetrics, 
+  ActionRequiredItem, 
+  Courier,
+  ReturnCase,
+  ReturnItem,
+  ReturnStatus,
+  ReturnType,
+  ReturnReason,
+  RefundStatus,
+  RefundMethod,
+  QcCondition,
+  QcResult,
+  InventoryDisposition,
+  ReturnMetrics,
+  ReturnReplacement,
+  ReturnTimelineEvent,
+  ReturnQc,
+  ReturnRefund
+} from "@/types/orderflow";
+import { generateMockOrders, generateMockReturns, CURRENT_USER, INITIAL_COURIERS, STAFF_USERS } from "./mock-data";
 import { matchesDateFilter } from "./utils";
 import { 
   isSupabaseConfigured, 
@@ -12,9 +40,11 @@ import {
 const STORAGE_KEY_ORDERS = "orderflow_orders_v1";
 const STORAGE_KEY_USER = "orderflow_current_user_v1";
 const STORAGE_KEY_COURIERS = "orderflow_courier_partners_v1";
+const STORAGE_KEY_RETURNS = "orderflow_returns_v1";
 
 // Global in-memory cache
 let globalOrders: Order[] = [];
+let globalReturns: ReturnCase[] = [];
 let globalUser: UserSession = CURRENT_USER;
 let globalCouriers: Courier[] = [...INITIAL_COURIERS];
 let globalSearchQuery: string = "";
@@ -35,6 +65,49 @@ export function generateDispatchId(existingOrders: Order[] = globalOrders): stri
     const dispId = o.dispatch?.dispatchId;
     if (dispId && dispId.startsWith(prefix)) {
       const seqStr = dispId.slice(prefix.length);
+      const seq = parseInt(seqStr, 10);
+      if (!isNaN(seq) && seq > maxSeq) {
+        maxSeq = seq;
+      }
+    }
+  });
+
+  return `${prefix}${String(maxSeq + 1).padStart(3, "0")}`;
+}
+
+export function generateReturnId(existingReturns: ReturnCase[] = globalReturns): string {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const prefix = `RTN-${yy}${mm}${dd}-`;
+
+  let maxSeq = 0;
+  existingReturns.forEach((r) => {
+    if (r.returnId && r.returnId.startsWith(prefix)) {
+      const seqStr = r.returnId.slice(prefix.length);
+      const seq = parseInt(seqStr, 10);
+      if (!isNaN(seq) && seq > maxSeq) {
+        maxSeq = seq;
+      }
+    }
+  });
+
+  return `${prefix}${String(maxSeq + 1).padStart(3, "0")}`;
+}
+
+export function generateReplacementId(existingReturns: ReturnCase[] = globalReturns): string {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const prefix = `REP-${yy}${mm}${dd}-`;
+
+  let maxSeq = 0;
+  existingReturns.forEach((r) => {
+    const repId = r.replacement?.replacementId;
+    if (repId && repId.startsWith(prefix)) {
+      const seqStr = repId.slice(prefix.length);
       const seq = parseInt(seqStr, 10);
       if (!isNaN(seq) && seq > maxSeq) {
         maxSeq = seq;
@@ -220,9 +293,23 @@ export function initStore(): Order[] {
         }, 30000);
       }
     }
+    // Initialize Returns Cache
+    const cachedReturns = localStorage.getItem(STORAGE_KEY_RETURNS);
+    if (cachedReturns) {
+      try {
+        globalReturns = JSON.parse(cachedReturns);
+      } catch {
+        globalReturns = generateMockReturns(globalOrders);
+        localStorage.setItem(STORAGE_KEY_RETURNS, JSON.stringify(globalReturns));
+      }
+    } else {
+      globalReturns = generateMockReturns(globalOrders);
+      localStorage.setItem(STORAGE_KEY_RETURNS, JSON.stringify(globalReturns));
+    }
   } catch (err) {
     console.error("Error reading from localStorage:", err);
     globalOrders = isLive ? [] : generateMockOrders();
+    globalReturns = isLive ? [] : generateMockReturns(globalOrders);
   }
 
   return globalOrders;
@@ -236,6 +323,18 @@ function persistOrders(orders: Order[]) {
       localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(cleanOrders));
     } catch (err) {
       console.error("Error saving to localStorage:", err);
+    }
+  }
+  notifyListeners();
+}
+
+function persistReturns(returns: ReturnCase[]) {
+  globalReturns = [...returns];
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY_RETURNS, JSON.stringify(returns));
+    } catch (err) {
+      console.error("Error saving returns to localStorage:", err);
     }
   }
   notifyListeners();
@@ -365,13 +464,17 @@ export const orderflowStore = {
   resetData() {
     if (isSupabaseConfigured()) {
       localStorage.removeItem(STORAGE_KEY_ORDERS);
+      localStorage.removeItem(STORAGE_KEY_RETURNS);
       localStorage.setItem("orderflow_live_mode", "connected");
       globalOrders = [];
+      globalReturns = [];
       notifyListeners();
       this.refreshFromSupabase();
     } else {
       const fresh = generateMockOrders();
       persistOrders(fresh);
+      const freshReturns = generateMockReturns(fresh);
+      persistReturns(freshReturns);
     }
   },
 
@@ -1016,6 +1119,36 @@ export const orderflowStore = {
       }
     });
 
+    // Calculate Return Metrics for Dashboard & Attention items
+    const rawReturns = globalReturns.length > 0 ? globalReturns : (initStore(), globalReturns);
+    const filteredReturns = rawReturns.filter((r) => matchesDateFilter(r.createdAt, globalDateFilter, globalCustomDate));
+
+    let returnRequested = 0;
+    let awaitingReturn = 0;
+    let receivedQcPending = 0;
+    let refundPending = 0;
+    let replacementPending = 0;
+
+    filteredReturns.forEach((r) => {
+      if (r.status === "Return Requested") returnRequested++;
+      if (r.status === "Awaiting Return" || r.status === "Return Approved") awaitingReturn++;
+      if (r.status === "Return Received" || r.status === "QC Pending") receivedQcPending++;
+      if (r.status === "Refund Pending") refundPending++;
+      if (r.status === "Replacement Pending") replacementPending++;
+    });
+
+    const activeReturnsCount = returnRequested + awaitingReturn + receivedQcPending + refundPending + replacementPending;
+
+    const returnMetrics: ReturnMetrics = {
+      totalReturns: filteredReturns.length,
+      returnRequested,
+      awaitingReturn,
+      receivedQcPending,
+      refundPending,
+      replacementPending,
+      activeReturnsCount,
+    };
+
     const actionItems: ActionRequiredItem[] = [
       {
         id: "act-packing",
@@ -1064,6 +1197,55 @@ export const orderflowStore = {
       },
     ];
 
+    // Dynamic Return Attention Alerts (Requirement 23)
+    if (awaitingReturn > 0) {
+      actionItems.push({
+        id: "act-rtn-awaiting",
+        title: `${awaitingReturn} ${awaitingReturn === 1 ? "return" : "returns"} awaiting physical receipt`,
+        description: "Return parcels expected at warehouse loading dock",
+        count: awaitingReturn,
+        type: "return_awaiting_receipt",
+        color: "amber",
+        href: "/returns?status=Awaiting+Return",
+      });
+    }
+
+    if (receivedQcPending > 0) {
+      actionItems.push({
+        id: "act-rtn-qc",
+        title: `${receivedQcPending} ${receivedQcPending === 1 ? "return" : "returns"} pending QC`,
+        description: "Received return parcels waiting for condition and tag inspection",
+        count: receivedQcPending,
+        type: "return_qc_pending",
+        color: "orange",
+        href: "/returns?status=QC+Pending",
+      });
+    }
+
+    if (refundPending > 0) {
+      actionItems.push({
+        id: "act-rtn-refund",
+        title: `${refundPending} ${refundPending === 1 ? "refund" : "refunds"} pending`,
+        description: "Approved return claims awaiting payment disbursement",
+        count: refundPending,
+        type: "return_refund_pending",
+        color: "rose",
+        href: "/returns?status=Refund+Pending",
+      });
+    }
+
+    if (replacementPending > 0) {
+      actionItems.push({
+        id: "act-rtn-replacement",
+        title: `${replacementPending} ${replacementPending === 1 ? "replacement" : "replacements"} waiting for packing`,
+        description: "Approved replacement exchanges queued for warehouse packing",
+        count: replacementPending,
+        type: "return_replacement_pending",
+        color: "purple",
+        href: "/returns?status=Replacement+Pending",
+      });
+    }
+
     return {
       todayOrders: orders.length,
       newOrders,
@@ -1075,6 +1257,7 @@ export const orderflowStore = {
       smsFailed,
       stCourierMissingLlr,
       stCourierPendingDelivery,
+      returnMetrics,
       actionItems,
     };
   },
@@ -1112,5 +1295,603 @@ export const orderflowStore = {
       listeners = listeners.filter((l) => l !== listener);
     };
   },
+
+  // ============================================================================
+  // RETURN MANAGEMENT STORE OPERATIONS
+  // ============================================================================
+
+  getReturns(): ReturnCase[] {
+    if (globalReturns.length === 0) {
+      initStore();
+    }
+    return globalReturns;
+  },
+
+  getReturnById(id: string): ReturnCase | undefined {
+    return globalReturns.find((r) => r.id === id || r.returnId === id);
+  },
+
+  getReturnsByOrderId(orderId: string): ReturnCase[] {
+    if (globalReturns.length === 0) {
+      initStore();
+    }
+    return globalReturns.filter((r) => r.orderId === orderId || r.orderNumber === orderId);
+  },
+
+  getActiveReturnsCount(): number {
+    const activeStatuses: ReturnStatus[] = [
+      "Return Requested",
+      "Return Approved",
+      "Awaiting Return",
+      "Return Received",
+      "QC Pending",
+      "Refund Pending",
+      "Replacement Pending",
+    ];
+    return globalReturns.filter((r) => activeStatuses.includes(r.status)).length;
+  },
+
+  getReturnMetrics(dateFilter = globalDateFilter, customDate = globalCustomDate): ReturnMetrics {
+    const returns = this.getReturns().filter((r) => matchesDateFilter(r.createdAt, dateFilter, customDate));
+
+    let returnRequested = 0;
+    let awaitingReturn = 0;
+    let receivedQcPending = 0;
+    let refundPending = 0;
+    let replacementPending = 0;
+
+    returns.forEach((r) => {
+      if (r.status === "Return Requested") returnRequested++;
+      if (r.status === "Awaiting Return" || r.status === "Return Approved") awaitingReturn++;
+      if (r.status === "Return Received" || r.status === "QC Pending") receivedQcPending++;
+      if (r.status === "Refund Pending") refundPending++;
+      if (r.status === "Replacement Pending") replacementPending++;
+    });
+
+    const activeReturnsCount = returnRequested + awaitingReturn + receivedQcPending + refundPending + replacementPending;
+
+    return {
+      totalReturns: returns.length,
+      returnRequested,
+      awaitingReturn,
+      receivedQcPending,
+      refundPending,
+      replacementPending,
+      activeReturnsCount,
+    };
+  },
+
+  createReturnCase(params: {
+    orderId: string;
+    returnType: ReturnType;
+    reason: ReturnReason;
+    customerNote?: string;
+    items: Array<{
+      orderItemId?: string;
+      productName: string;
+      sku?: string;
+      color?: string;
+      size: string;
+      purchasedQuantity: number;
+      returnQuantity: number;
+      unitPrice: number;
+    }>;
+    discountAdjustment?: number;
+    shippingAdjustment?: number;
+    customAmountOverride?: number;
+  }): { success: boolean; returnCase?: ReturnCase; error?: string } {
+    const order = this.getOrderById(params.orderId);
+    if (!order) {
+      return { success: false, error: "Order not found" };
+    }
+
+    // Existing returns for this order
+    const existingReturns = this.getReturnsByOrderId(order.id);
+
+    // Business Rule 1 & 2: Validate each item quantity against remaining unreturned quantity
+    const returnItems: ReturnItem[] = [];
+    let totalRequestedQty = 0;
+    let itemsAmount = 0;
+
+    for (const item of params.items) {
+      if (item.returnQuantity <= 0) continue;
+
+      // Calculate previously returned quantity for this specific item/SKU/name
+      let previouslyReturnedQty = 0;
+      existingReturns.forEach((ret) => {
+        if (ret.status !== "Rejected" && ret.status !== "Cancelled") {
+          ret.items.forEach((ri) => {
+            const matches = (item.orderItemId && ri.orderItemId === item.orderItemId) ||
+              (ri.productName.toLowerCase() === item.productName.toLowerCase() && ri.size === item.size);
+            if (matches) {
+              previouslyReturnedQty += ri.requestedQuantity;
+            }
+          });
+        }
+      });
+
+      const availableQty = Math.max(0, item.purchasedQuantity - previouslyReturnedQty);
+      if (item.returnQuantity > availableQty) {
+        return {
+          success: false,
+          error: `Cannot return ${item.returnQuantity} of "${item.productName}". Only ${availableQty} remaining returnable.`,
+        };
+      }
+
+      const itemReturnAmount = item.returnQuantity * item.unitPrice;
+      totalRequestedQty += item.returnQuantity;
+      itemsAmount += itemReturnAmount;
+
+      returnItems.push({
+        id: `rtn-it-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        orderItemId: item.orderItemId,
+        productName: item.productName,
+        sku: item.sku,
+        color: item.color || "Standard",
+        size: item.size,
+        purchasedQuantity: item.purchasedQuantity,
+        requestedQuantity: item.returnQuantity,
+        receivedQuantity: 0,
+        approvedQuantity: 0,
+        unitPrice: item.unitPrice,
+        returnAmount: itemReturnAmount,
+      });
+    }
+
+    if (returnItems.length === 0) {
+      return { success: false, error: "Please select at least 1 item with quantity > 0 to return." };
+    }
+
+    const discountAdjustment = params.discountAdjustment || 0;
+    const shippingAdjustment = params.shippingAdjustment || 0;
+    const calculatedExpectedAmount = Math.max(0, itemsAmount - discountAdjustment + shippingAdjustment);
+    const expectedAmount = params.customAmountOverride !== undefined ? params.customAmountOverride : calculatedExpectedAmount;
+
+    const returnId = generateReturnId();
+    const now = new Date().toISOString();
+
+    const newReturnCase: ReturnCase = {
+      id: `rtn-case-${Date.now()}`,
+      returnId,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      customerId: order.customer.id,
+      customerName: order.customer.name,
+      customerPhone: order.customer.mobile,
+      returnType: params.returnType,
+      reason: params.reason,
+      customerNote: params.customerNote,
+      status: "Return Requested",
+      requestedQuantity: totalRequestedQty,
+      receivedQuantity: 0,
+      approvedQuantity: 0,
+      expectedAmount,
+      refundAmount: params.returnType === "Refund" ? expectedAmount : 0,
+      discountAdjustment,
+      shippingAdjustment,
+      items: returnItems,
+      timeline: [
+        {
+          id: `tl-${Date.now()}`,
+          returnId,
+          action: "Return Requested",
+          user: globalUser.name,
+          role: globalUser.role,
+          notes: `Return case created for ${totalRequestedQty} item(s). Reason: ${params.reason}. Type: ${params.returnType}`,
+          timestamp: now,
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
+      createdBy: globalUser.name,
+    };
+
+    const updated = [newReturnCase, ...globalReturns];
+    persistReturns(updated);
+
+    return { success: true, returnCase: newReturnCase };
+  },
+
+  updateReturnStatus(
+    returnId: string,
+    newStatus: ReturnStatus,
+    notes?: string,
+    userName?: string,
+    userRole?: Role
+  ): { success: boolean; error?: string } {
+    const index = globalReturns.findIndex((r) => r.id === returnId || r.returnId === returnId);
+    if (index === -1) return { success: false, error: "Return case not found" };
+
+    const target = globalReturns[index];
+    const now = new Date().toISOString();
+    const actionUser = userName || globalUser.name;
+    const actionRole = userRole || globalUser.role;
+
+    const updatedTimeline: ReturnTimelineEvent[] = [
+      ...target.timeline,
+      {
+        id: `tl-${Date.now()}`,
+        returnId: target.returnId,
+        action: newStatus,
+        user: actionUser,
+        role: actionRole,
+        notes: notes || `Return status updated to ${newStatus}`,
+        timestamp: now,
+      },
+    ];
+
+    const updatedCase: ReturnCase = {
+      ...target,
+      status: newStatus,
+      updatedAt: now,
+      timeline: updatedTimeline,
+    };
+
+    const newReturns = [...globalReturns];
+    newReturns[index] = updatedCase;
+    persistReturns(newReturns);
+
+    return { success: true };
+  },
+
+  recordReturnReceived(
+    returnId: string,
+    params: {
+      receivedQuantity: number;
+      receivedBy?: string;
+      receivingNote?: string;
+      itemReceipts?: Record<string, number>;
+    }
+  ): { success: boolean; error?: string } {
+    const index = globalReturns.findIndex((r) => r.id === returnId || r.returnId === returnId);
+    if (index === -1) return { success: false, error: "Return case not found" };
+
+    const target = globalReturns[index];
+    const now = new Date().toISOString();
+    const receiver = params.receivedBy || globalUser.name;
+
+    // Update item-level received quantities
+    const updatedItems = target.items.map((it) => {
+      const recQty = params.itemReceipts?.[it.id] !== undefined 
+        ? params.itemReceipts[it.id] 
+        : params.receivedQuantity >= it.requestedQuantity ? it.requestedQuantity : params.receivedQuantity;
+      return {
+        ...it,
+        receivedQuantity: recQty,
+      };
+    });
+
+    const totalReceived = params.receivedQuantity;
+    const shortQty = Math.max(0, target.requestedQuantity - totalReceived);
+    const shortNote = shortQty > 0 ? ` (Short Quantity: ${shortQty})` : "";
+
+    const timelineEntry: ReturnTimelineEvent = {
+      id: `tl-${Date.now()}`,
+      returnId: target.returnId,
+      action: "Return Received",
+      user: receiver,
+      role: globalUser.role,
+      notes: `Physical return parcel checked in by ${receiver}. Expected: ${target.requestedQuantity}, Received: ${totalReceived}${shortNote}. Note: ${params.receivingNote || "Parcel in warehouse"}`,
+      timestamp: now,
+    };
+
+    const updatedCase: ReturnCase = {
+      ...target,
+      status: "QC Pending",
+      receivedQuantity: totalReceived,
+      receivedAt: now,
+      receivedBy: receiver,
+      receivingNote: params.receivingNote,
+      items: updatedItems,
+      updatedAt: now,
+      timeline: [...target.timeline, timelineEntry],
+    };
+
+    const newReturns = [...globalReturns];
+    newReturns[index] = updatedCase;
+    persistReturns(newReturns);
+
+    return { success: true };
+  },
+
+  performQcCheck(
+    returnId: string,
+    params: {
+      condition: QcCondition;
+      qcResult: QcResult;
+      inventoryDisposition?: InventoryDisposition;
+      qcNotes?: string;
+      approvedQuantities?: Record<string, number>;
+      checkedBy?: string;
+    }
+  ): { success: boolean; error?: string } {
+    const index = globalReturns.findIndex((r) => r.id === returnId || r.returnId === returnId);
+    if (index === -1) return { success: false, error: "Return case not found" };
+
+    const target = globalReturns[index];
+    const now = new Date().toISOString();
+    const inspector = params.checkedBy || globalUser.name;
+
+    // Calculate approved items
+    let totalApprovedQty = 0;
+    let approvedRefundAmount = 0;
+
+    const updatedItems = target.items.map((it) => {
+      let appQty = 0;
+      if (params.qcResult === "Approved") {
+        appQty = it.receivedQuantity || it.requestedQuantity;
+      } else if (params.qcResult === "Partially Approved") {
+        appQty = params.approvedQuantities?.[it.id] ?? Math.min(1, it.receivedQuantity || 1);
+      } else {
+        appQty = 0;
+      }
+      totalApprovedQty += appQty;
+      approvedRefundAmount += appQty * it.unitPrice;
+      return {
+        ...it,
+        approvedQuantity: appQty,
+      };
+    });
+
+    const qcRecord: ReturnQc = {
+      id: `qc-${Date.now()}`,
+      condition: params.condition,
+      qcResult: params.qcResult,
+      inventoryDisposition: params.inventoryDisposition || (params.condition === "Good" ? "Restock" : "Damaged Stock"),
+      qcNotes: params.qcNotes,
+      checkedBy: inspector,
+      checkedAt: now,
+    };
+
+    let nextStatus: ReturnStatus = "QC Approved";
+    if (params.qcResult === "Rejected") {
+      nextStatus = "Rejected";
+    } else {
+      if (target.returnType === "Refund") {
+        nextStatus = "Refund Pending";
+      } else {
+        nextStatus = "Replacement Pending";
+      }
+    }
+
+    const timelineNotes = `QC check completed by ${inspector}. Result: ${params.qcResult}, Condition: ${params.condition}, Disposition: ${qcRecord.inventoryDisposition}. Approved Qty: ${totalApprovedQty}. Note: ${params.qcNotes || "None"}`;
+
+    const timelineEntry: ReturnTimelineEvent = {
+      id: `tl-${Date.now()}`,
+      returnId: target.returnId,
+      action: params.qcResult === "Rejected" ? "QC Rejected" : "QC Approved",
+      user: inspector,
+      role: globalUser.role,
+      notes: timelineNotes,
+      timestamp: now,
+    };
+
+    // Auto-create replacement task if Replacement or Exchange
+    let replacement = target.replacement;
+    if ((target.returnType === "Replacement" || target.returnType === "Exchange") && params.qcResult !== "Rejected" && !replacement) {
+      const repItem = target.items[0];
+      replacement = {
+        id: `rep-${Date.now()}`,
+        replacementId: generateReplacementId(),
+        originalOrderId: target.orderId,
+        originalOrderNumber: target.orderNumber,
+        originalItemName: repItem?.productName || "Item",
+        returnedItem: `${repItem?.productName || "Item"} - ${repItem?.size || "M"}`,
+        replacementItem: `${repItem?.productName || "Item"} - ${repItem?.size || "M"}`,
+        color: repItem?.color || "Standard",
+        size: repItem?.size || "M",
+        quantity: totalApprovedQty || 1,
+        status: "Waiting for Packing",
+      };
+    }
+
+    const updatedCase: ReturnCase = {
+      ...target,
+      status: nextStatus,
+      approvedQuantity: totalApprovedQty,
+      refundAmount: target.returnType === "Refund" ? approvedRefundAmount : 0,
+      qc: qcRecord,
+      replacement,
+      items: updatedItems,
+      updatedAt: now,
+      timeline: [...target.timeline, timelineEntry],
+    };
+
+    const newReturns = [...globalReturns];
+    newReturns[index] = updatedCase;
+    persistReturns(newReturns);
+
+    return { success: true };
+  },
+
+  processRefund(
+    returnId: string,
+    params: {
+      refundStatus: RefundStatus;
+      refundAmount?: number;
+      refundMethod?: RefundMethod;
+      utrReference?: string;
+      refundNotes?: string;
+      processedBy?: string;
+    }
+  ): { success: boolean; error?: string } {
+    const index = globalReturns.findIndex((r) => r.id === returnId || r.returnId === returnId);
+    if (index === -1) return { success: false, error: "Return case not found" };
+
+    const target = globalReturns[index];
+    const now = new Date().toISOString();
+    const processor = params.processedBy || globalUser.name;
+
+    if (params.refundStatus === "Refunded" && !params.utrReference && !params.refundMethod) {
+      return { success: false, error: "Please provide refund method and UTR / Reference number to mark completed." };
+    }
+
+    const refundAmount = params.refundAmount !== undefined ? params.refundAmount : target.refundAmount;
+
+    const refundRecord: ReturnRefund = {
+      id: target.refund?.id || `ref-${Date.now()}`,
+      refundStatus: params.refundStatus,
+      refundAmount,
+      refundMethod: params.refundMethod || target.refund?.refundMethod || "UPI",
+      utrReference: params.utrReference || target.refund?.utrReference,
+      refundNotes: params.refundNotes || target.refund?.refundNotes,
+      processedBy: processor,
+      refundDate: params.refundStatus === "Refunded" ? now : target.refund?.refundDate,
+    };
+
+    const isRefundCompleted = params.refundStatus === "Refunded";
+    const nextStatus: ReturnStatus = isRefundCompleted ? "Completed" : "Refund Pending";
+
+    const timelineEntry: ReturnTimelineEvent = {
+      id: `tl-${Date.now()}`,
+      returnId: target.returnId,
+      action: isRefundCompleted ? "Refund Completed" : `Refund ${params.refundStatus}`,
+      user: processor,
+      role: globalUser.role,
+      notes: `Refund ${params.refundStatus}: ₹${refundAmount} via ${refundRecord.refundMethod}${refundRecord.utrReference ? ` (UTR: ${refundRecord.utrReference})` : ""}. Note: ${params.refundNotes || "Processed"}`,
+      timestamp: now,
+    };
+
+    const updatedCase: ReturnCase = {
+      ...target,
+      status: nextStatus,
+      refundAmount,
+      refund: refundRecord,
+      updatedAt: now,
+      timeline: [...target.timeline, timelineEntry],
+    };
+
+    const newReturns = [...globalReturns];
+    newReturns[index] = updatedCase;
+    persistReturns(newReturns);
+
+    return { success: true };
+  },
+
+  createReplacementTask(
+    returnId: string,
+    params: {
+      replacementItem?: string;
+      color?: string;
+      size?: string;
+      quantity?: number;
+    }
+  ): { success: boolean; replacementId?: string; error?: string } {
+    const index = globalReturns.findIndex((r) => r.id === returnId || r.returnId === returnId);
+    if (index === -1) return { success: false, error: "Return case not found" };
+
+    const target = globalReturns[index];
+    const now = new Date().toISOString();
+    const repId = generateReplacementId();
+    const firstItem = target.items[0];
+
+    const replacementRecord: ReturnReplacement = {
+      id: `rep-${Date.now()}`,
+      replacementId: repId,
+      originalOrderId: target.orderId,
+      originalOrderNumber: target.orderNumber,
+      originalItemName: firstItem?.productName || "Item",
+      returnedItem: `${firstItem?.productName || "Item"} - ${firstItem?.size || "M"}`,
+      replacementItem: params.replacementItem || `${firstItem?.productName || "Item"} - ${params.size || firstItem?.size || "M"}`,
+      color: params.color || firstItem?.color || "Standard",
+      size: params.size || firstItem?.size || "M",
+      quantity: params.quantity || target.approvedQuantity || 1,
+      status: "Waiting for Packing",
+    };
+
+    const timelineEntry: ReturnTimelineEvent = {
+      id: `tl-${Date.now()}`,
+      returnId: target.returnId,
+      action: "Replacement Created",
+      user: globalUser.name,
+      role: globalUser.role,
+      notes: `Replacement task ${repId} created and sent to Packing Station (${replacementRecord.replacementItem}, Qty: ${replacementRecord.quantity})`,
+      timestamp: now,
+    };
+
+    const updatedCase: ReturnCase = {
+      ...target,
+      status: "Replacement Pending",
+      replacement: replacementRecord,
+      updatedAt: now,
+      timeline: [...target.timeline, timelineEntry],
+    };
+
+    const newReturns = [...globalReturns];
+    newReturns[index] = updatedCase;
+    persistReturns(newReturns);
+
+    return { success: true, replacementId: repId };
+  },
+
+  updateReplacementDispatch(
+    returnIdOrReplacementId: string,
+    params: {
+      dispatchId?: string;
+      courier?: string;
+      llr?: string;
+      tracking?: string;
+      status?: "Waiting for Packing" | "Packing" | "Packed" | "Dispatched" | "Delivered";
+    }
+  ): { success: boolean; error?: string } {
+    const index = globalReturns.findIndex(
+      (r) => r.id === returnIdOrReplacementId ||
+        r.returnId === returnIdOrReplacementId ||
+        r.replacement?.replacementId === returnIdOrReplacementId
+    );
+    if (index === -1) return { success: false, error: "Replacement or Return not found" };
+
+    const target = globalReturns[index];
+    if (!target.replacement) return { success: false, error: "No replacement task linked to this return case" };
+
+    const now = new Date().toISOString();
+    const newStatus = params.status || "Dispatched";
+    const dispatchId = params.dispatchId || target.replacement.dispatchId || generateDispatchId();
+
+    const updatedReplacement: ReturnReplacement = {
+      ...target.replacement,
+      status: newStatus,
+      dispatchId,
+      courier: params.courier || target.replacement.courier || "ST Courier",
+      llr: params.llr !== undefined ? params.llr : target.replacement.llr,
+      tracking: params.tracking || target.replacement.tracking,
+      dispatchedAt: newStatus === "Dispatched" ? (target.replacement.dispatchedAt || now) : target.replacement.dispatchedAt,
+    };
+
+    let nextReturnStatus = target.status;
+    if (newStatus === "Dispatched") {
+      nextReturnStatus = "Replacement Dispatched";
+    } else if (newStatus === "Delivered") {
+      nextReturnStatus = "Completed";
+    }
+
+    const actionTitle = newStatus === "Packing" ? "Replacement Packing Started" : newStatus === "Packed" ? "Replacement Packed" : newStatus === "Dispatched" ? "Replacement Dispatched" : "Replacement Delivered";
+    const actionDetails = `${actionTitle}: Dispatch ID ${dispatchId}, Courier: ${updatedReplacement.courier}${updatedReplacement.llr ? `, LLR: ${updatedReplacement.llr}` : ""}`;
+
+    const timelineEntry: ReturnTimelineEvent = {
+      id: `tl-${Date.now()}`,
+      returnId: target.returnId,
+      action: actionTitle,
+      user: globalUser.name,
+      role: globalUser.role,
+      notes: actionDetails,
+      timestamp: now,
+    };
+
+    const updatedCase: ReturnCase = {
+      ...target,
+      status: nextReturnStatus,
+      replacement: updatedReplacement,
+      updatedAt: now,
+      timeline: [...target.timeline, timelineEntry],
+    };
+
+    const newReturns = [...globalReturns];
+    newReturns[index] = updatedCase;
+    persistReturns(newReturns);
+
+    return { success: true };
+  },
 };
+
 

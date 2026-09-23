@@ -126,10 +126,29 @@ export interface ActionRequiredItem {
   title: string;
   description: string;
   count: number;
-  type: "packing_waiting" | "dispatch_waiting" | "sms_pending" | "sms_failed" | "st_courier_missing_llr";
-  color: "amber" | "purple" | "blue" | "red" | "orange";
+  type: 
+    | "packing_waiting" 
+    | "dispatch_waiting" 
+    | "sms_pending" 
+    | "sms_failed" 
+    | "st_courier_missing_llr"
+    | "return_awaiting_receipt"
+    | "return_qc_pending"
+    | "return_refund_pending"
+    | "return_replacement_pending";
+  color: "amber" | "purple" | "blue" | "red" | "orange" | "rose" | "emerald";
   href: string;
   queryParam?: Record<string, string>;
+}
+
+export interface ReturnMetrics {
+  totalReturns: number;
+  returnRequested: number;
+  awaitingReturn: number;
+  receivedQcPending: number;
+  refundPending: number;
+  replacementPending: number;
+  activeReturnsCount: number;
 }
 
 export interface DashboardMetrics {
@@ -143,5 +162,155 @@ export interface DashboardMetrics {
   smsFailed: number;
   stCourierMissingLlr: number;
   stCourierPendingDelivery: number;
+  returnMetrics?: ReturnMetrics;
   actionItems: ActionRequiredItem[];
+}
+
+// ==============================================================================
+// RETURN MANAGEMENT MODULE TYPES
+// ==============================================================================
+
+export type ReturnType = "Refund" | "Replacement" | "Exchange";
+
+export type ReturnReason =
+  | "Size Issue"
+  | "Color Issue"
+  | "Wrong Product"
+  | "Damaged Product"
+  | "Quality Issue"
+  | "Product Not as Expected"
+  | "Customer Changed Mind"
+  | "Duplicate Order"
+  | "Courier Damage"
+  | "Missing Item"
+  | "Other";
+
+export type ReturnStatus =
+  | "Return Requested"
+  | "Return Approved"
+  | "Awaiting Return"
+  | "Return Received"
+  | "QC Pending"
+  | "QC Approved"
+  | "Refund Pending"
+  | "Refunded"
+  | "Replacement Pending"
+  | "Replacement Dispatched"
+  | "Completed"
+  | "Rejected"
+  | "Cancelled";
+
+export type RefundStatus =
+  | "Not Started"
+  | "Pending"
+  | "Processing"
+  | "Refunded"
+  | "Failed";
+
+export type RefundMethod =
+  | "UPI"
+  | "Bank Transfer"
+  | "Cash"
+  | "Original Payment Method"
+  | "Other";
+
+export type QcCondition = "Good" | "Used" | "Damaged" | "Missing Item" | "Wrong Item";
+export type QcResult = "Approved" | "Partially Approved" | "Rejected";
+export type InventoryDisposition = "Restock" | "Damaged Stock" | "Hold" | "Other";
+
+export interface ReturnItem {
+  id: string;
+  orderItemId?: string;
+  productName: string;
+  sku?: string;
+  color?: string;
+  size: string;
+  purchasedQuantity: number;
+  requestedQuantity: number;
+  receivedQuantity?: number;
+  approvedQuantity?: number;
+  unitPrice: number;
+  returnAmount: number;
+}
+
+export interface ReturnQc {
+  id: string;
+  condition: QcCondition;
+  qcResult: QcResult;
+  inventoryDisposition: InventoryDisposition;
+  qcNotes?: string;
+  checkedBy: string;
+  checkedAt: string;
+}
+
+export interface ReturnRefund {
+  id: string;
+  refundStatus: RefundStatus;
+  refundAmount: number;
+  refundMethod?: RefundMethod;
+  utrReference?: string;
+  refundNotes?: string;
+  processedBy?: string;
+  refundDate?: string;
+}
+
+export interface ReturnReplacement {
+  id: string;
+  replacementId: string; // e.g. REP-260923-001
+  originalOrderId: string;
+  originalOrderNumber: string;
+  originalItemName: string;
+  returnedItem: string;
+  replacementItem: string;
+  color?: string;
+  size: string;
+  quantity: number;
+  status: "Waiting for Packing" | "Packing" | "Packed" | "Dispatched" | "Delivered";
+  dispatchId?: string; // e.g. DSP-260923-021
+  courier?: string;
+  llr?: string;
+  tracking?: string;
+  dispatchedAt?: string;
+}
+
+export interface ReturnTimelineEvent {
+  id: string;
+  returnId: string;
+  action: string;
+  user: string;
+  role: Role;
+  notes?: string;
+  timestamp: string;
+}
+
+export interface ReturnCase {
+  id: string;
+  returnId: string; // RTN-YYMMDD-001
+  orderId: string;
+  orderNumber: string;
+  customerId?: string;
+  customerName: string;
+  customerPhone: string;
+  returnType: ReturnType;
+  reason: ReturnReason;
+  customerNote?: string;
+  status: ReturnStatus;
+  requestedQuantity: number;
+  receivedQuantity: number;
+  approvedQuantity: number;
+  expectedAmount: number;
+  refundAmount: number;
+  discountAdjustment: number;
+  shippingAdjustment: number;
+  items: ReturnItem[];
+  qc?: ReturnQc;
+  refund?: ReturnRefund;
+  replacement?: ReturnReplacement;
+  receivedAt?: string;
+  receivedBy?: string;
+  receivingNote?: string;
+  timeline: ReturnTimelineEvent[];
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
 }

@@ -7,6 +7,7 @@ import {
   LayoutDashboard, 
   ShoppingCart, 
   Box, 
+  RotateCcw,
   Truck, 
   Send, 
   BarChart3, 
@@ -24,6 +25,7 @@ interface SidebarProps {
     dispatchCount?: number;
     stMissingLlr?: number;
     smsFailed?: number;
+    returnsCount?: number;
   };
 }
 
@@ -52,6 +54,8 @@ export function Sidebar({
         return ["ADMIN", "MANAGER", "ORDER_STAFF"].includes(user.role);
       case "packing":
         return ["ADMIN", "MANAGER", "PACKING_STAFF"].includes(user.role);
+      case "returns":
+        return ["ADMIN", "MANAGER", "ORDER_STAFF"].includes(user.role);
       case "courier":
         return ["ADMIN", "MANAGER", "DISPATCH_STAFF", "COURIER"].includes(user.role);
       case "sms":
@@ -96,6 +100,15 @@ export function Sidebar({
       exact: false,
       icon: Box,
       badge: badgeCounts.packingCount && badgeCounts.packingCount > 0 ? badgeCounts.packingCount : undefined,
+      badgeType: "warning",
+    },
+    {
+      id: "returns",
+      label: "Returns",
+      href: "/returns",
+      exact: false,
+      icon: RotateCcw,
+      badge: badgeCounts.returnsCount && badgeCounts.returnsCount > 0 ? badgeCounts.returnsCount : undefined,
       badgeType: "warning",
     },
     {

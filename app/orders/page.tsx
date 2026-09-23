@@ -22,8 +22,10 @@ import {
   Globe
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
-import { Order, OrderStatus, CourierStatus, SmsStatus, OrderSource } from "@/types/orderflow";
+import { Order, OrderStatus, CourierStatus, SmsStatus, OrderSource, ReturnCase } from "@/types/orderflow";
 import { OrderStatusBadge, CourierStatusBadge, SmsStatusBadge, SourceBadge } from "@/components/ui/status-badge";
+import { ReturnCompactIndicator } from "@/components/returns/return-status-badge";
+import { ReturnDetailsDrawer } from "@/components/returns/return-details-drawer";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { SyncWooCommerceDialog } from "@/components/sync-woocommerce-dialog";
 import { formatINR, formatDate, cn, matchesDateFilter } from "@/lib/utils";
@@ -37,6 +39,7 @@ function OrdersContent() {
 
   const { 
     orders, 
+    returns,
     user, 
     updateOrderStatus, 
     updateCourierDetails,
@@ -46,6 +49,7 @@ function OrdersContent() {
     customDate,
   } = useOrderFlow();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedReturn, setSelectedReturn] = useState<ReturnCase | null>(null);
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
 
   // Filters state
@@ -565,19 +569,20 @@ function OrdersContent() {
                     <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                   </div>
                 </th>
-                <th className="py-2 px-1 w-[8%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Order Status</th>
-                <th className="py-2 px-1 w-[8%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
-                <th className="py-2 px-1 w-[8%] text-center border-r border-b-2 border-slate-300 bg-slate-100">LLR</th>
-                <th className="py-2 px-1 w-[8%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
-                <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">SMS Status</th>
-                <th className="py-2 px-1 w-[8%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">Tracking</th>
+                <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Order Status</th>
+                <th className="py-2 px-1 w-[7%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Return</th>
+                <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
+                <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">LLR</th>
+                <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
+                <th className="py-2 px-1 w-[7%] text-center border-r border-b-2 border-slate-300 bg-slate-100">SMS Status</th>
+                <th className="py-2 px-1 w-[7.5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">Tracking</th>
               </tr>
             </thead>
 
             <tbody>
               {paginatedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="py-12 text-center text-slate-400 border-b border-slate-300">
+                  <td colSpan={15} className="py-12 text-center text-slate-400 border-b border-slate-300">
                     <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     <p className="text-sm font-semibold text-slate-700">No matching orders found</p>
                     <p className="text-xs text-slate-500 mt-1">
@@ -662,6 +667,24 @@ function OrdersContent() {
                       {/* Order Status */}
                       <td className="py-2 px-1 text-center truncate border-r border-b border-slate-300">
                         <OrderStatusBadge status={order.orderStatus} className="justify-center text-[11px]" />
+                      </td>
+
+                      {/* Return Column (Requirement 19) */}
+                      <td className="py-2 px-1 text-center truncate border-r border-b border-slate-300" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const orderReturns = returns.filter((r) => r.orderId === order.id || r.orderNumber === order.orderNumber);
+                          if (orderReturns.length === 0) {
+                            return <span className="text-slate-400 text-[10.5px]">No Return</span>;
+                          }
+                          const latestReturn = orderReturns[0];
+                          return (
+                            <ReturnCompactIndicator
+                              status={latestReturn.status}
+                              returnId={latestReturn.returnId}
+                              onClick={() => setSelectedReturn(latestReturn)}
+                            />
+                          );
+                        })()}
                       </td>
 
                       {/* Courier */}
@@ -811,6 +834,13 @@ function OrdersContent() {
         onUpdateStatus={updateOrderStatus}
         onUpdateCourier={updateCourierDetails}
         userRole={user.role}
+      />
+
+      {/* Return Details Drawer */}
+      <ReturnDetailsDrawer
+        returnCase={selectedReturn}
+        isOpen={Boolean(selectedReturn)}
+        onClose={() => setSelectedReturn(null)}
       />
 
       {/* Sync WooCommerce Dialog */}

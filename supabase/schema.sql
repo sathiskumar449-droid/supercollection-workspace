@@ -276,3 +276,162 @@ CREATE POLICY "Public Read Access" ON couriers FOR SELECT USING (true);
 CREATE POLICY "Public Read Access" ON users FOR SELECT USING (true);
 CREATE POLICY "Public Read Access" ON activity_logs FOR SELECT USING (true);
 CREATE POLICY "Public Insert Access" ON activity_logs FOR INSERT WITH CHECK (true);
+
+-- ==============================================================================
+-- 13. RETURN MANAGEMENT MODULE (Enterprise Normalized Relational Schema)
+-- ==============================================================================
+
+-- 13.1 RETURNS CORE TABLE
+CREATE TABLE IF NOT EXISTS returns (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    return_id VARCHAR(64) UNIQUE NOT NULL, -- e.g. RTN-260923-001
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_number VARCHAR(64) NOT NULL,
+    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+    customer_name VARCHAR(255) NOT NULL,
+    customer_phone VARCHAR(32) NOT NULL,
+    return_type VARCHAR(32) NOT NULL DEFAULT 'Refund', -- 'Refund', 'Replacement', 'Exchange'
+    reason VARCHAR(128) NOT NULL,
+    customer_note TEXT,
+    status VARCHAR(64) NOT NULL DEFAULT 'Return Requested',
+    requested_quantity INTEGER NOT NULL DEFAULT 1,
+    received_quantity INTEGER DEFAULT 0,
+    approved_quantity INTEGER DEFAULT 0,
+    expected_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    refund_amount NUMERIC(10, 2) DEFAULT 0,
+    discount_adjustment NUMERIC(10, 2) DEFAULT 0,
+    shipping_adjustment NUMERIC(10, 2) DEFAULT 0,
+    received_at TIMESTAMPTZ,
+    received_by VARCHAR(128),
+    receiving_note TEXT,
+    created_by VARCHAR(128) NOT NULL DEFAULT 'Admin',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_returns_order_id ON returns(order_id);
+CREATE INDEX IF NOT EXISTS idx_returns_return_id ON returns(return_id);
+CREATE INDEX IF NOT EXISTS idx_returns_status ON returns(status);
+CREATE INDEX IF NOT EXISTS idx_returns_created_at ON returns(created_at);
+
+-- 13.2 RETURN ITEMS TABLE
+CREATE TABLE IF NOT EXISTS return_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    return_id UUID NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
+    order_item_id UUID REFERENCES order_items(id) ON DELETE SET NULL,
+    product_name VARCHAR(255) NOT NULL,
+    sku VARCHAR(64),
+    color VARCHAR(64),
+    size VARCHAR(32),
+    purchased_quantity INTEGER NOT NULL DEFAULT 1,
+    requested_quantity INTEGER NOT NULL DEFAULT 1,
+    received_quantity INTEGER DEFAULT 0,
+    approved_quantity INTEGER DEFAULT 0,
+    unit_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    return_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_return_items_return_id ON return_items(return_id);
+
+-- 13.3 RETURN QC INSPECTION TABLE
+CREATE TABLE IF NOT EXISTS return_qc (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    return_id UUID UNIQUE NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
+    condition VARCHAR(64) NOT NULL DEFAULT 'Good', -- 'Good', 'Used', 'Damaged', 'Missing Item', 'Wrong Item'
+    qc_result VARCHAR(64) NOT NULL DEFAULT 'Approved', -- 'Approved', 'Partially Approved', 'Rejected'
+    inventory_disposition VARCHAR(64) NOT NULL DEFAULT 'Restock', -- 'Restock', 'Damaged Stock', 'Hold', 'Other'
+    qc_notes TEXT,
+    checked_by VARCHAR(128) NOT NULL,
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_return_qc_return_id ON return_qc(return_id);
+
+-- 13.4 RETURN REFUNDS TABLE
+CREATE TABLE IF NOT EXISTS return_refunds (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    return_id UUID UNIQUE NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
+    refund_status VARCHAR(32) NOT NULL DEFAULT 'Pending', -- 'Not Started', 'Pending', 'Processing', 'Refunded', 'Failed'
+    refund_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    refund_method VARCHAR(64), -- 'UPI', 'Bank Transfer', 'Cash', 'Original Payment Method', 'Other'
+    utr_reference VARCHAR(128),
+    refund_notes TEXT,
+    processed_by VARCHAR(128),
+    refund_date TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_return_refunds_return_id ON return_refunds(return_id);
+CREATE INDEX IF NOT EXISTS idx_return_refunds_status ON return_refunds(refund_status);
+
+-- 13.5 RETURN REPLACEMENTS TABLE
+CREATE TABLE IF NOT EXISTS return_replacements (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    return_id UUID UNIQUE NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
+    replacement_id VARCHAR(64) UNIQUE NOT NULL, -- e.g. REP-260923-001
+    original_order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    original_order_number VARCHAR(64) NOT NULL,
+    original_item_name VARCHAR(255) NOT NULL,
+    returned_item VARCHAR(255) NOT NULL,
+    replacement_item VARCHAR(255) NOT NULL,
+    color VARCHAR(64),
+    size VARCHAR(32) NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    status VARCHAR(64) NOT NULL DEFAULT 'Waiting for Packing', -- 'Waiting for Packing', 'Packing', 'Packed', 'Dispatched', 'Delivered'
+    dispatch_id VARCHAR(64), -- Auto-generated e.g. DSP-260923-021
+    courier VARCHAR(128),
+    llr VARCHAR(64),
+    tracking TEXT,
+    dispatched_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_return_replacements_return_id ON return_replacements(return_id);
+CREATE INDEX IF NOT EXISTS idx_return_replacements_rep_id ON return_replacements(replacement_id);
+
+-- 13.6 RETURN TIMELINE AUDIT TABLE
+CREATE TABLE IF NOT EXISTS return_timeline (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    return_id UUID NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
+    action VARCHAR(128) NOT NULL,
+    user_name VARCHAR(128) NOT NULL,
+    user_role VARCHAR(64) NOT NULL DEFAULT 'ADMIN',
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_return_timeline_return_id ON return_timeline(return_id);
+
+-- Enable RLS for Returns Tables
+ALTER TABLE returns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE return_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE return_qc ENABLE ROW LEVEL SECURITY;
+ALTER TABLE return_refunds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE return_replacements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE return_timeline ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public Read Access" ON returns FOR SELECT USING (true);
+CREATE POLICY "Public Insert Access" ON returns FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Access" ON returns FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Access" ON returns FOR DELETE USING (true);
+
+CREATE POLICY "Public Read Access" ON return_items FOR SELECT USING (true);
+CREATE POLICY "Public Insert Access" ON return_items FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Access" ON return_items FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Access" ON return_items FOR DELETE USING (true);
+
+CREATE POLICY "Public Read Access" ON return_qc FOR SELECT USING (true);
+CREATE POLICY "Public Insert Access" ON return_qc FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Access" ON return_qc FOR UPDATE USING (true);
+
+CREATE POLICY "Public Read Access" ON return_refunds FOR SELECT USING (true);
+CREATE POLICY "Public Insert Access" ON return_refunds FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Access" ON return_refunds FOR UPDATE USING (true);
+
+CREATE POLICY "Public Read Access" ON return_replacements FOR SELECT USING (true);
+CREATE POLICY "Public Insert Access" ON return_replacements FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Access" ON return_replacements FOR UPDATE USING (true);
+
+CREATE POLICY "Public Read Access" ON return_timeline FOR SELECT USING (true);
+CREATE POLICY "Public Insert Access" ON return_timeline FOR INSERT WITH CHECK (true);
+
+-- Realtime publication for returns
+ALTER PUBLICATION supabase_realtime ADD TABLE returns;
+ALTER PUBLICATION supabase_realtime ADD TABLE return_refunds;
+ALTER PUBLICATION supabase_realtime ADD TABLE return_replacements;

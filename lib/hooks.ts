@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { orderflowStore } from "./store";
-import { Order, UserSession, DashboardMetrics } from "@/types/orderflow";
+import { Order, UserSession, DashboardMetrics, ReturnCase, ReturnMetrics } from "@/types/orderflow";
 import { CURRENT_USER } from "./mock-data";
 
 export const INITIAL_METRICS: DashboardMetrics = {
@@ -21,6 +21,7 @@ export const INITIAL_METRICS: DashboardMetrics = {
 
 export function useOrderFlow() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [returns, setReturns] = useState<ReturnCase[]>([]);
   const [user, setUser] = useState<UserSession>(CURRENT_USER);
   const [metrics, setMetrics] = useState<DashboardMetrics>(INITIAL_METRICS);
   const [searchQuery, setSearchQueryState] = useState<string>("");
@@ -30,6 +31,7 @@ export function useOrderFlow() {
 
   useEffect(() => {
     setOrders([...orderflowStore.getOrders()]);
+    setReturns([...orderflowStore.getReturns()]);
     setUser({ ...orderflowStore.getCurrentUser() });
     setMetrics({ ...orderflowStore.getMetrics() });
     setSearchQueryState(orderflowStore.getSearchQuery());
@@ -39,6 +41,7 @@ export function useOrderFlow() {
 
     const unsubscribe = orderflowStore.subscribe(() => {
       setOrders([...orderflowStore.getOrders()]);
+      setReturns([...orderflowStore.getReturns()]);
       setUser({ ...orderflowStore.getCurrentUser() });
       setMetrics({ ...orderflowStore.getMetrics() });
       setSearchQueryState(orderflowStore.getSearchQuery());
@@ -49,8 +52,12 @@ export function useOrderFlow() {
     return unsubscribe;
   }, []);
 
+  const activeReturnsCount = orderflowStore.getActiveReturnsCount();
+
   return {
     orders,
+    returns,
+    activeReturnsCount,
     user,
     isLoaded,
     metrics,
@@ -76,5 +83,17 @@ export function useOrderFlow() {
     userOrders: orderflowStore.getOrdersForUser(user),
     switchRole: orderflowStore.switchRole.bind(orderflowStore),
     resetData: orderflowStore.resetData.bind(orderflowStore),
+    // Returns API
+    getReturns: orderflowStore.getReturns.bind(orderflowStore),
+    getReturnById: orderflowStore.getReturnById.bind(orderflowStore),
+    getReturnsByOrderId: orderflowStore.getReturnsByOrderId.bind(orderflowStore),
+    getReturnMetrics: orderflowStore.getReturnMetrics.bind(orderflowStore),
+    createReturnCase: orderflowStore.createReturnCase.bind(orderflowStore),
+    updateReturnStatus: orderflowStore.updateReturnStatus.bind(orderflowStore),
+    recordReturnReceived: orderflowStore.recordReturnReceived.bind(orderflowStore),
+    performQcCheck: orderflowStore.performQcCheck.bind(orderflowStore),
+    processRefund: orderflowStore.processRefund.bind(orderflowStore),
+    createReplacementTask: orderflowStore.createReplacementTask.bind(orderflowStore),
+    updateReplacementDispatch: orderflowStore.updateReplacementDispatch.bind(orderflowStore),
   };
 }
