@@ -12,7 +12,9 @@ import {
   Phone, 
   AlertCircle,
   Clock,
-  CheckCheck
+  CheckCheck,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
 import { Order, CourierStatus } from "@/types/orderflow";
@@ -321,6 +323,21 @@ function CourierHubContent() {
     });
   }, [currentPartnerOrders, statusFilter, searchQuery]);
 
+  // Pagination state (like Orders page)
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
+  const totalPages = Math.ceil(displayedOrders.length / pageSize) || 1;
+  const paginatedOrders = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return displayedOrders.slice(start, start + pageSize);
+  }, [displayedOrders, page, pageSize]);
+
+  // Reset page when filters change
+  React.useEffect(() => {
+    setPage(1);
+  }, [statusFilter, searchQuery, adminPartnerFilter]);
+
   // 4. Inline handlers
   const handleSavePickupPhone = (orderId: string, orderNumber: string, val: string) => {
     updateCourierDetails(orderId, { pickupPhone: val });
@@ -340,16 +357,16 @@ function CourierHubContent() {
 
   // 5. Bulk selection
   const isAllDisplayedSelected =
-    displayedOrders.length > 0 &&
-    displayedOrders.every((o) => selectedIds.includes(o.id));
+    paginatedOrders.length > 0 &&
+    paginatedOrders.every((o) => selectedIds.includes(o.id));
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      const allIds = displayedOrders.map((o) => o.id);
-      setSelectedIds(Array.from(new Set([...selectedIds, ...allIds])));
+      const pageIds = paginatedOrders.map((o) => o.id);
+      setSelectedIds(Array.from(new Set([...selectedIds, ...pageIds])));
     } else {
-      const displayedIdSet = new Set(displayedOrders.map((o) => o.id));
-      setSelectedIds(selectedIds.filter((id) => !displayedIdSet.has(id)));
+      const pageIdSet = new Set(paginatedOrders.map((o) => o.id));
+      setSelectedIds(selectedIds.filter((id) => !pageIdSet.has(id)));
     }
   };
 
@@ -455,7 +472,7 @@ function CourierHubContent() {
   }, [courierPartners, activePartnerCode]);
 
   return (
-    <div className="max-w-[1440px] mx-auto space-y-4 pb-16">
+    <div className="space-y-4 max-w-full pb-16">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
@@ -464,39 +481,159 @@ function CourierHubContent() {
         </div>
       )}
 
-      {/* Header & Subtitle */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Truck className="w-5 h-5 text-orange-600" />
-            <h1 className="text-xl font-black text-slate-900 tracking-tight">
-              {isCourierUser ? `${currentPartner.name} Portal` : `Courier Hub — ${currentPartner.name}`}
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
-              {currentPartnerOrders.length} Shipments
+      {/* Metric Cards (Compact at the top) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        {/* Total Orders */}
+        <div 
+          onClick={() => { setStatusFilter("ALL"); setPage(1); }}
+          className={cn(
+            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
+            statusFilter === "ALL" ? "border-orange-500 ring-1 ring-orange-500/20 bg-orange-50/10" : "border-slate-200 hover:border-slate-300"
+          )}
+        >
+          <span className="text-[10.5px] font-bold text-slate-500 block uppercase tracking-wider">
+            {isCourierUser ? "Today's Orders" : "Total Dispatched"}
+          </span>
+          <div className="text-xl font-black text-slate-900 mt-0.5 tracking-tight">
+            {metrics.total}
+          </div>
+        </div>
+
+        {/* Waiting for Pickup */}
+        <div 
+          onClick={() => { setStatusFilter("WAITING_FOR_PICKUP"); setPage(1); }}
+          className={cn(
+            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
+            statusFilter === "WAITING_FOR_PICKUP" ? "border-amber-500 ring-1 ring-amber-500/20 bg-amber-50/10" : "border-slate-200 hover:border-slate-300"
+          )}
+        >
+          <span className="text-[10.5px] font-bold text-amber-700 block uppercase tracking-wider">
+            Waiting for Pickup
+          </span>
+          <div className="text-xl font-black text-amber-600 mt-0.5 tracking-tight">
+            {metrics.waiting}
+          </div>
+        </div>
+
+        {/* Picked Up */}
+        <div 
+          onClick={() => { setStatusFilter("PICKED_UP"); setPage(1); }}
+          className={cn(
+            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
+            statusFilter === "PICKED_UP" ? "border-blue-500 ring-1 ring-blue-500/20 bg-blue-50/10" : "border-slate-200 hover:border-slate-300"
+          )}
+        >
+          <span className="text-[10.5px] font-bold text-blue-700 block uppercase tracking-wider">
+            Picked Up
+          </span>
+          <div className="text-xl font-black text-blue-600 mt-0.5 tracking-tight">
+            {metrics.pickedUp}
+          </div>
+        </div>
+
+        {/* Delivered */}
+        <div 
+          onClick={() => { setStatusFilter("DELIVERED"); setPage(1); }}
+          className={cn(
+            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
+            statusFilter === "DELIVERED" ? "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/10" : "border-slate-200 hover:border-slate-300"
+          )}
+        >
+          <span className="text-[10.5px] font-bold text-emerald-700 block uppercase tracking-wider">
+            Delivered
+          </span>
+          <div className="text-xl font-black text-emerald-600 mt-0.5 tracking-tight">
+            {metrics.delivered}
+          </div>
+        </div>
+
+        {/* Missing LLR (Admin only) */}
+        {!isCourierUser && (
+          <div 
+            onClick={() => { setStatusFilter("MISSING_LLR"); setPage(1); }}
+            className={cn(
+              "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
+              statusFilter === "MISSING_LLR" ? "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/10" : "border-slate-200 hover:border-slate-300"
+            )}
+          >
+            <span className="text-[10.5px] font-bold text-rose-700 block uppercase tracking-wider">
+              Missing LLR
+            </span>
+            <div className="text-xl font-black text-rose-600 mt-0.5 tracking-tight">
+              {metrics.missingLlr}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Courier Partner Tabs & Export Buttons */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-200">
+        {!isCourierUser ? (
+          <div className="flex items-center gap-2 overflow-x-auto text-xs py-0.5">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0">
+              Courier Partner:
+            </span>
+
+            {courierPartners.map((cp) => {
+              const isSelected = activePartnerCode === cp.code;
+              const count = partnerCounts[cp.code] || 0;
+              return (
+                <button
+                  key={cp.id}
+                  onClick={() => {
+                    setAdminPartnerFilter(cp.code);
+                    setPage(1);
+                    if (typeof window !== "undefined") {
+                      const params = new URLSearchParams(window.location.search);
+                      params.set("partner", cp.code);
+                      window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+                    }
+                  }}
+                  className={cn(
+                    "px-3.5 py-1.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-2 text-xs",
+                    isSelected
+                      ? "bg-orange-600 text-white shadow-xs ring-1 ring-orange-500"
+                      : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200"
+                  )}
+                >
+                  <span>{cp.name}</span>
+                  <span
+                    className={cn(
+                      "px-1.5 py-0.2 rounded-full text-[10.5px] font-bold",
+                      isSelected
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-100 text-slate-600 border border-slate-200"
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+            <span className="px-3 py-1 bg-orange-100 text-orange-800 border border-orange-200 rounded-lg">
+              {currentPartner.name}
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {isCourierUser 
-              ? `Dedicated shipment queue for ${currentPartner.name}. Manage pickup details and update tracking statuses.`
-              : `Active handoff queue for ${currentPartner.name}. Monitor driver pickup telemetry, enter LLR, and verify delivery.`
-            }
-          </p>
-        </div>
+        )}
 
         {/* Admin Export Buttons */}
         {!isCourierUser && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+              title="Export filtered courier manifest to Excel"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Export Excel</span>
             </button>
             <button
               onClick={handleExportPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+              title="Export filtered courier manifest to PDF"
             >
               <FileText className="w-3.5 h-3.5" />
               <span>Export PDF</span>
@@ -504,137 +641,6 @@ function CourierHubContent() {
           </div>
         )}
       </div>
-
-      {/* Metric Cards (Requirement 8 & 12) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-        {/* Total Orders */}
-        <div 
-          onClick={() => setStatusFilter("ALL")}
-          className={cn(
-            "p-3.5 rounded-xl border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "ALL" ? "border-orange-500 ring-2 ring-orange-500/10" : "border-slate-200 hover:border-slate-300"
-          )}
-        >
-          <span className="text-[11px] font-semibold text-slate-500 block uppercase tracking-wider">
-            {isCourierUser ? "Today's Orders" : "Total Dispatched"}
-          </span>
-          <div className="text-2xl font-black text-slate-900 mt-0.5">
-            {metrics.total}
-          </div>
-        </div>
-
-        {/* Waiting for Pickup */}
-        <div 
-          onClick={() => setStatusFilter("WAITING_FOR_PICKUP")}
-          className={cn(
-            "p-3.5 rounded-xl border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "WAITING_FOR_PICKUP" ? "border-amber-500 ring-2 ring-amber-500/10" : "border-slate-200 hover:border-slate-300"
-          )}
-        >
-          <span className="text-[11px] font-semibold text-amber-700 block uppercase tracking-wider">
-            Waiting for Pickup
-          </span>
-          <div className="text-2xl font-black text-amber-600 mt-0.5">
-            {metrics.waiting}
-          </div>
-        </div>
-
-        {/* Picked Up */}
-        <div 
-          onClick={() => setStatusFilter("PICKED_UP")}
-          className={cn(
-            "p-3.5 rounded-xl border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "PICKED_UP" ? "border-blue-500 ring-2 ring-blue-500/10" : "border-slate-200 hover:border-slate-300"
-          )}
-        >
-          <span className="text-[11px] font-semibold text-blue-700 block uppercase tracking-wider">
-            Picked Up
-          </span>
-          <div className="text-2xl font-black text-blue-600 mt-0.5">
-            {metrics.pickedUp}
-          </div>
-        </div>
-
-        {/* Delivered */}
-        <div 
-          onClick={() => setStatusFilter("DELIVERED")}
-          className={cn(
-            "p-3.5 rounded-xl border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "DELIVERED" ? "border-emerald-500 ring-2 ring-emerald-500/10" : "border-slate-200 hover:border-slate-300"
-          )}
-        >
-          <span className="text-[11px] font-semibold text-emerald-700 block uppercase tracking-wider">
-            Delivered
-          </span>
-          <div className="text-2xl font-black text-emerald-600 mt-0.5">
-            {metrics.delivered}
-          </div>
-        </div>
-
-        {/* Missing LLR (Admin only, or courier if needed) */}
-        {!isCourierUser && (
-          <div 
-            onClick={() => setStatusFilter("MISSING_LLR")}
-            className={cn(
-              "p-3.5 rounded-xl border bg-white shadow-2xs cursor-pointer transition-all",
-              statusFilter === "MISSING_LLR" ? "border-rose-500 ring-2 ring-rose-500/10" : "border-slate-200 hover:border-slate-300"
-            )}
-          >
-            <span className="text-[11px] font-semibold text-rose-700 block uppercase tracking-wider">
-              Missing LLR
-            </span>
-            <div className="text-2xl font-black text-rose-600 mt-0.5">
-              {metrics.missingLlr}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ADMIN ONLY: Courier Partner Filter Tabs (Requirement 7 & 8) */}
-      {/* Strict Privacy: NEVER shown to courier users! */}
-      {!isCourierUser && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200 text-xs">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 shrink-0">
-            Courier Partner:
-          </span>
-
-          {courierPartners.map((cp) => {
-            const isSelected = activePartnerCode === cp.code;
-            const count = partnerCounts[cp.code] || 0;
-            return (
-              <button
-                key={cp.id}
-                onClick={() => {
-                  setAdminPartnerFilter(cp.code);
-                  if (typeof window !== "undefined") {
-                    const params = new URLSearchParams(window.location.search);
-                    params.set("partner", cp.code);
-                    window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
-                  }
-                }}
-                className={cn(
-                  "px-4 py-2 rounded-xl font-bold transition-all shrink-0 cursor-pointer flex items-center gap-2 text-xs",
-                  isSelected
-                    ? "bg-orange-600 text-white shadow-md shadow-orange-600/20 ring-1 ring-orange-500"
-                    : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200"
-                )}
-              >
-                <span>{cp.name}</span>
-                <span
-                  className={cn(
-                    "px-2 py-0.5 rounded-full text-[11px] font-bold",
-                    isSelected
-                      ? "bg-white/20 text-white"
-                      : "bg-slate-100 text-slate-600 border border-slate-200"
-                  )}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
 
       {/* Status Filter Sub-tabs & Search Input */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
@@ -648,11 +654,11 @@ function CourierHubContent() {
           ].map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setStatusFilter(tab.key)}
+              onClick={() => { setStatusFilter(tab.key); setPage(1); }}
               className={cn(
                 "px-3 py-1 rounded-md font-semibold transition-all whitespace-nowrap cursor-pointer",
                 statusFilter === tab.key
-                  ? "bg-white text-slate-900 shadow-xs"
+                  ? "bg-white text-slate-900 shadow-xs font-bold"
                   : "text-slate-600 hover:text-slate-900"
               )}
             >
@@ -667,7 +673,7 @@ function CourierHubContent() {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             placeholder="Search by Order, Dispatch ID, Mobile..."
             className="w-full text-xs pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 text-slate-800"
           />
@@ -760,14 +766,14 @@ function CourierHubContent() {
         </div>
       )}
 
-      {/* Table Section */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+      {/* Table Section (Full-width Excel Spreadsheet Grid Style like Orders Page) */}
+      <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full text-left text-xs border-collapse border border-slate-300">
             <thead>
-              <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[11px]">
+              <tr className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[11px] uppercase tracking-tight">
                 {/* Checkbox Header */}
-                <th className="py-2.5 px-3 w-10 text-center">
+                <th className="py-2.5 px-2 w-10 text-center border-r border-b-2 border-slate-300 bg-slate-100">
                   <input
                     type="checkbox"
                     checked={isAllDisplayedSelected}
@@ -775,26 +781,26 @@ function CourierHubContent() {
                     className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
                   />
                 </th>
-                <th className="py-2.5 px-2 w-12 text-center">S.No</th>
-                <th className="py-2.5 px-3">Date</th>
-                <th className="py-2.5 px-3">Order ID</th>
-                <th className="py-2.5 px-3">Dispatch ID</th>
+                <th className="py-2.5 px-2 w-12 text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
+                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Date</th>
+                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
+                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Dispatch ID</th>
                 {/* Admin sees Customer column; Courier sees minimal or read-only info */}
-                {!isCourierUser && <th className="py-2.5 px-3">Customer</th>}
-                {!isCourierUser && <th className="py-2.5 px-3">Courier</th>}
-                <th className="py-2.5 px-3 min-w-[150px]">Pickup Phone</th>
-                <th className="py-2.5 px-3 min-w-[140px]">LLR / Tracking</th>
-                <th className="py-2.5 px-3 min-w-[140px]">Status</th>
+                {!isCourierUser && <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer</th>}
+                {!isCourierUser && <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>}
+                <th className="py-2.5 px-3 min-w-[160px] border-r border-b-2 border-slate-300 bg-slate-100">Pickup Phone</th>
+                <th className="py-2.5 px-3 min-w-[160px] border-r border-b-2 border-slate-300 bg-slate-100">LLR / Tracking</th>
+                <th className="py-2.5 px-3 min-w-[150px] border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-100">
-              {displayedOrders.length === 0 ? (
+            <tbody className="divide-y divide-slate-200">
+              {paginatedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={isCourierUser ? 8 : 10} className="py-12 text-center text-slate-400">
-                    <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    <p className="text-sm font-semibold text-slate-700">No orders in this courier queue</p>
-                    <p className="text-xs text-slate-400 mt-1">
+                  <td colSpan={isCourierUser ? 8 : 10} className="py-16 text-center text-slate-400 border-b border-slate-300">
+                    <Package className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                    <p className="text-sm font-bold text-slate-700">No orders in this courier queue</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
                       {isCourierUser 
                         ? "Any orders dispatched to your courier will appear here automatically."
                         : "Orders marked as Dispatched in Packing Station will automatically arrive here."}
@@ -802,7 +808,7 @@ function CourierHubContent() {
                   </td>
                 </tr>
               ) : (
-                displayedOrders.map((order, idx) => {
+                paginatedOrders.map((order, idx) => {
                   const isSelected = selectedIds.includes(order.id);
                   const cStatus = order.dispatch?.courierStatus;
 
@@ -811,13 +817,13 @@ function CourierHubContent() {
                       key={order.id}
                       onClick={() => setInspectOrder(order)}
                       className={cn(
-                        "hover:bg-orange-50/30 transition-colors cursor-pointer",
-                        isSelected && "bg-orange-50/50"
+                        "hover:bg-orange-50/40 transition-colors cursor-pointer border-b border-slate-200",
+                        isSelected && "bg-orange-50/60"
                       )}
                     >
                       {/* Checkbox */}
                       <td 
-                        className="py-2.5 px-3 text-center"
+                        className="py-2.5 px-2 text-center border-r border-slate-200"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <input
@@ -829,22 +835,22 @@ function CourierHubContent() {
                       </td>
 
                       {/* S.No */}
-                      <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-500">
-                        {idx + 1}
+                      <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-500 border-r border-slate-200">
+                        {(page - 1) * pageSize + idx + 1}
                       </td>
 
                       {/* Date */}
-                      <td className="py-2.5 px-3 whitespace-nowrap text-slate-600 font-medium">
+                      <td className="py-2.5 px-3 whitespace-nowrap text-slate-600 font-medium border-r border-slate-200">
                         {formatDate(order.createdAt)}
                       </td>
 
                       {/* Order ID */}
-                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-slate-900">
+                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-slate-900 border-r border-slate-200">
                         {order.orderNumber}
                       </td>
 
                       {/* Dispatch ID */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
+                      <td className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200">
                         {order.dispatch?.dispatchId ? (
                           <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-orange-100 text-orange-800 border border-orange-200">
                             {order.dispatch.dispatchId}
@@ -858,8 +864,8 @@ function CourierHubContent() {
 
                       {/* Customer (Admin only) */}
                       {!isCourierUser && (
-                        <td className="py-2.5 px-3">
-                          <div className="font-semibold text-slate-800 truncate max-w-[140px]">
+                        <td className="py-2.5 px-3 border-r border-slate-200">
+                          <div className="font-semibold text-slate-800 truncate max-w-[160px]">
                             {order.customer.name}
                           </div>
                           <div className="text-[11px] font-mono text-slate-500 flex items-center gap-1 mt-0.5">
@@ -871,7 +877,7 @@ function CourierHubContent() {
 
                       {/* Courier Partner (Admin only) */}
                       {!isCourierUser && (
-                        <td className="py-2.5 px-3 whitespace-nowrap">
+                        <td className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200">
                           <span className={cn(
                             "px-2 py-0.5 rounded text-[11px] font-bold border",
                             order.dispatch?.courierPartnerId === "PROFESSIONAL"
@@ -888,7 +894,7 @@ function CourierHubContent() {
                       )}
 
                       {/* Pickup Phone (Separate from Customer Phone) */}
-                      <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2 px-3 border-r border-slate-200" onClick={(e) => e.stopPropagation()}>
                         <InlinePickupPhoneInput
                           orderId={order.id}
                           orderNumber={order.orderNumber}
@@ -898,7 +904,7 @@ function CourierHubContent() {
                       </td>
 
                       {/* LLR / Tracking Number */}
-                      <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2 px-3 border-r border-slate-200" onClick={(e) => e.stopPropagation()}>
                         <InlineLlrInput
                           orderId={order.id}
                           orderNumber={order.orderNumber}
@@ -938,6 +944,52 @@ function CourierHubContent() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Bar (Like Orders Page) */}
+        <div className="px-6 py-3 border-t border-slate-300 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing {displayedOrders.length > 0 ? (page - 1) * pageSize + 1 : 0} to{" "}
+              {Math.min(page * pageSize, displayedOrders.length)} of {displayedOrders.length} orders
+            </span>
+
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+              className="px-2 py-1 bg-white border border-slate-200 rounded text-xs outline-none ml-2 cursor-pointer font-medium"
+            >
+              <option value={10}>10 / page</option>
+              <option value={15}>15 / page</option>
+              <option value={25}>25 / page</option>
+              <option value={50}>50 / page</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+              className="p-1.5 rounded border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="px-3 py-1 font-medium text-slate-700">
+              Page {page} of {totalPages}
+            </span>
+
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage(page + 1)}
+              className="p-1.5 rounded border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
