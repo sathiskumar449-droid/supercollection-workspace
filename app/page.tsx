@@ -31,12 +31,11 @@ export default function DashboardPage() {
 
   const { orders, returns, dateFilter, customDate } = useOrderFlow();
 
-  // 1. Packing Station Counts (matches Packing Station's exact criteria: non-NEW, non-RETURN)
+  // 1. Packing Station Counts (matches Packing Station's exact criteria: non-NEW)
   const packingEligibleOrders = useMemo(() => {
     return orders.filter(
       (o) =>
         o.orderStatus !== "NEW" &&
-        o.orderStatus !== "RETURN" &&
         matchesDateFilter(o.createdAt, dateFilter, customDate)
     );
   }, [orders, dateFilter, customDate]);

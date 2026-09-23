@@ -12,7 +12,8 @@ import {
   MessageSquare,
   Box,
   Instagram,
-  User
+  User,
+  RotateCcw
 } from "lucide-react";
 
 export function OrderStatusBadge({ status, className }: { status: OrderStatus; className?: string }) {
@@ -48,9 +49,9 @@ export function OrderStatusBadge({ status, className }: { status: OrderStatus; c
       icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />,
     },
     RETURN: {
-      label: "Return",
+      label: "↩ Return",
       text: "text-rose-600",
-      icon: <AlertCircle className="w-3.5 h-3.5 text-rose-600" />,
+      icon: <RotateCcw className="w-3.5 h-3.5 text-rose-600" />,
     },
   };
 

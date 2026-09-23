@@ -40,6 +40,7 @@ const STATUS_OPTIONS: { key: OrderStatus; label: string; badgeColor: string }[] 
   { key: "PACKED", label: "Packed", badgeColor: "bg-purple-50 text-purple-700 border-purple-200" },
   { key: "DISPATCHED", label: "Dispatched", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   { key: "COMPLETED", label: "Completed", badgeColor: "bg-orange-50 text-orange-800 border-orange-300" },
+  { key: "RETURN", label: "↩ Return", badgeColor: "bg-rose-50 text-rose-700 border-rose-300" },
 ];
 
 function InlineDispatchInput({
@@ -205,14 +206,12 @@ export default function PackingPage() {
     { value: "DISPATCHED", label: "Dispatched" },
   ];
 
-  // Orders eligible for Packing Station (WooCommerce completed/processing or active packing flow)
-  // Strictly excludes "NEW" (Pending) and "RETURN" (Failed/Cancelled)
-  // Filtered by global TopBar date filter / calendar picker
+  // Orders eligible for Packing Station (includes active packing orders and Return orders)
+  // Filtered by global TopBar date filter / calendar picker (strictly excluding unconfirmed NEW)
   const packingEligibleOrders = useMemo(() => {
     return orders.filter(
       (o) =>
         o.orderStatus !== "NEW" &&
-        o.orderStatus !== "RETURN" &&
         matchesDateFilter(o.createdAt, dateFilter, customDate)
     );
   }, [orders, dateFilter, customDate]);
@@ -373,6 +372,7 @@ export default function PackingPage() {
   const packagingCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKING").length;
   const packedCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKED").length;
   const dispatchedCount = packingEligibleOrders.filter((o) => o.orderStatus === "DISPATCHED").length;
+  const returnOrdersCount = packingEligibleOrders.filter((o) => o.orderStatus === "RETURN").length;
 
   // Export handlers
   const handleExportExcel = () => {
@@ -462,7 +462,7 @@ export default function PackingPage() {
   return (
     <div className="space-y-3.5 max-w-full mx-auto">
       {/* KPI Status Filter Buttons Row (with matching border colors) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
         <button
           onClick={() => {
             setActiveTab("ORDERS");
@@ -557,6 +557,30 @@ export default function PackingPage() {
         >
           <span className="text-[11px] text-emerald-700 font-medium block">Dispatched</span>
           <span className="text-base font-bold text-emerald-700 font-mono mt-0.5 block">{dispatchedCount}</span>
+        </button>
+
+        {/* 7. Return Orders Count */}
+        <button
+          onClick={() => {
+            setActiveTab("ORDERS");
+            setStatusFilter("RETURN");
+          }}
+          className={cn(
+            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
+            activeTab === "ORDERS" && statusFilter === "RETURN"
+              ? "border-rose-600 ring-2 ring-rose-500/20 bg-rose-50/10" 
+              : "border-rose-300 hover:border-rose-400"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-rose-700 font-medium block">Return</span>
+            {returnOrdersCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                {returnOrdersCount}
+              </span>
+            )}
+          </div>
+          <span className="text-base font-bold text-rose-700 font-mono mt-0.5 block">{returnOrdersCount}</span>
         </button>
 
         <button
@@ -1008,14 +1032,14 @@ export default function PackingPage() {
                           value={order.orderStatus}
                           onChange={(e) => handleInlineStatusChange(order, e.target.value as OrderStatus)}
                           className={cn(
-                            "w-full text-[11px] font-semibold py-0.5 px-1 rounded border border-slate-200 bg-white shadow-xs outline-none cursor-pointer transition-all truncate",
-                            order.orderStatus === "NEW" && "text-slate-700",
-                            order.orderStatus === "CONFIRMED" && "text-blue-600",
-                            order.orderStatus === "PACKING" && "text-orange-600",
-                            order.orderStatus === "PACKED" && "text-purple-600",
-                            order.orderStatus === "DISPATCHED" && "text-emerald-600",
-                            order.orderStatus === "COMPLETED" && "text-emerald-600",
-                            order.orderStatus === "RETURN" && "text-rose-600"
+                            "w-full text-[11px] font-semibold py-0.5 px-1 rounded border shadow-xs outline-none cursor-pointer transition-all truncate",
+                            order.orderStatus === "NEW" && "text-slate-700 bg-white border-slate-200",
+                            order.orderStatus === "CONFIRMED" && "text-blue-600 bg-white border-slate-200",
+                            order.orderStatus === "PACKING" && "text-orange-600 bg-white border-slate-200",
+                            order.orderStatus === "PACKED" && "text-purple-600 bg-white border-slate-200",
+                            order.orderStatus === "DISPATCHED" && "text-emerald-600 bg-white border-slate-200",
+                            order.orderStatus === "COMPLETED" && "text-emerald-600 bg-white border-slate-200",
+                            order.orderStatus === "RETURN" && "text-rose-700 bg-rose-50 border-rose-300 font-bold"
                           )}
                         >
                           <option value="NEW">Pending</option>
@@ -1024,8 +1048,28 @@ export default function PackingPage() {
                           <option value="PACKED">Packed</option>
                           <option value="DISPATCHED">Dispatched</option>
                           <option value="COMPLETED">Completed</option>
-                          <option value="RETURN">Return</option>
+                          <option value="RETURN">↩ Return</option>
                         </select>
+
+                        {/* If Return Case exists, display linked Return ID (clickable to open Return Details) */}
+                        {(() => {
+                          const linkedRtn = returns.find((r) => r.orderId === order.id || r.orderNumber === order.orderNumber);
+                          if (!linkedRtn) return null;
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInspectReturn(linkedRtn);
+                              }}
+                              className="mt-1 flex items-center justify-center gap-1 text-[10px] font-mono font-bold text-rose-700 hover:text-rose-900 bg-rose-100/70 hover:bg-rose-100 border border-rose-200 rounded px-1.5 py-0.5 transition-colors cursor-pointer w-full truncate shadow-2xs"
+                              title={`Click to view Return Case ${linkedRtn.returnId}`}
+                            >
+                              <RotateCcw className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                              <span className="truncate">{linkedRtn.returnId}</span>
+                            </button>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );

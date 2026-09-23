@@ -67,9 +67,9 @@ function OrdersContent() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
 
-  // Only Processing & Completed orders are shown in Orders page (strictly exclude NEW and RETURN)
+  // All active/processed orders (including RETURN orders) are shown in Orders page (strictly exclude unconfirmed NEW)
   const baseOrders = useMemo(() => {
-    return orders.filter((o) => o.orderStatus !== "NEW" && o.orderStatus !== "RETURN");
+    return orders.filter((o) => o.orderStatus !== "NEW");
   }, [orders]);
 
   // Filtered & Sorted orders calculation
@@ -416,6 +416,7 @@ function OrdersContent() {
             <option value="CONFIRMED">Processing</option>
             <option value="COMPLETED">Completed</option>
             <option value="DISPATCHED">Dispatched</option>
+            <option value="RETURN">↩ Return</option>
           </select>
 
           {/* Source Filter */}

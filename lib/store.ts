@@ -596,6 +596,18 @@ export const orderflowStore = {
           details: "Order is ready for packing",
         });
       }
+    } else if (newStatus === "RETURN") {
+      newEntries.push({
+        id: `tl-${Date.now()}-return`,
+        orderId: order.id,
+        timestamp: now,
+        user: globalUser.name,
+        role: globalUser.role,
+        action: "Return Initiated",
+        details: reason || "Return case created from Packing Station",
+        oldValue: oldStatus,
+        newValue: newStatus,
+      });
     }
 
     const updatedTimeline: ActivityLog[] = [...order.timeline, ...newEntries];
