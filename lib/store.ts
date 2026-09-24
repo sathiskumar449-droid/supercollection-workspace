@@ -667,23 +667,36 @@ export function initStore(): Order[] {
         });
       });
 
-      // Background live sync from WooCommerce website every 20 seconds
+      // Background live sync from WooCommerce website every 30 seconds
       if (typeof window !== "undefined") {
         setInterval(() => {
-          fetch("/api/sync/woocommerce", { method: "POST" })
-            .then((res) => res.json())
-            .then((data) => {
-              if (data?.success) {
-                fetchSupabaseOrders().then((remoteOrders) => {
-                  if (remoteOrders !== null) {
-                    const merged = mergeRemoteWithLocalOrders(remoteOrders, globalOrders);
-                    persistOrders(merged);
-                  }
-                });
-              }
+          const savedKey = localStorage.getItem("sc_wc_consumer_key") || "";
+          const savedSecret = localStorage.getItem("sc_wc_consumer_secret") || "";
+          const savedUrl = localStorage.getItem("sc_wc_store_url") || "https://supercollections.in";
+          if (savedKey && savedSecret) {
+            fetch("/api/sync/woocommerce", { 
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                storeUrl: savedUrl,
+                consumerKey: savedKey,
+                consumerSecret: savedSecret,
+              }),
             })
-            .catch(() => {});
-        }, 20000);
+              .then((res) => res.json())
+              .then((data) => {
+                if (data?.success) {
+                  fetchSupabaseOrders().then((remoteOrders) => {
+                    if (remoteOrders !== null) {
+                      const merged = mergeRemoteWithLocalOrders(remoteOrders, globalOrders);
+                      persistOrders(merged);
+                    }
+                  });
+                }
+              })
+              .catch(() => {});
+          }
+        }, 30000);
       }
     }
     // Purge legacy v1 return caches
@@ -770,7 +783,12 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
   });
 
   const remoteIds = new Set(remoteOrders.map((o) => o.id));
+  const isLive = isSupabaseConfigured();
   localOrders.forEach((loc) => {
+    // When connected to live Supabase, do NOT resurrect stale/deleted WooCommerce orders from localStorage
+    if (isLive && (loc.source === "WEBSITE" || loc.orderNumber?.startsWith("SC-WC-") || String(loc.id || "").startsWith("SC-WC-"))) {
+      return;
+    }
     if (!remoteIds.has(loc.id)) {
       merged.push(loc);
     }

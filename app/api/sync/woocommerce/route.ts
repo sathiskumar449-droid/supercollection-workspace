@@ -36,11 +36,9 @@ export async function POST(req: NextRequest) {
     twoDaysAgo.setHours(0, 0, 0, 0);
     const afterIso = twoDaysAgo.toISOString();
 
-    // In WooCommerce REST API, 'status' does NOT accept comma-separated values like 'processing,completed'.
-    // Calling status=processing,completed returns 0 orders.
-    // We fetch status=processing (all active processing orders) AND status=any (recent 2-day orders) in parallel.
+    // Fetch processing orders, completed orders, and recently modified orders in parallel from WooCommerce
     const authHeader = "Basic " + Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
-    const [resProcessing, resAny] = await Promise.all([
+    const [resProcessing, resCompleted, resModified] = await Promise.all([
       fetch(
         `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=processing&orderby=date&order=desc&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`,
         {
@@ -49,7 +47,14 @@ export async function POST(req: NextRequest) {
         }
       ),
       fetch(
-        `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=any&orderby=date&order=desc&after=${encodeURIComponent(afterIso)}&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`,
+        `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=completed&orderby=date&order=desc&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`,
+        {
+          headers: { Authorization: authHeader, "Content-Type": "application/json" },
+          cache: "no-store",
+        }
+      ),
+      fetch(
+        `${storeUrl}/wp-json/wc/v3/orders?per_page=100&orderby=modified&order=desc&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`,
         {
           headers: { Authorization: authHeader, "Content-Type": "application/json" },
           cache: "no-store",
@@ -58,20 +63,28 @@ export async function POST(req: NextRequest) {
     ]);
 
     const processingOrders = resProcessing.ok ? await resProcessing.json() : [];
-    const anyOrders = resAny.ok ? await resAny.json() : [];
+    const completedOrders = resCompleted.ok ? await resCompleted.json() : [];
+    const modifiedOrders = resModified.ok ? await resModified.json() : [];
 
     // Deduplicate into a unified list by ID
     const wcOrdersMap = new Map<string, any>();
-    if (Array.isArray(processingOrders)) {
-      processingOrders.forEach((o: any) => wcOrdersMap.set(String(o.id || o.number), o));
-    }
-    if (Array.isArray(anyOrders)) {
-      anyOrders.forEach((o: any) => {
-        const id = String(o.id || o.number);
-        if (!wcOrdersMap.has(id)) {
-          wcOrdersMap.set(id, o);
+    if (Array.isArray(completedOrders)) {
+      completedOrders.forEach((o: any) => {
+        if (o.status === "completed") {
+          wcOrdersMap.set(String(o.id || o.number), o);
         }
       });
+    }
+    if (Array.isArray(modifiedOrders)) {
+      modifiedOrders.forEach((o: any) => {
+        if (o.status === "processing" || o.status === "completed") {
+          wcOrdersMap.set(String(o.id || o.number), o);
+        }
+      });
+    }
+    // Active processing orders from WooCommerce take final precedence
+    if (Array.isArray(processingOrders)) {
+      processingOrders.forEach((o: any) => wcOrdersMap.set(String(o.id || o.number), o));
     }
 
     const wcOrders = Array.from(wcOrdersMap.values());
@@ -85,10 +98,35 @@ export async function POST(req: NextRequest) {
 
     const db = supabaseAdmin || supabase;
 
-    // Purge old orders older than 2 days so only last 2 days orders remain in the app
-    await db.from("orders").delete().lt("created_at", afterIso);
-    // Also delete any previously imported WooCommerce orders with status NEW or RETURN
+    // Purge any previously imported WooCommerce orders with status NEW or RETURN
     await db.from("orders").delete().eq("source", "WEBSITE").in("status", ["NEW", "RETURN"]);
+
+    // CRITICAL: Any existing WEBSITE order in Supabase with status CONFIRMED that is no longer in WooCommerce's processing list
+    // has been completed (or cancelled) in WooCommerce. Update them to COMPLETED!
+    if (Array.isArray(processingOrders)) {
+      const processingIdSet = new Set(processingOrders.map((o: any) => String(o.id || o.number)));
+      const { data: currentConfirmed } = await db
+        .from("orders")
+        .select("id, external_order_id")
+        .eq("source", "WEBSITE")
+        .eq("status", "CONFIRMED");
+
+      if (currentConfirmed && currentConfirmed.length > 0) {
+        const toCompleteIds = currentConfirmed
+          .filter((o: any) => o.external_order_id && !processingIdSet.has(String(o.external_order_id)))
+          .map((o: any) => o.id);
+
+        if (toCompleteIds.length > 0) {
+          await db
+            .from("orders")
+            .update({
+              status: "COMPLETED",
+              updated_at: new Date().toISOString(),
+            })
+            .in("id", toCompleteIds);
+        }
+      }
+    }
 
     // Default ST Courier ID
     const { data: stCourier } = await db
@@ -190,8 +228,10 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
 
       let effectiveStatus: any = orderStatus;
-      if (existingOrder?.status) {
-        const advancedStatuses = ["PACKING", "PACKED", "DISPATCHED"];
+      if (wc.status === "completed") {
+        effectiveStatus = "COMPLETED";
+      } else if (existingOrder?.status) {
+        const advancedStatuses = ["PACKING", "PACKED", "DISPATCHED", "COMPLETED"];
         if (advancedStatuses.includes(existingOrder.status)) {
           effectiveStatus = existingOrder.status;
         }
