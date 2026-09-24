@@ -48,6 +48,14 @@ export async function POST(req: NextRequest) {
       }, { status: 200 });
     }
 
+    // Strictly ignore pending, cancelled, refunded, failed, on-hold orders from WooCommerce
+    if (body.status !== "processing" && body.status !== "completed") {
+      return NextResponse.json({
+        success: true,
+        message: `Ignored WooCommerce order with status "${body.status}". Only processing and completed orders are imported.`,
+      }, { status: 200 });
+    }
+
     const wcId = String(body.id || body.number || Date.now());
     const customerName = `${body.billing?.first_name || ""} ${body.billing?.last_name || ""}`.trim() || body.shipping?.first_name || "Online Customer";
     const mobile = (body.billing?.phone || body.shipping?.phone || "+91 98000 00000").trim();
@@ -57,11 +65,7 @@ export async function POST(req: NextRequest) {
     const pincode = body.shipping?.postcode || body.billing?.postcode || "600001";
     const totalAmount = parseFloat(body.total || "0") || 0;
 
-    let orderStatus: OrderStatus = "NEW";
-    if (body.status === "completed") orderStatus = "COMPLETED";
-    else if (body.status === "processing") orderStatus = "CONFIRMED";
-    else if (body.status === "cancelled" || body.status === "refunded" || body.status === "failed") orderStatus = "RETURN";
-    else orderStatus = "NEW";
+    let orderStatus: OrderStatus = body.status === "completed" ? "COMPLETED" : "CONFIRMED";
 
     const paymentStatus = body.status === "processing" || body.status === "completed" ? "PAID" : body.payment_method === "cod" ? "COD" : "PENDING";
     const courierStatus = "PENDING"; // Webhook orders start as PENDING courier status; only dispatched orders from packing reach courier hub

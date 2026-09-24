@@ -160,8 +160,8 @@ export function generateMockOrders(): Order[] {
 
     // Explicit Status Assignment:
     if (i <= 12) {
-      // 12 NEW orders
-      orderStatus = "NEW";
+      // Only WhatsApp orders can be NEW; website orders start at processing (CONFIRMED)
+      orderStatus = isWebsite ? "CONFIRMED" : "NEW";
       courierStatus = "PENDING";
       smsStatus = "PENDING";
     } else if (i <= 20) {

@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     // Call WooCommerce REST API using BOTH query params and Basic Auth header for maximum compatibility
     const authHeader = "Basic " + Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
-    const wcApiUrl = `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=any&after=${encodeURIComponent(afterIso)}&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`;
+    const wcApiUrl = `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=processing,completed&after=${encodeURIComponent(afterIso)}&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`;
 
     const res = await fetch(wcApiUrl, {
       headers: {
@@ -83,6 +83,11 @@ export async function POST(req: NextRequest) {
     let syncedCount = 0;
 
     for (const wc of wcOrders) {
+      // Strictly ignore pending, cancelled, refunded, failed, on-hold orders from WooCommerce
+      if (wc.status !== "processing" && wc.status !== "completed") {
+        continue;
+      }
+
       const wcId = String(wc.id || wc.number);
       const customerName = `${wc.billing?.first_name || ""} ${wc.billing?.last_name || ""}`.trim() || wc.shipping?.first_name || "Online Customer";
       const mobile = (wc.billing?.phone || wc.shipping?.phone || "+91 98000 00000").trim();
@@ -92,12 +97,8 @@ export async function POST(req: NextRequest) {
       const pincode = wc.shipping?.postcode || wc.billing?.postcode || "600001";
       const totalAmount = parseFloat(wc.total || "0") || 0;
 
-      // Status mapping
-      let orderStatus: OrderStatus = "NEW";
-      if (wc.status === "completed") orderStatus = "COMPLETED";
-      else if (wc.status === "processing") orderStatus = "CONFIRMED";
-      else if (wc.status === "cancelled" || wc.status === "refunded" || wc.status === "failed") orderStatus = "RETURN";
-      else orderStatus = "NEW";
+      // Status mapping - Only processing and completed reach here
+      let orderStatus: OrderStatus = wc.status === "completed" ? "COMPLETED" : "CONFIRMED";
 
       const paymentStatus = wc.status === "processing" || wc.status === "completed" ? "PAID" : wc.payment_method === "cod" ? "COD" : "PENDING";
       const courierStatus = "PENDING"; // Synced orders start as PENDING courier status; only dispatched orders from packing reach courier hub

@@ -76,6 +76,11 @@ function OrdersContent() {
   // Filtered & Sorted orders calculation
   const filteredOrders = useMemo(() => {
     return baseOrders.filter((order) => {
+      // Exclude pending and cancelled WooCommerce/Website orders
+      if (order.source === "WEBSITE" && (order.orderStatus === "NEW" || order.orderStatus === "RETURN")) {
+        return false;
+      }
+
       // Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -517,19 +522,17 @@ function OrdersContent() {
           {/* Export Actions (inline, rightmost) */}
           <button
             onClick={handleExportExcel}
-            title="Download filtered orders as Excel Spreadsheet (.csv)"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0"
+            title="Export Excel"
+            className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Export Excel</span>
+            <FileSpreadsheet className="w-4 h-4" />
           </button>
           <button
             onClick={handleExportPdf}
-            title="Print or Save PDF Report"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0"
+            title="Export PDF"
+            className="inline-flex items-center justify-center p-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Export PDF</span>
+            <FileText className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -599,7 +602,7 @@ function OrdersContent() {
                 <th className="py-2 px-1 w-[6.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">LLR</th>
                 <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
                 <th className="py-2 px-1 w-[11%] text-center border-r border-b-2 border-slate-300 bg-slate-100">SMS Status</th>
-                <th className="py-2 px-1 w-[4%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap"></th>
+                <th className="py-2 px-1 w-[5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">TRACKING</th>
               </tr>
             </thead>
 

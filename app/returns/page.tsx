@@ -400,19 +400,17 @@ function ReturnsContent() {
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={handleExportExcel}
-            title="Download filtered returns as Excel CSV"
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-2xs cursor-pointer"
+            title="Export Excel"
+            className="inline-flex items-center justify-center p-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-2xs cursor-pointer"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Excel</span>
+            <FileSpreadsheet className="w-4 h-4" />
           </button>
           <button
             onClick={handleExportPdf}
-            title="Print or Save PDF Report"
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-2xs cursor-pointer"
+            title="Export PDF"
+            className="inline-flex items-center justify-center p-2 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-2xs cursor-pointer"
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>PDF</span>
+            <FileText className="w-4 h-4" />
           </button>
         </div>
       </div>

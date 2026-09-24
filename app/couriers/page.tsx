@@ -656,19 +656,17 @@ function CourierHubContent() {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleExportExcel}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-              title="Export picked up courier manifest to Excel"
+              className="inline-flex items-center justify-center p-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+              title="Export Excel"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Export Excel</span>
+              <FileSpreadsheet className="w-4 h-4" />
             </button>
             <button
               onClick={handleExportPdf}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-              title="Export picked up courier manifest to PDF"
+              className="inline-flex items-center justify-center p-2 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+              title="Export PDF"
             >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Export PDF</span>
+              <FileText className="w-4 h-4" />
             </button>
           </div>
         )}

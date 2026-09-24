@@ -456,19 +456,17 @@ function SmsMonitoringContent() {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleExportExcel}
-                title="Download SMS logs as Excel Spreadsheet (.csv)"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs"
+                title="Export Excel"
+                className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>Export Excel</span>
+                <FileSpreadsheet className="w-4 h-4" />
               </button>
               <button
                 onClick={handleExportPdf}
-                title="Print or Save PDF Report"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs"
+                title="Export PDF"
+                className="inline-flex items-center justify-center p-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer"
               >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Export PDF</span>
+                <FileText className="w-4 h-4" />
               </button>
             </div>
           </div>
