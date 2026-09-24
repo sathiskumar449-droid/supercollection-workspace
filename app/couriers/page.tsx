@@ -229,7 +229,7 @@ function CourierHubContent() {
       seenIds.add(o.id);
 
       // Must not be cancelled or returned
-      if (o.orderStatus === "CANCELLED" || o.orderStatus === "RETURNED" || o.orderStatus === "RETURN") {
+      if (o.orderStatus === "RETURN" || (o.orderStatus as string) === "CANCELLED" || (o.orderStatus as string) === "RETURNED") {
         return false;
       }
 
