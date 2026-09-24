@@ -252,14 +252,12 @@ function CourierHubContent() {
         return false;
       }
 
-      // Must have an assigned courier partner
-      if (!o.dispatch?.courierPartnerId) {
-        return false;
-      }
+      // Must have an assigned courier partner (default to ST_COURIER)
+      const partnerCode = o.dispatch?.courierPartnerId || "ST_COURIER";
 
       // Strict courier partner isolation for courier user
       if (isCourierUser) {
-        return o.dispatch.courierPartnerId === userCourierPartnerId;
+        return partnerCode === userCourierPartnerId;
       }
 
       return true;
@@ -276,7 +274,7 @@ function CourierHubContent() {
     });
 
     verifiedOrders.forEach((o) => {
-      const code = o.dispatch?.courierPartnerId;
+      const code = o.dispatch?.courierPartnerId || "ST_COURIER";
       if (code) {
         if (counts[code] !== undefined) {
           counts[code]++;
@@ -293,7 +291,7 @@ function CourierHubContent() {
   const currentPartnerOrders = useMemo(() => {
     return verifiedOrders
       .filter((o) => {
-        const code = o.dispatch?.courierPartnerId;
+        const code = o.dispatch?.courierPartnerId || "ST_COURIER";
         return code === activePartnerCode;
       })
       .sort((a, b) => {

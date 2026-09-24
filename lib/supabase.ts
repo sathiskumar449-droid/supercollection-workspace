@@ -88,26 +88,19 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
       const defaultCourierStatus: CourierStatus = "PENDING";
       const courierObj = rawDispatch?.courier;
 
-      // Check if courier was explicitly assigned
-      const notesStr = String(rawDispatch?.notes || "");
+      // Extract notes metadata from dispatches.notes and orders.notes
+      const notesStr = `${rawDispatch?.notes || ""};${raw?.notes || ""}`;
       const explicitCourierMatch = notesStr.match(/assigned_courier:([a-zA-Z0-9_\s]+)/);
       const explicitCourierName = explicitCourierMatch ? explicitCourierMatch[1].trim() : undefined;
 
-      // Only actively assigned if courier partner or actual pickup/LLR exists (DISPATCHED alone does NOT assign courier)
-      const isActivelyAssigned = Boolean(explicitCourierName) ||
-                                Boolean(rawDispatch?.courier_partner_id) ||
-                                (rawDispatch?.courier_status && rawDispatch.courier_status !== "PENDING") ||
-                                Boolean(rawDispatch?.picked_up_at) ||
-                                Boolean(rawDispatch?.llr_number);
+      const partnerCodeMatch = notesStr.match(/partner_code:([a-zA-Z0-9_]+)/);
+      const explicitPartnerCode = partnerCodeMatch ? partnerCodeMatch[1].trim() : undefined;
 
-      let resolvedCourierName: string | undefined = undefined;
-      let resolvedPartnerCode: string | undefined = undefined;
+      const pickupPhoneMatch = notesStr.match(/pickup_phone:([^\s;|]+)/);
+      const parsedPickupPhone = pickupPhoneMatch ? pickupPhoneMatch[1].trim() : undefined;
 
-      if (isActivelyAssigned) {
-        resolvedCourierName = explicitCourierName || rawDispatch?.courier_name || courierObj?.name || undefined;
-        resolvedPartnerCode = rawDispatch?.courier_partner_id || courierObj?.code || 
-          (resolvedCourierName?.includes("Professional") ? "PROFESSIONAL" : resolvedCourierName?.includes("DTDC") ? "DTDC" : (resolvedCourierName?.includes("ST") ? "ST_COURIER" : undefined));
-      }
+      const pickedUpAtMatch = notesStr.match(/picked_up_at:([^\s;|]+)/);
+      const parsedPickedUpAt = pickedUpAtMatch ? pickedUpAtMatch[1].trim() : undefined;
 
       const notesMatch = raw.notes ? String(raw.notes).match(/dispatch_id:([^\s;|]+)/) : null;
       const parsedDispatchId = rawDispatch?.dispatch_id || rawDispatch?.dispatchId || (notesMatch ? notesMatch[1] : undefined);
@@ -122,11 +115,31 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         rawLlr !== parsedDispatchId
       );
 
+      // Only actively assigned if courier partner or actual pickup/LLR exists (DISPATCHED alone does NOT assign courier)
+      const isActivelyAssigned = Boolean(explicitCourierName) ||
+                                Boolean(explicitPartnerCode) ||
+                                Boolean(courierObj?.code) ||
+                                (rawDispatch?.courier_status && rawDispatch.courier_status !== "PENDING") ||
+                                Boolean(rawDispatch?.picked_up_at) ||
+                                Boolean(parsedPickedUpAt) ||
+                                Boolean(hasValidLlr) ||
+                                notesStr.includes("courier_status:PICKED_UP") ||
+                                notesStr.includes("courier_status:SHIPPED");
+
+      let resolvedCourierName: string | undefined = undefined;
+      let resolvedPartnerCode: string | undefined = undefined;
+
+      if (isActivelyAssigned) {
+        resolvedCourierName = explicitCourierName || rawDispatch?.courier_name || courierObj?.name || "ST Courier";
+        resolvedPartnerCode = explicitPartnerCode || rawDispatch?.courier_partner_id || courierObj?.code || 
+          (resolvedCourierName?.includes("Professional") ? "PROFESSIONAL" : resolvedCourierName?.includes("DTDC") ? "DTDC" : "ST_COURIER");
+      }
+
       let resolvedCourierStatus: CourierStatus = defaultCourierStatus;
       const rawCStatus = rawDispatch?.courier_status || rawDispatch?.courierStatus;
       if (hasValidLlr || notesStr.includes("courier_status:SHIPPED") || rawCStatus === "SHIPPED") {
         resolvedCourierStatus = "SHIPPED";
-      } else if (rawCStatus === "PICKED_UP" || rawDispatch?.picked_up_at || notesStr.includes("courier_status:PICKED_UP")) {
+      } else if (rawCStatus === "PICKED_UP" || rawDispatch?.picked_up_at || parsedPickedUpAt || notesStr.includes("courier_status:PICKED_UP")) {
         resolvedCourierStatus = "PICKED_UP";
       } else if (rawCStatus && rawCStatus !== "DELIVERED") {
         resolvedCourierStatus = rawCStatus as CourierStatus;
@@ -138,11 +151,11 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         courierPartnerId: resolvedPartnerCode,
         dispatchId: parsedDispatchId,
         llrNumber: hasValidLlr ? rawLlr : undefined,
-        pickupPhone: rawDispatch?.pickup_phone || rawDispatch?.pickupPhone || undefined,
+        pickupPhone: parsedPickupPhone || rawDispatch?.pickup_phone || rawDispatch?.pickupPhone || undefined,
         verifiedCustomerPhone: rawDispatch?.verified_customer_phone || cust.mobile,
         courierStatus: resolvedCourierStatus,
         dispatchedAt: rawDispatch?.dispatched_at || rawDispatch?.dispatchedAt || raw.dispatched_at,
-        pickedUpAt: rawDispatch?.picked_up_at || rawDispatch?.pickedUpAt,
+        pickedUpAt: parsedPickedUpAt || rawDispatch?.picked_up_at || rawDispatch?.pickedUpAt || (resolvedCourierStatus === "PICKED_UP" || resolvedCourierStatus === "SHIPPED" ? (raw.shipped_at || rawDispatch?.shipped_at || raw.updated_at) : undefined),
         deliveredAt: undefined,
         shippedAt: (hasValidLlr || resolvedCourierStatus === "SHIPPED") ? (rawDispatch?.shipped_at || rawDispatch?.delivered_at || rawDispatch?.deliveredAt || raw.shipped_at || raw.updated_at) : undefined,
         notes: rawDispatch?.notes,
@@ -349,117 +362,117 @@ export async function updateSupabaseCourierDetails(
   if (!isUuid) return true;
 
   try {
-    const updates: any = {
-      updated_at: new Date().toISOString(),
+    const nowIso = new Date().toISOString();
+
+    // 1. Resolve courier partner code and courier UUID from couriers table
+    const partnerCode = details.courierPartnerId || (details.courierName?.includes("Professional") ? "PROFESSIONAL" : details.courierName?.includes("DTDC") ? "DTDC" : "ST_COURIER");
+    const courierName = details.courierName || (partnerCode === "PROFESSIONAL" ? "Professional Courier" : partnerCode === "DTDC" ? "DTDC" : "ST Courier");
+    let courierIdToUse = details.courierId || (await getCourierIdByCode(db, partnerCode));
+    if (!courierIdToUse) {
+      courierIdToUse = await getCourierIdByCode(db, "DEFAULT");
+    }
+
+    // 2. Build notes string safely containing structured metadata (dispatch_id, pickup_phone, etc.)
+    const notesParts: string[] = [];
+    if (courierName) notesParts.push(`assigned_courier:${courierName}`);
+    if (partnerCode) notesParts.push(`partner_code:${partnerCode}`);
+    if (details.dispatchId && details.dispatchId.trim()) notesParts.push(`dispatch_id:${details.dispatchId.trim()}`);
+    if (details.pickupPhone && details.pickupPhone.trim()) notesParts.push(`pickup_phone:${details.pickupPhone.trim()}`);
+    if (details.verifiedCustomerPhone && details.verifiedCustomerPhone.trim()) notesParts.push(`verified_phone:${details.verifiedCustomerPhone.trim()}`);
+    if (details.pickedUpAt) notesParts.push(`picked_up_at:${details.pickedUpAt}`);
+
+    const hasLlr = Boolean(details.llrNumber && details.llrNumber.trim());
+    const isShipped = details.courierStatus === "SHIPPED" || details.courierStatus === "DELIVERED" || hasLlr;
+    const isPickedUp = details.courierStatus === "PICKED_UP";
+
+    if (isShipped) {
+      notesParts.push("courier_status:SHIPPED");
+    } else if (isPickedUp) {
+      notesParts.push("courier_status:PICKED_UP");
+    }
+
+    // 3. PostgreSQL dispatches table columns strictly:
+    // Only: id, order_id, courier_id, llr_number, courier_status ('PENDING' | 'SHIPPED'), dispatched_at, shipped_at, notes, updated_at
+    const dispatchUpdates: any = {
+      updated_at: nowIso,
+      courier_status: isShipped ? "SHIPPED" : "PENDING",
+      notes: notesParts.join(";"),
     };
 
-    if (details.dispatchId !== undefined) {
-      updates.dispatch_id = details.dispatchId && details.dispatchId.trim() ? details.dispatchId.trim() : null;
-    }
-    if (details.pickupPhone !== undefined) {
-      updates.pickup_phone = details.pickupPhone && details.pickupPhone.trim() ? details.pickupPhone.trim() : null;
-    }
-    if (details.courierPartnerId !== undefined) {
-      updates.courier_partner_id = details.courierPartnerId || null;
+    if (courierIdToUse) {
+      dispatchUpdates.courier_id = courierIdToUse;
     }
     if (details.llrNumber !== undefined) {
-      updates.llr_number = details.llrNumber && details.llrNumber.trim() ? details.llrNumber.trim() : null;
+      dispatchUpdates.llr_number = details.llrNumber && details.llrNumber.trim() ? details.llrNumber.trim() : null;
     }
-
-    if (details.courierName || details.courierPartnerId) {
-      const cName = details.courierName || (details.courierPartnerId === "PROFESSIONAL" ? "Professional Courier" : details.courierPartnerId === "DTDC" ? "DTDC" : "ST Courier");
-      const partnerCode = details.courierPartnerId || (cName.includes("Professional") ? "PROFESSIONAL" : cName.includes("DTDC") ? "DTDC" : "ST_COURIER");
-      updates.courier_partner_id = partnerCode;
-      updates.notes = `assigned_courier:${cName}`;
-
-      const realCourierId = await getCourierIdByCode(db, partnerCode);
-      if (realCourierId) {
-        updates.courier_id = realCourierId;
-      }
+    if (details.dispatchedAt) {
+      dispatchUpdates.dispatched_at = details.dispatchedAt;
     }
-
-    if (details.verifiedCustomerPhone) {
-      updates.verified_customer_phone = details.verifiedCustomerPhone;
-    }
-    if (details.pickedUpAt) {
-      updates.picked_up_at = details.pickedUpAt;
-    }
-    if (details.shippedAt) {
-      updates.shipped_at = details.shippedAt;
-    }
-
-    if (details.courierStatus) {
-      // PostgreSQL enum courier_status only accepts 'PENDING' and 'SHIPPED'
-      const pgStatus = (details.courierStatus === "PICKED_UP" || details.courierStatus === "DELIVERED" || details.courierStatus === "SHIPPED")
-        ? "SHIPPED"
-        : "PENDING";
-      updates.courier_status = pgStatus;
-
-      const currentNotes = updates.notes || "";
-      if (details.courierStatus === "PICKED_UP") {
-        updates.picked_up_at = details.pickedUpAt || new Date().toISOString();
-        updates.notes = currentNotes ? `${currentNotes};courier_status:PICKED_UP` : "courier_status:PICKED_UP";
-      }
-      if (details.courierStatus === "SHIPPED" || details.courierStatus === "DELIVERED") {
-        updates.shipped_at = details.shippedAt || new Date().toISOString();
-        updates.notes = currentNotes ? `${currentNotes};courier_status:SHIPPED` : "courier_status:SHIPPED";
-      }
+    if (isShipped) {
+      dispatchUpdates.shipped_at = details.shippedAt || nowIso;
     }
 
     // Check if dispatch record exists
     const { data: existingDispatch } = await db
       .from("dispatches")
-      .select("id")
+      .select("id, notes")
       .eq("order_id", orderId)
       .maybeSingle();
 
     if (existingDispatch) {
+      // Merge previous notes if present
+      if (existingDispatch.notes) {
+        const prevNotes = String(existingDispatch.notes).split(";");
+        const newKeys = new Set(notesParts.map((p) => p.split(":")[0]));
+        const retainedPrev = prevNotes.filter((p) => !newKeys.has(p.split(":")[0]));
+        dispatchUpdates.notes = [...retainedPrev, ...notesParts].filter(Boolean).join(";");
+      }
+
       const { error: updateErr } = await db
         .from("dispatches")
-        .update(updates)
+        .update(dispatchUpdates)
         .eq("order_id", orderId);
+
       if (updateErr) {
-        // If unique constraint or foreign key constraint hit, retry without conflicting fields
-        if (updateErr.code === "23505" && updates.dispatch_id) {
-          const fallbackUpdates = { ...updates };
-          delete fallbackUpdates.dispatch_id;
-          await db.from("dispatches").update(fallbackUpdates).eq("order_id", orderId);
-        } else {
-          console.warn("Supabase dispatch update warning:", updateErr?.message || updateErr);
-        }
+        console.warn("Supabase dispatch update warning:", updateErr?.message || updateErr);
       }
     } else {
-      let courierIdToUse: string | null = null;
-      if (updates.courier_partner_id) {
-        courierIdToUse = await getCourierIdByCode(db, updates.courier_partner_id);
-      }
       const insertPayload: any = {
         order_id: orderId,
-        ...updates,
+        courier_id: courierIdToUse || (await getCourierIdByCode(db, "DEFAULT")),
+        ...dispatchUpdates,
       };
-      if (courierIdToUse && !insertPayload.courier_id) {
-        insertPayload.courier_id = courierIdToUse;
-      }
+
       const { error: insertErr } = await db
         .from("dispatches")
         .insert(insertPayload);
+
       if (insertErr) {
         console.warn("Supabase dispatch insert warning:", insertErr?.message || insertErr);
       }
     }
 
-    // If marked as SHIPPED, PICKED_UP, DELIVERED or has LLR, record shipped_at timestamp without overwriting SMS status
-    if (details.courierStatus === "SHIPPED" || details.courierStatus === "DELIVERED" || details.llrNumber) {
-      await db.from("orders").update({
-        shipped_at: details.shippedAt || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq("id", orderId);
-    } else if (details.courierStatus === "PICKED_UP") {
-      await db.from("orders").update({
-        updated_at: new Date().toISOString(),
-      }).eq("id", orderId);
+    // 4. Update orders table with shipped_at and status = DISPATCHED
+    const orderUpdates: any = {
+      updated_at: nowIso,
+      status: "DISPATCHED",
+    };
+    if (courierIdToUse) {
+      orderUpdates.courier_id = courierIdToUse;
+    }
+    if (isShipped) {
+      orderUpdates.shipped_at = details.shippedAt || nowIso;
+    }
+    if (details.dispatchId && details.dispatchId.trim()) {
+      const { data: ord } = await db.from("orders").select("notes").eq("id", orderId).maybeSingle();
+      let ordNotes = ord?.notes || "";
+      ordNotes = ordNotes.replace(/(\s*\|\s*)?dispatch_id:[^\s;|]+/g, "").trim();
+      orderUpdates.notes = ordNotes ? `${ordNotes} | dispatch_id:${details.dispatchId.trim()}` : `dispatch_id:${details.dispatchId.trim()}`;
     }
 
+    await db.from("orders").update(orderUpdates).eq("id", orderId);
+
+    // 5. Activity log
     if (activity) {
       await db.from("activity_logs").insert({
         order_id: orderId,
@@ -469,7 +482,7 @@ export async function updateSupabaseCourierDetails(
         details: activity.details || null,
         old_value: activity.oldValue || null,
         new_value: activity.newValue || null,
-        created_at: activity.timestamp || new Date().toISOString(),
+        created_at: activity.timestamp || nowIso,
       });
     }
 
@@ -483,7 +496,7 @@ export async function updateSupabaseCourierDetails(
 /**
  * Update SMS Status in Supabase
  */
-export async function updateSupabaseSmsStatus(orderId: string, status: SmsStatus) {
+export async function updateSupabaseSmsStatus(orderId: string, status: SmsStatus, mobile?: string) {
   const db = supabaseAdmin || supabase;
   if (!db) return false;
 
@@ -504,9 +517,15 @@ export async function updateSupabaseSmsStatus(orderId: string, status: SmsStatus
         updated_at: new Date().toISOString(),
       }).eq("id", existingSms.id);
     } else {
+      let custMobile = mobile;
+      if (!custMobile || custMobile === "N/A") {
+        const { data: ord } = await db.from("orders").select("customer_id, customers(mobile)").eq("id", orderId).maybeSingle();
+        custMobile = (ord as any)?.customers?.mobile || (ord as any)?.customer?.mobile || "N/A";
+      }
+
       await db.from("sms_logs").insert({
         order_id: orderId,
-        mobile: "N/A",
+        mobile: custMobile || "N/A",
         provider: "Ping4SMS",
         status,
         sent_at: status === "SENT" ? new Date().toISOString() : null,

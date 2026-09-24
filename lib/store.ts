@@ -744,12 +744,23 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
         ? "PICKED_UP"
         : (remoteDisp.courierStatus || localDisp.courierStatus));
 
-    const isDispatched = local.orderStatus === "DISPATCHED" || remote.orderStatus === "DISPATCHED";
+    const finalCourierPartnerId = remoteDisp.courierPartnerId || localDisp.courierPartnerId || "ST_COURIER";
+    const finalCourierName = remoteDisp.courierName || localDisp.courierName || "ST Courier";
+    const finalCourierId = remoteDisp.courierId || localDisp.courierId;
+    const finalPickupPhone = remoteDisp.pickupPhone || localDisp.pickupPhone;
+    const finalPickedUpAt = localDisp.pickedUpAt || remoteDisp.pickedUpAt;
+    const finalShippedAt = (finalCourierStatus === "SHIPPED" || Boolean(finalLlr))
+      ? (remoteDisp.shippedAt || localDisp.shippedAt || remote.shippedAt || local.shippedAt || new Date().toISOString())
+      : undefined;
+
+    const isDispatched = local.orderStatus === "DISPATCHED" || remote.orderStatus === "DISPATCHED" || finalCourierStatus === "SHIPPED" || finalCourierStatus === "PICKED_UP";
 
     const localSms = local.sms || {};
     const remoteSms = remote.sms || {};
     let finalSmsStatus: SmsStatus = "PENDING";
-    if (local.updatedAt && remote.updatedAt && new Date(local.updatedAt).getTime() >= new Date(remote.updatedAt).getTime()) {
+    if (finalCourierStatus === "SHIPPED" || Boolean(finalLlr)) {
+      finalSmsStatus = localSms.status === "SENT" || remoteSms.status === "SENT" ? "SENT" : (localSms.status || remoteSms.status || "PENDING");
+    } else if (local.updatedAt && remote.updatedAt && new Date(local.updatedAt).getTime() >= new Date(remote.updatedAt).getTime()) {
       finalSmsStatus = localSms.status || remoteSms.status || "PENDING";
     } else {
       finalSmsStatus = remoteSms.status || localSms.status || "PENDING";
@@ -759,13 +770,20 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
       ...remote,
       orderStatus: isDispatched && remote.orderStatus !== "COMPLETED" ? "DISPATCHED" : remote.orderStatus,
       dispatchedAt: remote.dispatchedAt || local.dispatchedAt,
+      pickedUpAt: finalPickedUpAt,
+      shippedAt: finalShippedAt,
       dispatch: {
         ...remoteDisp,
         ...localDisp,
         dispatchId: finalDispatchId,
         llrNumber: finalLlr,
         courierStatus: finalCourierStatus,
-        pickedUpAt: localDisp.pickedUpAt || remoteDisp.pickedUpAt,
+        courierPartnerId: finalCourierPartnerId,
+        courierName: finalCourierName,
+        courierId: finalCourierId,
+        pickupPhone: finalPickupPhone,
+        pickedUpAt: finalPickedUpAt,
+        shippedAt: finalShippedAt,
       },
       sms: {
         ...remoteSms,
@@ -1485,10 +1503,11 @@ export const orderflowStore = {
         courierStatus: finalCourierStatus,
         pickedUpAt: pickedUpAtTime,
         shippedAt: shippedAtTime,
+        verifiedCustomerPhone: updatedOrder.customer.mobile,
       }, timelineEntries[0]);
 
       if (finalCourierStatus === "SHIPPED") {
-        updateSupabaseSmsStatus(orderId, updatedOrder.sms.status || "PENDING");
+        updateSupabaseSmsStatus(orderId, updatedOrder.sms.status || "PENDING", updatedOrder.customer.mobile);
       }
     }
 
