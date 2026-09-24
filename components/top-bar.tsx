@@ -74,19 +74,9 @@ export function TopBar({
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shadow-subtle gap-4">
-      {/* Left: Breadcrumbs & Title */}
-      <div className="flex flex-col shrink-0 min-w-0">
-        <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-          {breadcrumbs.map((b, i) => (
-            <React.Fragment key={i}>
-              {i > 0 && <span>/</span>}
-              <span className={i === breadcrumbs.length - 1 ? "text-slate-600 font-semibold" : ""}>
-                {b.label}
-              </span>
-            </React.Fragment>
-          ))}
-        </div>
-        <h1 className="text-base font-bold text-slate-900 tracking-tight leading-none mt-0.5">
+      {/* Left: Navigation Title */}
+      <div className="flex items-center shrink-0 min-w-0">
+        <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-none">
           {title}
         </h1>
       </div>

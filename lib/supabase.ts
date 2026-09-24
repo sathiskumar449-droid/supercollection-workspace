@@ -63,7 +63,16 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
 
     if (!dbOrders) return [];
 
-    return dbOrders.map((raw: any): Order => {
+    return dbOrders
+      .filter((raw: any) => {
+        const isWc = raw.source === "WEBSITE" || String(raw.order_number || "").startsWith("SC-WC-");
+        // Exclude pending (NEW) and cancelled/failed/refunded (RETURN) WooCommerce orders
+        if (isWc && (raw.status === "NEW" || raw.status === "RETURN")) {
+          return false;
+        }
+        return true;
+      })
+      .map((raw: any): Order => {
       const cust: Customer = raw.customer || {
         id: raw.customer_id || "cust-unknown",
         name: "Unknown Customer",

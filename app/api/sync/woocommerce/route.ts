@@ -71,6 +71,8 @@ export async function POST(req: NextRequest) {
 
     // Purge old orders older than 2 days so only last 2 days orders remain in the app
     await db.from("orders").delete().lt("created_at", afterIso);
+    // Also delete any previously imported WooCommerce orders with status NEW or RETURN
+    await db.from("orders").delete().eq("source", "WEBSITE").in("status", ["NEW", "RETURN"]);
 
     // Default ST Courier ID
     const { data: stCourier } = await db

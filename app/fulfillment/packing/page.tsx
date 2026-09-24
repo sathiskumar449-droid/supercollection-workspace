@@ -263,14 +263,17 @@ export default function PackingPage() {
     { value: "DISPATCHED", label: "Dispatched" },
   ];
 
-  // Orders eligible for Packing Station (includes active packing orders, Pending orders, and Return orders)
-  // Filtered by global TopBar date filter / calendar picker
+  // Orders eligible for Packing Station (active fulfillment: Processing, Packaging, Packed, Dispatched, Completed)
+  // Strictly excludes cancelled, pending, failed, and return orders
   const packingEligibleOrders = useMemo(() => {
-    return orders.filter(
-      (o) =>
-        matchesDateFilter(o.createdAt, dateFilter, customDate)
-    );
-  }, [orders, dateFilter, customDate]);
+    return orders.filter((o) => {
+      if (!matchesDateFilter(o.createdAt, dateFilter, customDate)) return false;
+      // Never show pending, cancelled, failed, return orders in Packing Station
+      if (o.orderStatus === "NEW" || o.orderStatus === "RETURN") return false;
+      if (isOrderReturn(o)) return false;
+      return true;
+    });
+  }, [orders, dateFilter, customDate, returns]);
 
   // Helper to determine if an order is in Return state
   const isOrderReturn = (o: Order) =>
@@ -281,13 +284,8 @@ export default function PackingPage() {
   const filteredOrders = useMemo(() => {
     return packingEligibleOrders.filter((order) => {
       // Status filter
-      if (statusFilter !== "ALL") {
-        const orderIsReturn = isOrderReturn(order);
-        if (statusFilter === "RETURN") {
-          if (!orderIsReturn) return false;
-        } else {
-          if (orderIsReturn || order.orderStatus !== statusFilter) return false;
-        }
+      if (statusFilter !== "ALL" && order.orderStatus !== statusFilter) {
+        return false;
       }
 
       // Search query
@@ -304,7 +302,7 @@ export default function PackingPage() {
 
       return true;
     });
-  }, [packingEligibleOrders, statusFilter, searchQuery, returns]);
+  }, [packingEligibleOrders, statusFilter, searchQuery]);
 
   // Validate selected orders against chosen bulk target status
   const { validOrders, skippedOrders } = useMemo(() => {
@@ -391,13 +389,11 @@ export default function PackingPage() {
   };
 
   // Stage counts for KPI pills (Packing Station)
-  const completedCount = packingEligibleOrders.filter((o) => o.orderStatus === "COMPLETED" && !isOrderReturn(o)).length;
-  const processingCount = packingEligibleOrders.filter((o) => o.orderStatus === "CONFIRMED" && !isOrderReturn(o)).length;
-  const pendingOrdersCount = packingEligibleOrders.filter((o) => o.orderStatus === "NEW" && !isOrderReturn(o)).length;
-  const packagingCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKING" && !isOrderReturn(o)).length;
-  const packedCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKED" && !isOrderReturn(o)).length;
-  const dispatchedCount = packingEligibleOrders.filter((o) => o.orderStatus === "DISPATCHED" && !isOrderReturn(o)).length;
-  const returnOrdersCount = packingEligibleOrders.filter((o) => isOrderReturn(o)).length;
+  const processingCount = packingEligibleOrders.filter((o) => o.orderStatus === "CONFIRMED").length;
+  const packagingCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKING").length;
+  const packedCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKED").length;
+  const dispatchedCount = packingEligibleOrders.filter((o) => o.orderStatus === "DISPATCHED").length;
+  const completedCount = packingEligibleOrders.filter((o) => o.orderStatus === "COMPLETED").length;
 
   // Export handlers
   const handleExportExcel = () => {
@@ -487,7 +483,7 @@ export default function PackingPage() {
   return (
     <div className="space-y-3.5 max-w-full mx-auto">
       {/* KPI Status Filter Buttons Row (with matching border colors) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         <button
           onClick={() => setStatusFilter("ALL")}
           className={cn(
@@ -502,19 +498,6 @@ export default function PackingPage() {
         </button>
 
         <button
-          onClick={() => setStatusFilter("COMPLETED")}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            statusFilter === "COMPLETED"
-              ? "border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/10" 
-              : "border-blue-300 hover:border-blue-400"
-          )}
-        >
-          <span className="text-[11px] text-blue-800 font-medium block">Completed (Ready)</span>
-          <span className="text-base font-bold text-blue-800 font-mono mt-0.5 block">{completedCount}</span>
-        </button>
-
-        <button
           onClick={() => setStatusFilter("CONFIRMED")}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
@@ -525,26 +508,6 @@ export default function PackingPage() {
         >
           <span className="text-[11px] text-sky-700 font-medium block">Processing</span>
           <span className="text-base font-bold text-sky-700 font-mono mt-0.5 block">{processingCount}</span>
-        </button>
-
-        <button
-          onClick={() => setStatusFilter("NEW")}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            statusFilter === "NEW"
-              ? "border-amber-600 ring-2 ring-amber-500/20 bg-amber-50/10" 
-              : "border-amber-300 hover:border-amber-400"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-amber-700 font-medium block">Pending</span>
-            {pendingOrdersCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                {pendingOrdersCount}
-              </span>
-            )}
-          </div>
-          <span className="text-base font-bold text-amber-700 font-mono mt-0.5 block">{pendingOrdersCount}</span>
         </button>
 
         <button
@@ -586,25 +549,17 @@ export default function PackingPage() {
           <span className="text-base font-bold text-emerald-700 font-mono mt-0.5 block">{dispatchedCount}</span>
         </button>
 
-        {/* 8. Return Orders Count */}
         <button
-          onClick={() => setStatusFilter("RETURN")}
+          onClick={() => setStatusFilter("COMPLETED")}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            statusFilter === "RETURN"
-              ? "border-rose-600 ring-2 ring-rose-500/20 bg-rose-50/10" 
-              : "border-rose-300 hover:border-rose-400"
+            statusFilter === "COMPLETED"
+              ? "border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/10" 
+              : "border-blue-300 hover:border-blue-400"
           )}
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-rose-700 font-medium block">Return</span>
-            {returnOrdersCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                {returnOrdersCount}
-              </span>
-            )}
-          </div>
-          <span className="text-base font-bold text-rose-700 font-mono mt-0.5 block">{returnOrdersCount}</span>
+          <span className="text-[11px] text-blue-800 font-medium block">Completed (Ready)</span>
+          <span className="text-base font-bold text-blue-800 font-mono mt-0.5 block">{completedCount}</span>
         </button>
       </div>
 

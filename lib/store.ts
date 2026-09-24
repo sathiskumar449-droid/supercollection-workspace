@@ -460,7 +460,17 @@ export function sanitizeOrders(orders: Order[]): Order[] {
   const dd = String(now.getDate()).padStart(2, "0");
   const todayPrefix = `DSP-${yy}${mm}${dd}-`;
 
-  return orders.map((ord) => {
+  // Filter out any pending or cancelled WooCommerce/WEBSITE orders
+  const validOrders = orders.filter((ord) => {
+    if (!ord) return false;
+    const isWc = ord.source === "WEBSITE" || ord.orderNumber?.startsWith("SC-WC-") || String(ord.id || "").startsWith("SC-WC-");
+    if (isWc && (ord.orderStatus === "NEW" || ord.orderStatus === "RETURN")) {
+      return false;
+    }
+    return true;
+  });
+
+  return validOrders.map((ord) => {
     if (!ord) return ord;
 
     // Ensure all WooCommerce orders (SC-WC-) are strictly WEBSITE source
