@@ -36,29 +36,45 @@ export async function POST(req: NextRequest) {
     twoDaysAgo.setHours(0, 0, 0, 0);
     const afterIso = twoDaysAgo.toISOString();
 
-    // Call WooCommerce REST API using BOTH query params and Basic Auth header for maximum compatibility
+    // In WooCommerce REST API, 'status' does NOT accept comma-separated values like 'processing,completed'.
+    // Calling status=processing,completed returns 0 orders.
+    // We fetch status=processing (all active processing orders) AND status=any (recent 2-day orders) in parallel.
     const authHeader = "Basic " + Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
-    const wcApiUrl = `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=processing,completed&after=${encodeURIComponent(afterIso)}&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`;
+    const [resProcessing, resAny] = await Promise.all([
+      fetch(
+        `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=processing&orderby=date&order=desc&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`,
+        {
+          headers: { Authorization: authHeader, "Content-Type": "application/json" },
+          cache: "no-store",
+        }
+      ),
+      fetch(
+        `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=any&orderby=date&order=desc&after=${encodeURIComponent(afterIso)}&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`,
+        {
+          headers: { Authorization: authHeader, "Content-Type": "application/json" },
+          cache: "no-store",
+        }
+      ),
+    ]);
 
-    const res = await fetch(wcApiUrl, {
-      headers: {
-        Authorization: authHeader,
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-    });
+    const processingOrders = resProcessing.ok ? await resProcessing.json() : [];
+    const anyOrders = resAny.ok ? await resAny.json() : [];
 
-    if (!res.ok) {
-      const errText = await res.text();
-      return NextResponse.json({
-        error: `WooCommerce API Error (${res.status}): ${errText}`,
-      }, { status: res.status });
+    // Deduplicate into a unified list by ID
+    const wcOrdersMap = new Map<string, any>();
+    if (Array.isArray(processingOrders)) {
+      processingOrders.forEach((o: any) => wcOrdersMap.set(String(o.id || o.number), o));
+    }
+    if (Array.isArray(anyOrders)) {
+      anyOrders.forEach((o: any) => {
+        const id = String(o.id || o.number);
+        if (!wcOrdersMap.has(id)) {
+          wcOrdersMap.set(id, o);
+        }
+      });
     }
 
-    const wcOrders = await res.json();
-    if (!Array.isArray(wcOrders)) {
-      return NextResponse.json({ error: "Invalid response from WooCommerce API" }, { status: 502 });
-    }
+    const wcOrders = Array.from(wcOrdersMap.values());
 
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json({
@@ -111,7 +127,7 @@ export async function POST(req: NextRequest) {
       // 1. Safe Customer Lookup / Upsert (avoid 42P10 constraint error)
       let customerId: string | null = null;
       if (mobile) {
-        const { data: existingCustomer } = await supabase
+        const { data: existingCustomer } = await db
           .from("customers")
           .select("id")
           .eq("mobile", mobile)
@@ -119,7 +135,7 @@ export async function POST(req: NextRequest) {
 
         if (existingCustomer?.id) {
           customerId = existingCustomer.id;
-          await supabase
+          await db
             .from("customers")
             .update({
               name: customerName,
@@ -134,7 +150,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (!customerId) {
-        const { data: newCust, error: newCustErr } = await supabase
+        const { data: newCust, error: newCustErr } = await db
           .from("customers")
           .insert({
             name: customerName,
@@ -157,7 +173,7 @@ export async function POST(req: NextRequest) {
 
       // Fallback customer if needed
       if (!customerId) {
-        const { data: fallbackCust } = await supabase.from("customers").select("id").limit(1).maybeSingle();
+        const { data: fallbackCust } = await db.from("customers").select("id").limit(1).maybeSingle();
         customerId = fallbackCust?.id || null;
       }
 
@@ -167,7 +183,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Check if order already exists in Supabase to preserve active fulfillment progression
-      const { data: existingOrder } = await supabase
+      const { data: existingOrder } = await db
         .from("orders")
         .select("id, status")
         .eq("external_order_id", wcId)
@@ -194,7 +210,7 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       };
 
-      let { data: order, error: orderError } = await (supabase as any)
+      let { data: order, error: orderError } = await (db as any)
         .from("orders")
         .upsert(orderPayload, { onConflict: "source,external_order_id" })
         .select()
@@ -203,7 +219,7 @@ export async function POST(req: NextRequest) {
       // If DB enum does not support DIRECT or INSTAGRAM, fallback safely to WEBSITE
       if (orderError && (orderError.code === "22P02" || orderError.message?.includes("enum"))) {
         orderPayload.source = "WEBSITE";
-        const retry = await (supabase as any)
+        const retry = await (db as any)
           .from("orders")
           .upsert(orderPayload, { onConflict: "source,external_order_id" })
           .select()
@@ -252,7 +268,7 @@ export async function POST(req: NextRequest) {
 
         // 4. Initial Activity Logs (Section 2 & 3: Order Created, Processing Started, and Order Completed / Ready for Packing if completed)
         // DO NOT automatically create Courier Hub dispatch record or assign ST Courier (Section 7)
-        const { data: existingLogs } = await supabase
+        const { data: existingLogs } = await db
           .from("activity_logs")
           .select("id, action")
           .eq("order_id", order.id);
@@ -302,7 +318,7 @@ export async function POST(req: NextRequest) {
             );
           }
 
-          await supabase.from("activity_logs").insert(initialLogs);
+          await db.from("activity_logs").insert(initialLogs);
         } else if (wc.status === "completed") {
           // If order already existed in DB and WooCommerce now marks it completed
           const hasCompletedLog = existingLogs.some(
@@ -310,7 +326,7 @@ export async function POST(req: NextRequest) {
           );
           if (!hasCompletedLog) {
             const completedTimestamp = parseWooCommerceDate(wc.date_modified_gmt, wc.date_modified) || new Date().toISOString();
-            await supabase.from("activity_logs").insert([
+            await db.from("activity_logs").insert([
               {
                 order_id: order.id,
                 user_name: "WooCommerce",
