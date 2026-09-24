@@ -119,6 +119,339 @@ export function generateReplacementId(existingReturns: ReturnCase[] = globalRetu
   return `${prefix}${String(maxSeq + 1).padStart(3, "0")}`;
 }
 
+export function hasValidLlrNumber(llr?: string, dispatchId?: string): boolean {
+  if (!llr) return false;
+  const clean = String(llr).trim();
+  if (!clean) return false;
+  const lower = clean.toLowerCase();
+  if (
+    lower === "pending" ||
+    lower === "available" ||
+    lower === "/available" ||
+    lower === "na" ||
+    lower === "n/a" ||
+    lower === "null" ||
+    lower === "undefined"
+  ) {
+    return false;
+  }
+  if (lower.startsWith("dsp-") || lower.startsWith("dsp_") || lower.startsWith("dsp")) {
+    return false;
+  }
+  if (dispatchId && clean === String(dispatchId).trim()) {
+    return false;
+  }
+  return true;
+}
+
+export function normalizeOrderTimeline(ord: Order): ActivityLog[] {
+  const existingTimeline: ActivityLog[] = Array.isArray(ord.timeline) ? [...ord.timeline] : [];
+  const eventsMap = new Map<string, ActivityLog>();
+
+  for (const ev of existingTimeline) {
+    const act = (ev.action || "").trim().toLowerCase();
+    if (!eventsMap.has(act)) {
+      eventsMap.set(act, ev);
+    }
+  }
+
+  const orderCreatedTime = ord.createdAt || new Date().toISOString();
+  const confirmedTime = ord.confirmedAt || new Date(new Date(orderCreatedTime).getTime() + 5 * 60 * 1000).toISOString();
+  const dispatchedTime = ord.dispatchedAt || ord.dispatch?.dispatchedAt || (ord.orderStatus === "DISPATCHED" ? new Date(new Date(confirmedTime).getTime() + 15 * 60 * 1000).toISOString() : undefined);
+  const pickedUpTime = ord.pickedUpAt || ord.dispatch?.pickedUpAt || (ord.dispatch?.courierStatus === "PICKED_UP" || ord.dispatch?.courierStatus === "SHIPPED" ? new Date(new Date(dispatchedTime || confirmedTime).getTime() + 10 * 60 * 1000).toISOString() : undefined);
+
+  // CRITICAL: An order ONLY has LLR/Shipped if there is an actual valid LLR number entered!
+  const hasLlr = hasValidLlrNumber(ord.dispatch?.llrNumber, ord.dispatch?.dispatchId);
+  const shippedTime = hasLlr ? (ord.shippedAt || ord.dispatch?.shippedAt || new Date(new Date(pickedUpTime || dispatchedTime || confirmedTime).getTime() + 10 * 60 * 1000).toISOString()) : undefined;
+  const smsTime = (hasLlr && (ord.sms?.status === "SENT" || eventsMap.has("sms sent"))) ? (ord.sms?.sentAt || new Date(new Date(shippedTime || pickedUpTime || dispatchedTime || confirmedTime).getTime() + 5 * 60 * 1000).toISOString()) : undefined;
+
+  let entries: ActivityLog[] = [];
+
+  // Stage 1: Order Created
+  if (eventsMap.has("order created") || eventsMap.has("order placed")) {
+    entries.push(eventsMap.get("order created") || eventsMap.get("order placed")!);
+  } else {
+    entries.push({
+      id: `tl-gen-${ord.id}-created`,
+      orderId: ord.id,
+      timestamp: orderCreatedTime,
+      user: "WooCommerce",
+      role: "SYSTEM",
+      action: "Order Created",
+      details: "Order received and created from website",
+      newValue: "NEW",
+    });
+  }
+
+  // Stage 1b: Processing Started
+  if (eventsMap.has("processing started") || eventsMap.has("order processing")) {
+    entries.push(eventsMap.get("processing started") || eventsMap.get("order processing")!);
+  } else {
+    entries.push({
+      id: `tl-gen-${ord.id}-proc`,
+      orderId: ord.id,
+      timestamp: new Date(new Date(orderCreatedTime).getTime() + 1000).toISOString(),
+      user: "Orders System",
+      role: "ORDER_STAFF",
+      action: "Processing Started",
+      details: "Order processing started",
+      newValue: "PROCESSING",
+    });
+  }
+
+  // Stage 2: Order Completed & Waiting for Packing
+  const isCompletedOrBeyond =
+    ord.orderStatus === "COMPLETED" ||
+    ord.orderStatus === "PACKED" ||
+    ord.orderStatus === "DISPATCHED" ||
+    Boolean(dispatchedTime) ||
+    Boolean(ord.dispatch?.dispatchId) ||
+    Boolean(pickedUpTime) ||
+    Boolean(shippedTime);
+
+  if (isCompletedOrBeyond) {
+    if (eventsMap.has("order completed")) {
+      entries.push(eventsMap.get("order completed")!);
+    } else {
+      entries.push({
+        id: `tl-gen-${ord.id}-compl`,
+        orderId: ord.id,
+        timestamp: confirmedTime,
+        user: "WooCommerce",
+        role: "SYSTEM",
+        action: "Order Completed",
+        details: "Order completed in WooCommerce",
+        newValue: "COMPLETED",
+      });
+    }
+
+    if (eventsMap.has("waiting for packing") || eventsMap.has("ready for packing")) {
+      entries.push(eventsMap.get("waiting for packing") || eventsMap.get("ready for packing")!);
+    } else {
+      entries.push({
+        id: `tl-gen-${ord.id}-waitpack`,
+        orderId: ord.id,
+        timestamp: new Date(new Date(confirmedTime).getTime() + 1000).toISOString(),
+        user: "Packing Station",
+        role: "PACKING_STAFF",
+        action: "Waiting for Packing",
+        details: "Order completed, waiting for packing in fulfillment station",
+      });
+    }
+  }
+
+  // Stage 3: Order Packed, Order Dispatched, and Waiting for Courier Pickup
+  const isPackedOrBeyond =
+    ord.orderStatus === "PACKED" ||
+    ord.orderStatus === "DISPATCHED" ||
+    Boolean(dispatchedTime) ||
+    Boolean(ord.dispatch?.dispatchId) ||
+    Boolean(pickedUpTime) ||
+    Boolean(shippedTime);
+
+  if (isPackedOrBeyond) {
+    const packTimestamp = dispatchedTime ? new Date(new Date(dispatchedTime).getTime() - 60 * 1000).toISOString() : new Date(new Date(confirmedTime).getTime() + 5 * 60 * 1000).toISOString();
+
+    if (eventsMap.has("order packed")) {
+      entries.push(eventsMap.get("order packed")!);
+    } else {
+      entries.push({
+        id: `tl-gen-${ord.id}-packed`,
+        orderId: ord.id,
+        timestamp: packTimestamp,
+        user: "Packing Staff",
+        role: "PACKING_STAFF",
+        action: "Order Packed",
+        details: "Items verified, folded and securely packed",
+        newValue: "PACKED",
+      });
+    }
+
+    if (eventsMap.has("order dispatched")) {
+      entries.push(eventsMap.get("order dispatched")!);
+    } else {
+      entries.push({
+        id: `tl-gen-${ord.id}-disp`,
+        orderId: ord.id,
+        timestamp: dispatchedTime || new Date(new Date(packTimestamp).getTime() + 60 * 1000).toISOString(),
+        user: "Admin",
+        role: "DISPATCH_STAFF",
+        action: "Order Dispatched",
+        details: ord.dispatch?.dispatchId ? `Dispatch No: ${ord.dispatch.dispatchId}` : "Order dispatched from packing station",
+        newValue: "DISPATCHED",
+      });
+    }
+
+    if (eventsMap.has("waiting for courier pickup") || eventsMap.has("waiting for pickup")) {
+      entries.push(eventsMap.get("waiting for courier pickup") || eventsMap.get("waiting for pickup")!);
+    } else {
+      entries.push({
+        id: `tl-gen-${ord.id}-waitpickup`,
+        orderId: ord.id,
+        timestamp: new Date(new Date(dispatchedTime || packTimestamp).getTime() + 1000).toISOString(),
+        user: "Packing Station",
+        role: "PACKING_STAFF",
+        action: "Waiting for Courier Pickup",
+        details: "Order ready in dispatch bay, waiting for courier pickup",
+      });
+    }
+  }
+
+  // Stage 4: Courier Picked Up & Waiting for Shipment
+  const isPickedUpOrBeyond =
+    ord.dispatch?.courierStatus === "PICKED_UP" ||
+    ord.dispatch?.courierStatus === "SHIPPED" ||
+    Boolean(pickedUpTime) ||
+    Boolean(shippedTime) ||
+    eventsMap.has("courier picked up");
+
+  if (isPickedUpOrBeyond) {
+    const courierName = ord.dispatch?.courierName || "Courier Partner";
+    const actualPickedUpTime = pickedUpTime || (dispatchedTime ? new Date(new Date(dispatchedTime).getTime() + 10 * 60 * 1000).toISOString() : new Date().toISOString());
+
+    if (eventsMap.has("courier picked up")) {
+      entries.push(eventsMap.get("courier picked up")!);
+    } else {
+      entries.push({
+        id: `tl-gen-${ord.id}-pickup`,
+        orderId: ord.id,
+        timestamp: actualPickedUpTime,
+        user: "Courier Staff",
+        role: "DISPATCH_STAFF",
+        action: "Courier Picked Up",
+        details: `Courier: ${courierName} · Customer Mobile Verified: ${ord.customer?.mobile}${ord.dispatch?.dispatchId ? ` · Dispatch ID: ${ord.dispatch.dispatchId}` : ""}`,
+        newValue: "PICKED_UP",
+      });
+    }
+
+    if (eventsMap.has("waiting for shipment") || eventsMap.has("waiting for llr / tracking")) {
+      entries.push(eventsMap.get("waiting for shipment") || eventsMap.get("waiting for llr / tracking")!);
+    } else {
+      entries.push({
+        id: `tl-gen-${ord.id}-waitship`,
+        orderId: ord.id,
+        timestamp: new Date(new Date(actualPickedUpTime).getTime() + 1000).toISOString(),
+        user: courierName,
+        role: "DISPATCH_STAFF",
+        action: "Waiting for Shipment",
+        details: "Handed over to courier, awaiting LLR / Tracking number entry",
+      });
+    }
+  }
+
+  // Stage 5: ONLY IF REAL VALID LLR NUMBER HAS BEEN ENTERED!
+  // If LLR is NOT entered, NEVER generate or include LLR, Shipped, or Waiting for SMS!
+  if (hasLlr) {
+    const courierName = ord.dispatch?.courierName || "Courier";
+    const llr = ord.dispatch!.llrNumber!.trim();
+    const actualShippedTime = shippedTime || new Date(new Date(pickedUpTime || dispatchedTime || confirmedTime).getTime() + 5000).toISOString();
+
+    if (eventsMap.has("llr / tracking added")) {
+      entries.push(eventsMap.get("llr / tracking added")!);
+    } else {
+      entries.push({
+        id: `tl-gen-${ord.id}-llr`,
+        orderId: ord.id,
+        timestamp: actualShippedTime,
+        user: "Courier Staff",
+        role: "DISPATCH_STAFF",
+        action: "LLR / Tracking Added",
+        details: `${courierName} · LLR: ${llr}`,
+        newValue: llr,
+      });
+    }
+
+    if (eventsMap.has("shipped")) {
+      entries.push(eventsMap.get("shipped")!);
+    } else {
+      entries.push({
+        id: `tl-gen-${ord.id}-shipped`,
+        orderId: ord.id,
+        timestamp: new Date(new Date(actualShippedTime).getTime() + 1000).toISOString(),
+        user: "Dispatch Staff",
+        role: "DISPATCH_STAFF",
+        action: "Shipped",
+        details: `Shipment in transit via ${courierName} (LLR: ${llr})`,
+        newValue: "SHIPPED",
+      });
+    }
+
+    if (eventsMap.has("waiting for sms")) {
+      entries.push(eventsMap.get("waiting for sms")!);
+    } else {
+      entries.push({
+        id: `tl-gen-${ord.id}-waitsms`,
+        orderId: ord.id,
+        timestamp: new Date(new Date(actualShippedTime).getTime() + 2000).toISOString(),
+        user: "SMS System",
+        role: "SYSTEM",
+        action: "Waiting for SMS",
+        details: "Shipment marked as Shipped, queued and waiting for SMS notification",
+      });
+    }
+
+    // Stage 6: SMS Sent or Failed
+    if (ord.sms?.status === "SENT" || eventsMap.has("sms sent")) {
+      if (eventsMap.has("sms sent")) {
+        entries.push(eventsMap.get("sms sent")!);
+      } else {
+        entries.push({
+          id: `tl-gen-${ord.id}-smssent`,
+          orderId: ord.id,
+          timestamp: smsTime || new Date(new Date(actualShippedTime).getTime() + 5 * 60 * 1000).toISOString(),
+          user: "Ping4SMS",
+          role: "SYSTEM",
+          action: "SMS Sent",
+          details: "Customer delivery notification sent successfully via Ping4SMS gateway",
+          newValue: "SENT",
+        });
+      }
+    } else if (ord.sms?.status === "FAILED" || eventsMap.has("sms failed")) {
+      if (eventsMap.has("sms failed")) {
+        entries.push(eventsMap.get("sms failed")!);
+      }
+    }
+  } else {
+    // If NO valid LLR has been entered, PURGE any premature LLR or Shipped or Waiting for SMS events
+    entries = entries.filter((e) => {
+      const act = (e.action || "").trim().toLowerCase();
+      return (
+        act !== "llr / tracking added" &&
+        act !== "shipped" &&
+        act !== "waiting for sms" &&
+        act !== "sms sent"
+      );
+    });
+  }
+
+  // Preserve any other custom/return/dispatch-update timeline entries
+  const standardActions = new Set([
+    "order created", "order placed",
+    "processing started", "order processing",
+    "order completed",
+    "waiting for packing", "ready for packing",
+    "order packed",
+    "order dispatched",
+    "waiting for courier pickup", "waiting for pickup",
+    "courier picked up",
+    "waiting for shipment", "waiting for llr / tracking",
+    "llr / tracking added",
+    "shipped",
+    "waiting for sms",
+    "sms sent", "sms failed",
+  ]);
+
+  for (const ev of existingTimeline) {
+    const act = (ev.action || "").trim().toLowerCase();
+    if (!standardActions.has(act)) {
+      entries.push(ev);
+    }
+  }
+
+  entries.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  return entries;
+}
+
 export function sanitizeOrders(orders: Order[]): Order[] {
   let dispCounter = 1;
   const now = new Date();
@@ -144,57 +477,70 @@ export function sanitizeOrders(orders: Order[]): Order[] {
     // "Dispatched" in Packing means READY FOR COURIER PICKUP.
     // An order only belongs to a courier partner and moves into Courier Hub once verified by Customer Mobile (Picked Up).
     if (ord.orderStatus === "DISPATCHED") {
-      // Do NOT auto-generate dispatchId! Dispatch number is entered manually in Packing.
       let dispatchId = ord.dispatch?.dispatchId;
       if (dispatchId === "Pending ID" || dispatchId === "pending") {
         dispatchId = undefined;
       }
 
-      // LLR number is entered by courier staff in Courier Hub; never copy dispatch number into it!
       let llrNumber = ord.dispatch?.llrNumber;
-      if (llrNumber && (llrNumber === dispatchId || (dispatchId && llrNumber === dispatchId) || llrNumber.toLowerCase().startsWith("dsp") || llrNumber === "pending")) {
+      if (!hasValidLlrNumber(llrNumber, dispatchId)) {
         llrNumber = undefined;
       }
 
-      // Check whether this order has ACTUALLY been verified / picked up by a courier partner
-      const hasCourierPickedUpTimeline = ord.timeline?.some((t) => t.action === "Courier picked up");
-      const isDelivered = Boolean(llrNumber && llrNumber.trim()) || ord.dispatch?.courierStatus === "DELIVERED";
-      const isActuallyPickedUp = hasCourierPickedUpTimeline || isDelivered || (Boolean(ord.dispatch?.pickedUpAt) && ord.dispatch?.courierStatus === "PICKED_UP" && Boolean(ord.dispatch?.courierPartnerId));
+      const hasCourierPickedUpTimeline = ord.timeline?.some(
+        (t) => t.action === "Courier Picked Up" || t.action === "Courier picked up"
+      );
+      const isActuallyPickedUp =
+        hasCourierPickedUpTimeline ||
+        Boolean(ord.dispatch?.pickedUpAt) ||
+        ord.dispatch?.courierStatus === "PICKED_UP" ||
+        ord.dispatch?.courierStatus === "SHIPPED" ||
+        Boolean(ord.dispatch?.courierPartnerId);
+
+      // CRITICAL: An order is ONLY Shipped if it has a real valid LLR number entered!
+      const isShipped = Boolean(llrNumber && hasValidLlrNumber(llrNumber, dispatchId));
 
       let partnerCode: string | undefined = undefined;
       let resolvedCourierName: string | undefined = undefined;
       let courierStatus: CourierStatus | undefined = undefined;
       let pickedUpAt: string | undefined = undefined;
+      let shippedAt: string | undefined = undefined;
 
       if (isActuallyPickedUp) {
         partnerCode = ord.dispatch?.courierPartnerId || undefined;
         resolvedCourierName = ord.dispatch?.courierName || undefined;
-        pickedUpAt = ord.dispatch?.pickedUpAt;
-        if (isDelivered) {
-          courierStatus = "DELIVERED";
+        pickedUpAt = ord.dispatch?.pickedUpAt || ord.pickedUpAt || ord.dispatchedAt || new Date().toISOString();
+        if (isShipped) {
+          courierStatus = "SHIPPED";
+          shippedAt = ord.dispatch?.shippedAt || ord.shippedAt || new Date().toISOString();
         } else {
+          // If NO valid LLR number is entered, courier status is strictly PICKED_UP!
           courierStatus = "PICKED_UP";
+          shippedAt = undefined;
         }
       } else {
-        // Dispatched in Packing Station ONLY - NOT yet picked up by courier!
-        // DO NOT assign ST Courier, DO NOT set waiting for pickup, DO NOT create courier hub record
         partnerCode = undefined;
         resolvedCourierName = undefined;
         courierStatus = undefined;
         pickedUpAt = undefined;
+        shippedAt = undefined;
       }
 
-      // Default SMS status strictly to PENDING ("Waiting for SMS") unless staff explicitly manually marked SENT in the timeline
-      const wasManuallyMarkedSent = ord.timeline?.some(
-        (t) => (t.action === "SMS status updated" || t.action === "SMS manually marked as sent") && t.newValue === "SENT"
-      );
-      if (!wasManuallyMarkedSent && ord.sms) {
+      if (ord.sms) {
+        const currentSmsStatus = ord.sms.status || "PENDING";
         ord.sms = {
           ...ord.sms,
-          status: "PENDING",
-          responseSnippet: "PENDING: Waiting for SMS",
+          status: currentSmsStatus,
+          responseSnippet: currentSmsStatus === "SENT"
+            ? "DELIVRD: Marked as Sent"
+            : currentSmsStatus === "FAILED"
+            ? (ord.sms.responseSnippet || "FAILED: Delivery failed")
+            : "PENDING: Waiting for SMS",
         };
       }
+
+      ord.pickedUpAt = pickedUpAt;
+      ord.shippedAt = shippedAt;
 
       ord.dispatch = {
         ...ord.dispatch,
@@ -204,8 +550,12 @@ export function sanitizeOrders(orders: Order[]): Order[] {
         llrNumber,
         courierStatus: courierStatus as any,
         pickedUpAt,
+        shippedAt,
       };
     }
+
+    // 3. Ensure master order timeline has full normalized workflow history
+    ord.timeline = normalizeOrderTimeline(ord);
 
     return ord;
   });
@@ -360,9 +710,9 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
     if (finalLlr && (finalLlr === finalDispatchId || finalLlr.toLowerCase().startsWith("dsp"))) {
       finalLlr = undefined;
     }
-    const finalCourierStatus: CourierStatus | undefined = (localDisp.courierStatus === "DELIVERED" || remoteDisp.courierStatus === "DELIVERED")
-      ? "DELIVERED"
-      : (localDisp.courierStatus === "PICKED_UP"
+    const finalCourierStatus: CourierStatus | undefined = (localDisp.courierStatus === "SHIPPED" || remoteDisp.courierStatus === "SHIPPED" || Boolean(finalLlr))
+      ? "SHIPPED"
+      : (localDisp.courierStatus === "PICKED_UP" || remoteDisp.courierStatus === "PICKED_UP"
         ? "PICKED_UP"
         : (remoteDisp.courierStatus || localDisp.courierStatus));
 
@@ -370,10 +720,12 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
 
     const localSms = local.sms || {};
     const remoteSms = remote.sms || {};
-    const wasManuallyMarkedSent = (local.timeline || remote.timeline || []).some(
-      (t) => (t.action === "SMS status updated" || t.action === "SMS manually marked as sent") && t.newValue === "SENT"
-    );
-    const finalSmsStatus: SmsStatus = wasManuallyMarkedSent ? "SENT" : "PENDING";
+    let finalSmsStatus: SmsStatus = "PENDING";
+    if (local.updatedAt && remote.updatedAt && new Date(local.updatedAt).getTime() >= new Date(remote.updatedAt).getTime()) {
+      finalSmsStatus = localSms.status || remoteSms.status || "PENDING";
+    } else {
+      finalSmsStatus = remoteSms.status || localSms.status || "PENDING";
+    }
 
     return {
       ...remote,
@@ -391,7 +743,12 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
         ...remoteSms,
         ...localSms,
         status: finalSmsStatus,
-        responseSnippet: finalSmsStatus === "SENT" ? "DELIVRD: Handset delivery confirmed" : "PENDING: Waiting for SMS",
+        sentAt: finalSmsStatus === "SENT" ? (localSms.sentAt || remoteSms.sentAt || new Date().toISOString()) : undefined,
+        responseSnippet: finalSmsStatus === "SENT"
+          ? "DELIVRD: Handset delivery confirmed"
+          : finalSmsStatus === "FAILED"
+          ? "FAILED: Delivery failed"
+          : "PENDING: Waiting for SMS",
       },
       timeline: local.timeline.length > remote.timeline.length ? local.timeline : remote.timeline,
     };
@@ -597,15 +954,28 @@ export const orderflowStore = {
     const newEntries: ActivityLog[] = [];
 
     if (newStatus === "CONFIRMED") {
-      if (!order.timeline.some((t) => t.action === "Order processing")) {
+      if (!order.timeline.some((t) => t.action === "Order Created" || t.action === "Order placed")) {
         newEntries.push({
-          id: `tl-${Date.now()}-proc`,
+          id: `tl-${Date.now()}-created`,
+          orderId: order.id,
+          timestamp: order.createdAt || now,
+          user: "WooCommerce",
+          role: "SYSTEM",
+          action: "Order Created",
+          details: "Order created in WooCommerce",
+          oldValue: oldStatus,
+          newValue: "NEW",
+        });
+      }
+      if (!order.timeline.some((t) => t.action === "Processing Started" || t.action === "Order processing")) {
+        newEntries.push({
+          id: `tl-${Date.now() + 50}-proc`,
           orderId: order.id,
           timestamp: now,
-          user: globalUser.name,
-          role: globalUser.role,
-          action: "Order processing",
-          details: "Order is being processed",
+          user: "WooCommerce",
+          role: "SYSTEM",
+          action: "Processing Started",
+          details: "Order processing started",
           oldValue: oldStatus,
           newValue: newStatus,
         });
@@ -625,56 +995,102 @@ export const orderflowStore = {
         });
       }
     } else if (newStatus === "PACKED") {
-      if (!order.timeline.some((t) => t.action === "Order packed")) {
+      if (!order.timeline.some((t) => t.action === "Order Packed" || t.action === "Order packed")) {
         newEntries.push({
           id: `tl-${Date.now()}-packed`,
           orderId: order.id,
           timestamp: now,
           user: globalUser.name,
           role: globalUser.role,
-          action: "Order packed",
+          action: "Order Packed",
           details: "Order packed successfully",
           oldValue: oldStatus,
           newValue: newStatus,
         });
       }
     } else if (newStatus === "DISPATCHED") {
-      if (!order.timeline.some((t) => t.action === "Order dispatched")) {
+      // 20. No silent history overwrite: if Dispatch Number is changed, record the change
+      const previousDispatchId = order.dispatch?.dispatchId;
+      const nextDispatchId = dispatchDetails?.dispatchId !== undefined ? dispatchDetails.dispatchId : previousDispatchId;
+
+      if (previousDispatchId && nextDispatchId && previousDispatchId !== nextDispatchId) {
         newEntries.push({
-          id: `tl-${Date.now()}-disp`,
+          id: `tl-${Date.now()}-disp-update`,
           orderId: order.id,
           timestamp: now,
           user: globalUser.name,
           role: globalUser.role,
-          action: "Order dispatched",
-          details: "Order dispatched",
+          action: "Dispatch Number Updated",
+          details: `Dispatch Number changed from ${previousDispatchId} to ${nextDispatchId}${reason ? `. Reason: ${reason}` : ""}`,
+          oldDispatchNo: previousDispatchId,
+          newDispatchNo: nextDispatchId,
+          reason: reason || "Dispatch Number Changed",
+        });
+      }
+
+      // 6. When a valid Dispatch Number is entered: Order Packed -> Order Dispatched
+      if (!order.timeline.some((t) => t.action === "Order Packed" || t.action === "Order packed")) {
+        newEntries.push({
+          id: `tl-${Date.now()}-packed`,
+          orderId: order.id,
+          timestamp: now,
+          user: globalUser.name,
+          role: globalUser.role,
+          action: "Order Packed",
+          details: "Order packed in Packing Station",
           oldValue: oldStatus,
-          newValue: newStatus,
+          newValue: "PACKED",
+        });
+      }
+
+      if (!order.timeline.some((t) => t.action === "Order Dispatched" || t.action === "Order dispatched")) {
+        newEntries.push({
+          id: `tl-${Date.now() + 100}-disp`,
+          orderId: order.id,
+          timestamp: new Date(Date.now() + 100).toISOString(),
+          user: globalUser.name,
+          role: globalUser.role,
+          action: "Order Dispatched",
+          details: nextDispatchId ? `Dispatch No: ${nextDispatchId}` : "Order ready for courier pickup",
+          oldValue: "PACKED",
+          newValue: "DISPATCHED",
+        });
+      }
+
+      if (!order.timeline.some((t) => t.action === "Waiting for Courier Pickup" || t.action === "Waiting for pickup")) {
+        newEntries.push({
+          id: `tl-${Date.now() + 150}-waitpickup`,
+          orderId: order.id,
+          timestamp: new Date(Date.now() + 150).toISOString(),
+          user: "Packing Station",
+          role: "PACKING_STAFF",
+          action: "Waiting for Courier Pickup",
+          details: "Order ready in packing station, waiting for courier pickup",
         });
       }
     } else if (newStatus === "COMPLETED") {
-      if (!order.timeline.some((t) => t.action === "Order completed")) {
+      if (!order.timeline.some((t) => t.action === "Order Completed" || t.action === "Order completed")) {
         newEntries.push({
           id: `tl-${Date.now()}-compl`,
           orderId: order.id,
           timestamp: now,
-          user: globalUser.name,
-          role: globalUser.role,
-          action: "Order completed",
+          user: "WooCommerce",
+          role: "SYSTEM",
+          action: "Order Completed",
           details: "Order completed in WooCommerce",
           oldValue: oldStatus,
           newValue: newStatus,
         });
       }
-      if (!order.timeline.some((t) => t.action === "Waiting for packing")) {
+      if (!order.timeline.some((t) => t.action === "Waiting for Packing" || t.action === "Ready for Packing" || t.action === "Waiting for packing")) {
         newEntries.push({
           id: `tl-${Date.now() + 100}-waitpack`,
           orderId: order.id,
           timestamp: new Date(Date.now() + 100).toISOString(),
           user: "Packing Station",
           role: "PACKING_STAFF",
-          action: "Waiting for packing",
-          details: "Order is ready for packing",
+          action: "Waiting for Packing",
+          details: "Order completed, waiting for packing in fulfillment station",
         });
       }
     } else if (newStatus === "RETURN") {
@@ -702,8 +1118,9 @@ export const orderflowStore = {
       timeline: updatedTimeline,
       confirmedAt: newStatus === "CONFIRMED" && !order.confirmedAt ? now : order.confirmedAt,
       packingStartedAt: newStatus === "PACKING" && !order.packingStartedAt ? now : order.packingStartedAt,
-      packedAt: newStatus === "PACKED" && !order.packedAt ? now : order.packedAt,
+      packedAt: (newStatus === "PACKED" || isDispatched) && !order.packedAt ? now : order.packedAt,
       dispatchedAt: isDispatched && !order.dispatchedAt ? now : order.dispatchedAt,
+      completedAt: newStatus === "COMPLETED" && !order.completedAt ? now : order.completedAt,
       packingStaff: newStatus === "PACKING" ? globalUser.name : order.packingStaff,
       dispatch: {
         ...order.dispatch,
@@ -764,6 +1181,8 @@ export const orderflowStore = {
       orderStatus: "NEW",
       pendingReason: reason,
       pendingNote: note || "",
+      pendingAt: now,
+      pendingBy: globalUser.name,
       notes: noteString,
       updatedAt: now,
       timeline: [...order.timeline, newEntry],
@@ -797,7 +1216,7 @@ export const orderflowStore = {
       user: globalUser.name,
       role: globalUser.role,
       action: "Pending Resolved",
-      details: `Pending status resolved. Order moved to ${newStatus === "COMPLETED" ? "Completed (Ready)" : "Processing"}`,
+      details: `Pending status resolved. Order moved to ${newStatus === "COMPLETED" ? "Ready for Packing" : "Processing"}`,
       oldValue: oldStatus,
       newValue: newStatus,
     };
@@ -807,6 +1226,8 @@ export const orderflowStore = {
       orderStatus: newStatus,
       pendingReason: undefined,
       pendingNote: undefined,
+      pendingAt: undefined,
+      pendingBy: undefined,
       updatedAt: now,
       timeline: [...order.timeline, newEntry],
     };
@@ -838,101 +1259,14 @@ export const orderflowStore = {
     if (orderIndex === -1) return { success: false };
 
     const order = globalOrders[orderIndex];
-    const now = new Date().toISOString();
-
-    // Use manual Dispatch ID if present; do not auto-generate
     const dispatchId = order.dispatch.dispatchId || undefined;
 
-    // Look up courier partner
-    const couriersList = this.getCourierPartners();
-    let selectedCourier = couriersList.find(
-      (c) => c.code === courierPartnerCodeOrId || c.id === courierPartnerCodeOrId || c.name === courierPartnerCodeOrId
+    return this.updateOrderStatus(
+      orderId,
+      "DISPATCHED",
+      "Order Dispatched from Packing Station",
+      { dispatchId, llrNumber }
     );
-    if (!selectedCourier) {
-      if (courierPartnerCodeOrId === "unassigned") {
-        selectedCourier = {
-          id: "unassigned",
-          name: "Unassigned",
-          code: "UNASSIGNED",
-          isStCourier: false,
-          active: true,
-        };
-      } else {
-        selectedCourier = couriersList.find((c) => c.isStCourier) || couriersList[0] || {
-          id: "cour-1",
-          name: "ST Courier",
-          code: "ST_COURIER",
-          isStCourier: true,
-          active: true,
-        };
-      }
-    }
-
-    const finalLlr = llrNumber || order.dispatch.llrNumber;
-    const newEntries: ActivityLog[] = [];
-
-    if (!order.timeline.some((t) => t.action === "Order dispatched")) {
-      newEntries.push({
-        id: `tl-${Date.now()}-disp`,
-        orderId: order.id,
-        timestamp: now,
-        user: globalUser.name,
-        role: globalUser.role,
-        action: "Order dispatched",
-        details: "Sent to courier pickup",
-        oldValue: order.orderStatus,
-        newValue: "DISPATCHED",
-      });
-    }
-
-    if (!order.timeline.some((t) => t.action === "Courier pickup waiting")) {
-      newEntries.push({
-        id: `tl-${Date.now() + 100}-waitship`,
-        orderId: order.id,
-        timestamp: new Date(Date.now() + 100).toISOString(),
-        user: "Courier Hub",
-        role: "DISPATCH_STAFF",
-        action: "Courier pickup waiting",
-        details: `Courier: ${selectedCourier.name}`,
-      });
-    }
-
-    const updatedOrder: Order = {
-      ...order,
-      orderStatus: "DISPATCHED",
-      dispatchedAt: now,
-      updatedAt: now,
-      dispatch: {
-        ...order.dispatch,
-        dispatchId,
-        courierId: selectedCourier.id,
-        courierName: selectedCourier.name,
-        courierPartnerId: selectedCourier.code === "UNASSIGNED" ? undefined : selectedCourier.code,
-        llrNumber: finalLlr,
-        courierStatus: "WAITING_FOR_PICKUP",
-        dispatchedAt: now,
-      },
-      timeline: [...order.timeline, ...newEntries],
-    };
-
-    const newOrders = [...globalOrders];
-    newOrders[orderIndex] = updatedOrder;
-    persistOrders(newOrders);
-
-    if (isSupabaseConfigured()) {
-      newEntries.forEach((entry) => {
-        updateSupabaseOrderStatus(orderId, "DISPATCHED", entry);
-      });
-      updateSupabaseCourierDetails(orderId, {
-        dispatchId,
-        courierId: selectedCourier.id,
-        courierPartnerId: selectedCourier.code === "UNASSIGNED" ? undefined : selectedCourier.code,
-        llrNumber: finalLlr,
-        courierStatus: "WAITING_FOR_PICKUP",
-      });
-    }
-
-    return { success: true, dispatchId };
   },
 
   // 5. Update Courier Details (Pickup Phone, LLR, Courier Name, Courier Status)
@@ -955,22 +1289,21 @@ export const orderflowStore = {
     const now = new Date().toISOString();
     const oldCourierStatus = order.dispatch.courierStatus;
 
-    // Normalize courier status (support legacy SHIPPED as PICKED_UP)
+    // 14 & 15. LLR / Tracking Number entry -> Courier Status = SHIPPED (DO NOT MARK DELIVERED)
     let finalCourierStatus: CourierStatus = order.dispatch.courierStatus;
-    if (params.courierStatus) {
-      if (params.courierStatus === "SHIPPED") {
-        finalCourierStatus = "PICKED_UP";
-      } else if (params.courierStatus === "PENDING") {
-        finalCourierStatus = "WAITING_FOR_PICKUP";
+    const isLlrEntered = Boolean(params.llrNumber && params.llrNumber.trim());
+
+    if (isLlrEntered) {
+      finalCourierStatus = "SHIPPED";
+    } else if (params.courierStatus) {
+      if (params.courierStatus === "SHIPPED" || params.courierStatus === "DELIVERED") {
+        finalCourierStatus = "SHIPPED";
       } else {
         finalCourierStatus = params.courierStatus;
       }
-    } else if (params.llrNumber && params.llrNumber.trim()) {
-      // Whenever LLR number is entered/updated, automatically mark status as DELIVERED
-      finalCourierStatus = "DELIVERED";
     }
 
-    const courierName = params.courierName !== undefined ? params.courierName : order.dispatch.courierName;
+    const courierName = params.courierName !== undefined ? params.courierName : (order.dispatch.courierName || "Courier");
     const timelineEntries: ActivityLog[] = [];
 
     // Pickup Phone entry (read-only customer phone is preserved; pickup phone is strictly separate)
@@ -989,65 +1322,59 @@ export const orderflowStore = {
       });
     }
 
-    // LLR number entry
+    // 14. LLR / Tracking Number entry -> "LLR / Tracking Added" then "Shipped"
     if (params.llrNumber !== undefined && params.llrNumber !== order.dispatch.llrNumber) {
-      const isNew = !order.dispatch.llrNumber;
-      timelineEntries.push({
-        id: `tl-${Date.now()}-llr`,
-        orderId: order.id,
-        timestamp: now,
-        user: globalUser.name,
-        role: globalUser.role,
-        action: isNew ? "LLR added" : "LLR updated",
-        details: `${courierName} · LLR: ${params.llrNumber || ""}`,
-        oldValue: order.dispatch.llrNumber,
-        newValue: params.llrNumber,
-      });
+      if (params.llrNumber.trim()) {
+        timelineEntries.push({
+          id: `tl-${Date.now()}-llr`,
+          orderId: order.id,
+          timestamp: now,
+          user: globalUser.name,
+          role: globalUser.role,
+          action: "LLR / Tracking Added",
+          details: `${courierName} · LLR: ${params.llrNumber.trim()}`,
+          oldValue: order.dispatch.llrNumber,
+          newValue: params.llrNumber.trim(),
+        });
+
+        timelineEntries.push({
+          id: `tl-${Date.now() + 50}-shipped`,
+          orderId: order.id,
+          timestamp: new Date(Date.now() + 50).toISOString(),
+          user: globalUser.name,
+          role: "DISPATCH_STAFF",
+          action: "Shipped",
+          details: `Shipment in transit via ${courierName} (LLR: ${params.llrNumber.trim()})`,
+          oldValue: oldCourierStatus,
+          newValue: "SHIPPED",
+        });
+
+        timelineEntries.push({
+          id: `tl-${Date.now() + 100}-waitsms`,
+          orderId: order.id,
+          timestamp: new Date(Date.now() + 100).toISOString(),
+          user: "SMS System",
+          role: "SYSTEM",
+          action: "Waiting for SMS",
+          details: "Shipment marked as Shipped, queued and waiting for SMS notification",
+        });
+      }
     }
 
-    // Courier status transitions: WAITING_FOR_PICKUP -> PICKED_UP -> DELIVERED
-    if (params.courierStatus !== undefined && finalCourierStatus !== oldCourierStatus) {
+    // Courier status transitions without LLR:
+    if (params.courierStatus !== undefined && finalCourierStatus !== oldCourierStatus && !isLlrEntered) {
       if (finalCourierStatus === "PICKED_UP") {
-        if (!order.timeline.some((t) => t.action === "Courier picked up")) {
+        if (!order.timeline.some((t) => t.action === "Courier Picked Up" || t.action === "Courier picked up")) {
           timelineEntries.push({
             id: `tl-${Date.now()}-pickedup`,
             orderId: order.id,
             timestamp: now,
             user: globalUser.name || courierName || "Dispatch Staff",
             role: "DISPATCH_STAFF",
-            action: "Courier picked up",
-            details: `LLR: ${params.llrNumber || order.dispatch.llrNumber || "N/A"}${courierName ? ` · ${courierName}` : ""}`,
+            action: "Courier Picked Up",
+            details: `Courier: ${courierName}`,
             oldValue: oldCourierStatus,
             newValue: "PICKED_UP",
-          });
-        }
-
-        // SMS notification triggered automatically after pickup
-        if (!order.timeline.some((t) => t.action === "SMS sent")) {
-          timelineEntries.push({
-            id: `tl-${Date.now() + 500}-sms`,
-            orderId: order.id,
-            timestamp: new Date(Date.now() + 500).toISOString(),
-            user: "Ping4SMS",
-            role: "SYSTEM",
-            action: "SMS sent",
-            details: "Customer notification sent",
-            oldValue: order.sms.status,
-            newValue: "SENT",
-          });
-        }
-      } else if (finalCourierStatus === "DELIVERED") {
-        if (!order.timeline.some((t) => t.action === "Delivered")) {
-          timelineEntries.push({
-            id: `tl-${Date.now()}-deliv`,
-            orderId: order.id,
-            timestamp: now,
-            user: globalUser.name || courierName || "Dispatch Staff",
-            role: "DISPATCH_STAFF",
-            action: "Delivered",
-            details: "Parcel delivered to customer",
-            oldValue: oldCourierStatus,
-            newValue: "DELIVERED",
           });
         }
       } else if (finalCourierStatus === "WAITING_FOR_PICKUP") {
@@ -1057,44 +1384,57 @@ export const orderflowStore = {
           timestamp: now,
           user: globalUser.name,
           role: globalUser.role,
-          action: "Courier pickup waiting",
-          details: courierName ? `Courier: ${courierName}` : "Courier pickup waiting",
+          action: "Waiting for Courier Pickup",
+          details: `Courier: ${courierName}`,
           oldValue: oldCourierStatus,
           newValue: "WAITING_FOR_PICKUP",
         });
       }
     }
 
-    const isPickedUpOrDelivered = finalCourierStatus === "PICKED_UP" || finalCourierStatus === "DELIVERED";
+    const shippedAtTime = finalCourierStatus === "SHIPPED" ? (order.shippedAt || order.dispatch?.shippedAt || now) : order.shippedAt;
+    const pickedUpAtTime = (finalCourierStatus === "PICKED_UP" || finalCourierStatus === "SHIPPED") ? (order.pickedUpAt || order.dispatch?.pickedUpAt || now) : order.pickedUpAt;
+
+    const couriersList = this.getCourierPartners();
+    const partner = couriersList.find((c) => c.code === (params.courierPartnerId || order.dispatch.courierPartnerId));
+    const trackingUrl = (params.llrNumber && partner?.trackingUrlPattern)
+      ? partner.trackingUrlPattern.replace("{llr}", params.llrNumber.trim())
+      : undefined;
 
     const updatedOrder: Order = {
       ...order,
       orderStatus: order.orderStatus === "NEW" || order.orderStatus === "CONFIRMED" ? "DISPATCHED" : order.orderStatus,
       dispatchedAt: order.dispatchedAt || order.dispatch?.dispatchedAt || now,
+      pickedUpAt: pickedUpAtTime,
+      shippedAt: shippedAtTime,
       updatedAt: now,
       dispatch: {
         ...order.dispatch,
         dispatchId: params.dispatchId !== undefined ? params.dispatchId : order.dispatch.dispatchId,
         pickupPhone: params.pickupPhone !== undefined ? params.pickupPhone : order.dispatch.pickupPhone,
         llrNumber: params.llrNumber !== undefined ? params.llrNumber : order.dispatch.llrNumber,
+        trackingNumber: params.llrNumber !== undefined ? params.llrNumber : order.dispatch.trackingNumber,
+        trackingUrl: trackingUrl || order.dispatch.trackingUrl,
         courierStatus: finalCourierStatus,
         courierId: params.courierId || order.dispatch.courierId,
         courierName: params.courierName || order.dispatch.courierName,
         courierPartnerId: params.courierPartnerId !== undefined ? params.courierPartnerId : order.dispatch.courierPartnerId,
         dispatchedAt: order.dispatch?.dispatchedAt || order.dispatchedAt || now,
-        pickedUpAt: (finalCourierStatus === "PICKED_UP" || finalCourierStatus === "DELIVERED") ? (order.dispatch?.pickedUpAt || now) : order.dispatch?.pickedUpAt,
-        deliveredAt: finalCourierStatus === "DELIVERED" ? (order.dispatch?.deliveredAt || now) : order.dispatch?.deliveredAt,
+        pickedUpAt: pickedUpAtTime,
+        shippedAt: shippedAtTime,
+        deliveredAt: undefined, // 15. DO NOT MARK DELIVERED
       },
       sms: {
         ...order.sms,
+        // 16. SHIPPED -> SMS stage becomes Waiting for SMS (PENDING)
         status: order.sms.status === "SENT" ? "SENT" : "PENDING",
         lastCheckedAt: now,
-        deliveredAt: order.sms.deliveredAt,
-        sentAt: order.sms.sentAt,
+        deliveredAt: undefined,
+        sentAt: order.sms.status === "SENT" ? order.sms.sentAt : undefined,
         providerMessageId: order.sms.providerMessageId || `P4S-SHIP-${order.orderNumber.replace(/[^a-zA-Z0-9]/g, "")}`,
         responseSnippet: order.sms.status === "SENT"
           ? (order.sms.responseSnippet || "DELIVRD: Handset delivery confirmed")
-          : `PENDING: Waiting for SMS (Tracking: ${params.llrNumber || order.dispatch.llrNumber || "active"})`,
+          : "PENDING: Waiting for SMS",
       },
       timeline: [...order.timeline, ...timelineEntries],
     };
@@ -1110,6 +1450,8 @@ export const orderflowStore = {
         courierPartnerId: updatedOrder.dispatch.courierPartnerId,
         llrNumber: params.llrNumber,
         courierStatus: finalCourierStatus,
+        pickedUpAt: pickedUpAtTime,
+        shippedAt: shippedAtTime,
       }, timelineEntries[0]);
     }
 
@@ -1117,9 +1459,12 @@ export const orderflowStore = {
   },
 
   // 5b. Verify Courier Pickup by Customer Mobile Number
-  // Automatically fetches order from packing page (PACKED, PACKING, CONFIRMED, or DISPATCHED),
-  // assigns Dispatch ID, active Courier, marks as DISPATCHED in packing, and PICKED_UP in courier hub with server timestamp.
-  // Note: The customer's mobile number is strictly used for verification and is NEVER saved as courier person's pickupPhone.
+  // 8. Courier Hub Workflow: Enter Customer Mobile Number
+  // 9. When courier person enters customer's mobile number: automatically search eligible dispatched orders.
+  // 10. If multiple matching orders: return multipleMatches for staff selection dialog.
+  // 11. If invalid phone: show "No eligible dispatched order found."
+  // 12. Courier Partner Restriction: ST Courier only finds ST Courier orders, etc.
+  // 13. Immediately sets Courier Status = Picked Up with exact server timestamp.
   verifyCourierPickupByCustomerMobile(params: {
     mobile: string;
     courierPartnerCode: string;
@@ -1154,162 +1499,139 @@ export const orderflowStore = {
       };
     }
 
-    // Look up eligible orders from packing station (PACKED, PACKING, CONFIRMED, or DISPATCHED)
-    // that have not yet been picked up or delivered
+    // 9. Eligible means:
+    // - Order is Dispatched
+    // - Order has not been picked up or shipped
+    // - Order is assigned to the current courier partner (or eligible for current partner)
+    // - Order is ready for courier handoff
     const eligibleOrders = globalOrders.filter((o) => {
-      // Must not already be picked up or delivered
-      if (o.dispatch?.courierStatus === "PICKED_UP" || o.dispatch?.courierStatus === "DELIVERED") {
+      // 1. Must be Dispatched from Packing
+      if (o.orderStatus !== "DISPATCHED") {
         return false;
       }
 
-      // Must be an active packing order (or already dispatched)
+      // 2. Must not already be picked up or shipped
       if (
-        o.orderStatus !== "PACKED" &&
-        o.orderStatus !== "PACKING" &&
-        o.orderStatus !== "CONFIRMED" &&
-        o.orderStatus !== "DISPATCHED"
+        o.dispatch?.courierStatus === "PICKED_UP" ||
+        o.dispatch?.courierStatus === "SHIPPED" ||
+        o.dispatch?.courierStatus === "DELIVERED" ||
+        Boolean(o.dispatch?.pickedUpAt)
       ) {
         return false;
       }
 
-      // If already assigned to a different courier partner, prioritize matching active partner, or allow reassignment to active courier
-      if (o.dispatch?.courierPartnerId && o.dispatch.courierPartnerId !== partnerCode && o.dispatch.courierStatus === "WAITING_FOR_PICKUP") {
-        // Can be picked up by the active courier if customer matches
+      // 12. Courier Partner Restriction (at database/store query level)
+      if (o.dispatch?.courierPartnerId && o.dispatch.courierPartnerId !== partnerCode) {
+        return false;
       }
 
-      // Must match customer mobile (normalized 10 digits)
+      // 4. Must match customer mobile (normalized 10 digits)
       return normalizePhoneDigits(o.customer.mobile) === cleanMobile;
     });
 
+    // 11. Invalid Customer Phone
     if (eligibleOrders.length === 0) {
-      // Check if order was already picked up
-      const alreadyPickedUp = globalOrders.find((o) => {
-        return (
-          (o.dispatch?.courierStatus === "PICKED_UP" || o.dispatch?.courierStatus === "DELIVERED") &&
-          normalizePhoneDigits(o.customer.mobile) === cleanMobile
-        );
-      });
-
-      if (alreadyPickedUp) {
-        return {
-          success: false,
-          error: `Order ${alreadyPickedUp.orderNumber} already picked up (${alreadyPickedUp.dispatch.courierName || "Courier"})`,
-        };
-      }
-
       return {
         success: false,
-        error: "No order found",
+        error: "No eligible dispatched order found.",
       };
     }
+
+    // 10. Multiple Orders with Same Customer Phone:
+    // Do NOT choose the first record automatically. Show matching orders for staff selection.
+    if (eligibleOrders.length > 1 && !params.orderId) {
+      return {
+        success: true,
+        multipleMatches: true,
+        matchingOrders: eligibleOrders,
+      };
+    }
+
+    const targetOrder = params.orderId
+      ? eligibleOrders.find((o) => o.id === params.orderId) || eligibleOrders[0]
+      : eligibleOrders[0];
 
     const now = new Date().toISOString();
-
-    // Determine target orders to update
-    let targetOrders: Order[] = [];
-    if (params.orderId) {
-      const match = eligibleOrders.find((o) => o.id === params.orderId);
-      if (match) targetOrders = [match];
-    } else {
-      targetOrders = eligibleOrders;
+    const orderIndex = globalOrders.findIndex((o) => o.id === targetOrder.id);
+    if (orderIndex === -1) {
+      return { success: false, error: "No eligible dispatched order found." };
     }
 
-    if (targetOrders.length === 0) {
-      return {
-        success: false,
-        error: "No order found",
-      };
-    }
+    const currentOrder = globalOrders[orderIndex];
+    const dispatchId = currentOrder.dispatch?.dispatchId || undefined;
 
-    let lastUpdatedOrder: Order | undefined;
+    // 13. Timeline: "Courier Picked Up" and "Waiting for Shipment"
+    const timelineEntry: ActivityLog = {
+      id: `tl-${Date.now()}-pickedup`,
+      orderId: currentOrder.id,
+      timestamp: now,
+      user: globalUser.name || selectedCourier.name || "Dispatch Staff",
+      role: "DISPATCH_STAFF",
+      action: "Courier Picked Up",
+      details: `Courier: ${selectedCourier.name} · Customer Mobile Verified: ${cleanMobile}${dispatchId ? ` · Dispatch ID: ${dispatchId}` : ""}`,
+      oldValue: currentOrder.dispatch?.courierStatus || "WAITING_FOR_PICKUP",
+      newValue: "PICKED_UP",
+    };
+
+    const waitingShipmentEntry: ActivityLog = {
+      id: `tl-${Date.now() + 50}-waitship`,
+      orderId: currentOrder.id,
+      timestamp: new Date(Date.now() + 50).toISOString(),
+      user: selectedCourier.name,
+      role: "DISPATCH_STAFF",
+      action: "Waiting for Shipment",
+      details: "Handed over to courier, awaiting LLR / Tracking number entry",
+    };
+
+    const updatedOrder: Order = {
+      ...currentOrder,
+      orderStatus: "DISPATCHED",
+      dispatchedAt: currentOrder.dispatchedAt || now,
+      pickedUpAt: now,
+      updatedAt: now,
+      dispatch: {
+        ...currentOrder.dispatch,
+        dispatchId,
+        llrNumber: (currentOrder.dispatch?.llrNumber && currentOrder.dispatch.llrNumber !== dispatchId && !currentOrder.dispatch.llrNumber.toLowerCase().startsWith("dsp"))
+          ? currentOrder.dispatch.llrNumber
+          : undefined,
+        courierId: selectedCourier.id,
+        courierName: selectedCourier.name,
+        courierPartnerId: selectedCourier.code,
+        courierStatus: "PICKED_UP",
+        pickedUpAt: now, // Save exact server timestamp
+        pickedUpBy: globalUser.name,
+        verifiedCustomerPhone: cleanMobile, // Customer phone only, not courier's phone
+        dispatchedAt: currentOrder.dispatch?.dispatchedAt || now,
+      },
+      sms: {
+        ...currentOrder.sms,
+        status: "PENDING",
+        lastCheckedAt: now,
+        responseSnippet: "PENDING: Waiting for SMS",
+      },
+      timeline: [...currentOrder.timeline, timelineEntry, waitingShipmentEntry],
+    };
+
     const newOrders = [...globalOrders];
-
-    targetOrders.forEach((targetOrder) => {
-      const orderIndex = newOrders.findIndex((o) => o.id === targetOrder.id);
-      if (orderIndex === -1) return;
-
-      const currentOrder = newOrders[orderIndex];
-      // Use manually entered dispatch ID from packing station; do not auto-generate
-      const dispatchId = currentOrder.dispatch?.dispatchId || undefined;
-
-      const timelineEntries: ActivityLog[] = [];
-
-      if (currentOrder.orderStatus !== "DISPATCHED") {
-        timelineEntries.push({
-          id: `tl-${Date.now()}-disp`,
-          orderId: currentOrder.id,
-          timestamp: now,
-          user: globalUser.name || "Courier Hub",
-          role: "DISPATCH_STAFF",
-          action: "Order dispatched",
-          details: `Sent to ${selectedCourier.name} via Pickup`,
-          oldValue: currentOrder.orderStatus,
-          newValue: "DISPATCHED",
-        });
-      }
-
-      timelineEntries.push({
-        id: `tl-${Date.now() + 100}-pickedup`,
-        orderId: currentOrder.id,
-        timestamp: now,
-        user: globalUser.name || selectedCourier.name || "Dispatch Staff",
-        role: "DISPATCH_STAFF",
-        action: "Courier picked up",
-        details: `Courier: ${selectedCourier.name} · Dispatch ID: ${dispatchId}`,
-        oldValue: currentOrder.dispatch?.courierStatus || "WAITING_FOR_PICKUP",
-        newValue: "PICKED_UP",
-      });
-
-      const updatedOrder: Order = {
-        ...currentOrder,
-        orderStatus: "DISPATCHED", // Dispatched in Packing Station & All Orders
-        dispatchedAt: currentOrder.dispatchedAt || now,
-        updatedAt: now,
-        dispatch: {
-          ...currentOrder.dispatch,
-          dispatchId,
-          llrNumber: (currentOrder.dispatch?.llrNumber && currentOrder.dispatch.llrNumber !== dispatchId && !currentOrder.dispatch.llrNumber.toLowerCase().startsWith("dsp"))
-            ? currentOrder.dispatch.llrNumber
-            : undefined,
-          courierId: selectedCourier.id,
-          courierName: selectedCourier.name,
-          courierPartnerId: selectedCourier.code,
-          courierStatus: "PICKED_UP",
-          pickedUpAt: now, // Actual server timestamp saved
-          dispatchedAt: currentOrder.dispatch?.dispatchedAt || now,
-        },
-        sms: {
-          ...currentOrder.sms,
-          status: "PENDING",
-          lastCheckedAt: now,
-          deliveredAt: undefined,
-          sentAt: undefined,
-          providerMessageId: currentOrder.sms.providerMessageId || `P4S-SHIP-${currentOrder.orderNumber.replace(/[^a-zA-Z0-9]/g, "")}`,
-          responseSnippet: "PENDING: Waiting for SMS",
-        },
-        timeline: [...currentOrder.timeline, ...timelineEntries],
-      };
-
-      newOrders[orderIndex] = updatedOrder;
-      lastUpdatedOrder = updatedOrder;
-
-      if (isSupabaseConfigured()) {
-        updateSupabaseOrderStatus(currentOrder.id, "DISPATCHED", timelineEntries[0]);
-        updateSupabaseCourierDetails(currentOrder.id, {
-          dispatchId,
-          courierId: selectedCourier.id,
-          courierPartnerId: selectedCourier.code,
-          courierStatus: "PICKED_UP",
-        }, timelineEntries[timelineEntries.length - 1]);
-      }
-    });
-
+    newOrders[orderIndex] = updatedOrder;
     persistOrders(newOrders);
+
+    if (isSupabaseConfigured()) {
+      updateSupabaseCourierDetails(currentOrder.id, {
+        dispatchId,
+        courierId: selectedCourier.id,
+        courierPartnerId: selectedCourier.code,
+        courierStatus: "PICKED_UP",
+        pickedUpAt: now,
+        verifiedCustomerPhone: cleanMobile,
+      }, timelineEntry);
+    }
 
     return {
       success: true,
-      order: lastUpdatedOrder,
-      matchingOrders: targetOrders,
+      order: updatedOrder,
+      matchingOrders: [updatedOrder],
     };
   },
 
@@ -1345,7 +1667,7 @@ export const orderflowStore = {
               timestamp: now,
               user: "Ping4SMS Sync",
               role: "ADMIN" as const,
-              action: "Ping4SMS Telemetry Refreshed",
+              action: newSmsStatus === "SENT" ? "SMS Sent" : "Waiting for SMS",
               details: `Synced delivery status: ${newSmsStatus}`,
               oldValue: order.sms.status,
               newValue: newSmsStatus,
@@ -1388,7 +1710,7 @@ export const orderflowStore = {
   },
 
   // 9. Manually update SMS Status (Waiting for SMS / Sent / Failed)
-  updateSmsStatus(orderId: string, status: SmsStatus, reason?: string): { success: boolean } {
+  updateSmsStatus(orderId: string, status: SmsStatus, failureReason?: string): { success: boolean } {
     const orderIndex = globalOrders.findIndex((o) => o.id === orderId);
     if (orderIndex === -1) return { success: false };
 
@@ -1396,14 +1718,22 @@ export const orderflowStore = {
     const now = new Date().toISOString();
     const oldStatus = order.sms.status;
 
+    // 17. SMS Status: "SMS Sent" or "SMS Failed"
+    const action = status === "SENT" ? "SMS Sent" : status === "FAILED" ? "SMS Failed" : "Waiting for SMS";
+    const details = status === "SENT"
+      ? "Customer delivery notification sent successfully"
+      : status === "FAILED"
+      ? (failureReason ? `SMS delivery failed: ${failureReason}` : "SMS delivery failed via Ping4SMS gateway")
+      : "Order queued waiting for SMS notification";
+
     const timelineEntry: ActivityLog = {
       id: `tl-${Date.now()}-sms`,
       orderId: order.id,
       timestamp: now,
-      user: globalUser.name || "Staff",
-      role: globalUser.role || "ADMIN",
-      action: "SMS status updated",
-      details: reason || `SMS status manually updated to ${status === "PENDING" ? "Waiting for SMS" : status}`,
+      user: globalUser.name || "Ping4SMS",
+      role: globalUser.role || "SYSTEM",
+      action,
+      details,
       oldValue: oldStatus,
       newValue: status,
     };
@@ -1416,11 +1746,12 @@ export const orderflowStore = {
         status,
         lastCheckedAt: now,
         sentAt: status === "SENT" ? (order.sms.sentAt || now) : order.sms.sentAt,
+        sentBy: status === "SENT" ? globalUser.name : undefined,
         deliveredAt: status === "SENT" ? (order.sms.deliveredAt || now) : undefined,
         responseSnippet: status === "SENT"
           ? "DELIVRD: Marked as Sent by staff"
           : status === "FAILED"
-          ? "FAILED: Delivery failed"
+          ? (failureReason ? `FAILED: ${failureReason}` : "FAILED: Delivery failed")
           : "PENDING: Waiting for SMS",
       },
       timeline: [...order.timeline, timelineEntry],
@@ -1450,17 +1781,39 @@ export const orderflowStore = {
 
   // Ingest order from Webhook (WooCommerce or WhatsApp)
   ingestWebhookOrder(payload: Partial<Order> & { source: OrderSource; externalOrderId: string }): { success: boolean; order?: Order; duplicate?: boolean } {
-    const existing = globalOrders.find((o) => o.source === payload.source && o.externalOrderId === payload.externalOrderId);
-    if (existing) {
-      return { success: false, duplicate: true, order: existing };
+    const existingIndex = globalOrders.findIndex((o) => o.source === payload.source && o.externalOrderId === payload.externalOrderId);
+    if (existingIndex !== -1) {
+      const existing = globalOrders[existingIndex];
+      // If order exists, preserve advanced fulfillment statuses (PACKING, PACKED, DISPATCHED, COMPLETED)
+      const advancedStatuses: OrderStatus[] = ["PACKING", "PACKED", "DISPATCHED", "COMPLETED"];
+      const updatedStatus = advancedStatuses.includes(existing.orderStatus)
+        ? existing.orderStatus
+        : (payload.orderStatus || existing.orderStatus);
+
+      const updatedOrder: Order = {
+        ...existing,
+        customer: payload.customer || existing.customer,
+        items: payload.items && payload.items.length > 0 ? payload.items : existing.items,
+        totalAmount: payload.totalAmount !== undefined ? payload.totalAmount : existing.totalAmount,
+        paymentStatus: payload.paymentStatus || existing.paymentStatus,
+        orderStatus: updatedStatus,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedList = [...globalOrders];
+      updatedList[existingIndex] = updatedOrder;
+      persistOrders(updatedList);
+      return { success: true, duplicate: true, order: updatedOrder };
     }
 
     const count = globalOrders.length + 1;
     const now = new Date().toISOString();
-    const orderNumber = `OF-${9000 + count}`;
+    const orderNumber = payload.orderNumber || (payload.source === "WHATSAPP" ? `WA-${payload.externalOrderId}` : `OF-${9000 + count}`);
+    const createdAt = payload.createdAt || now;
+    const initialStatus: OrderStatus = payload.orderStatus || "CONFIRMED";
 
     const newOrder: Order = {
-      id: `ord-${count}`,
+      id: payload.id || `ord-${count}`,
       orderNumber,
       externalOrderId: payload.externalOrderId,
       source: payload.source,
@@ -1488,27 +1841,37 @@ export const orderflowStore = {
       ],
       totalAmount: payload.totalAmount || 2499,
       paymentStatus: payload.paymentStatus || "PAID",
-      orderStatus: "NEW",
+      orderStatus: initialStatus,
       dispatch: {
-        courierId: "cour-1",
-        courierName: "ST Courier",
+        courierId: undefined,
+        courierName: undefined,
         courierStatus: "PENDING",
       },
       sms: {
         status: "PENDING",
         provider: "Ping4SMS",
       },
-      createdAt: now,
+      createdAt,
       updatedAt: now,
+      confirmedAt: initialStatus === "CONFIRMED" ? createdAt : undefined,
       timeline: [
         {
           id: `tl-${Date.now()}`,
-          orderId: `ord-${count}`,
-          timestamp: now,
-          user: payload.source === "WEBSITE" ? "WooCommerce Webhook" : "WhatsApp Chat Box",
+          orderId: payload.id || `ord-${count}`,
+          timestamp: createdAt,
+          user: payload.source === "WEBSITE" ? "WooCommerce Webhook" : "WhatsApp Integration",
           role: "ORDER_STAFF",
-          action: "Order Ingested",
-          details: `Imported via webhook (Ext ID: ${payload.externalOrderId})`,
+          action: "Order Created",
+          details: `Imported via integration (Ext ID: ${payload.externalOrderId})`,
+        },
+        {
+          id: `tl-${Date.now() + 50}`,
+          orderId: payload.id || `ord-${count}`,
+          timestamp: new Date(new Date(createdAt).getTime() + 1000).toISOString(),
+          user: "Orders System",
+          role: "ORDER_STAFF",
+          action: "Processing Started",
+          details: "Order placed in Processing workflow",
         },
       ],
     };
@@ -1810,6 +2173,38 @@ export const orderflowStore = {
     };
   },
 
+  appendOrderTimelineEvent(
+    orderIdOrNumber: string,
+    event: ActivityLog,
+    extraOrderUpdates?: Partial<Order>
+  ): boolean {
+    const orderIndex = globalOrders.findIndex(
+      (o) => o.id === orderIdOrNumber || o.orderNumber === orderIdOrNumber
+    );
+    if (orderIndex === -1) return false;
+
+    const targetOrder = globalOrders[orderIndex];
+    const updatedOrder: Order = {
+      ...targetOrder,
+      ...extraOrderUpdates,
+      updatedAt: event.timestamp || new Date().toISOString(),
+      timeline: [...targetOrder.timeline, event],
+    };
+
+    globalOrders[orderIndex] = updatedOrder;
+    persistOrders(globalOrders);
+
+    if (isSupabaseConfigured()) {
+      updateSupabaseOrderStatus(
+        targetOrder.id,
+        updatedOrder.orderStatus,
+        event,
+        updatedOrder.dispatch?.dispatchId
+      );
+    }
+    return true;
+  },
+
   createReturnCase(params: {
     orderId: string;
     returnType: ReturnType;
@@ -1941,7 +2336,21 @@ export const orderflowStore = {
 
     const updated = [newReturnCase, ...globalReturns];
     persistReturns(updated);
-    this.updateOrderStatus(order.id, "RETURN", `Return case ${returnId} initiated`);
+
+    // 24. Return events must also appear inside the master order timeline
+    this.appendOrderTimelineEvent(order.id, {
+      id: `tl-${Date.now()}-ret-req`,
+      orderId: order.id,
+      timestamp: now,
+      user: globalUser.name,
+      role: globalUser.role,
+      action: "Return Requested",
+      details: `Return case ${returnId} initiated from Packing Station (Type: ${params.returnType}, Reason: ${params.reason}, Qty: ${totalRequestedQty})`,
+      eventType: "RETURN",
+    }, {
+      linkedReturnId: returnId,
+      orderStatus: "RETURN",
+    });
 
     return { success: true, returnCase: newReturnCase };
   },
@@ -1984,6 +2393,31 @@ export const orderflowStore = {
     const newReturns = [...globalReturns];
     newReturns[index] = updatedCase;
     persistReturns(newReturns);
+
+    // 24. Return events must also appear inside the master order timeline
+    const actionMap: Record<string, string> = {
+      "Approved": "Return Approved",
+      "Awaiting Return": "Awaiting Return",
+      "Return Received": "Return Received",
+      "QC Pending": "QC Pending",
+      "QC Approved": "QC Approved",
+      "Refund Pending": "Refund Pending",
+      "Refunded": "Refund Completed",
+      "Rejected": "Return Rejected",
+      "Completed": "Return Completed",
+      "Cancelled": "Return Cancelled",
+    };
+    const actionName = actionMap[newStatus] || `Return ${newStatus}`;
+    this.appendOrderTimelineEvent(target.orderId, {
+      id: `tl-${Date.now()}-ret-status`,
+      orderId: target.orderId,
+      timestamp: now,
+      user: actionUser,
+      role: actionRole,
+      action: actionName,
+      details: notes || `Return case ${target.returnId} status updated to ${newStatus}`,
+      eventType: "RETURN",
+    });
 
     return { success: true };
   },
@@ -2044,6 +2478,18 @@ export const orderflowStore = {
     const newReturns = [...globalReturns];
     newReturns[index] = updatedCase;
     persistReturns(newReturns);
+
+    // 24. Return events must also appear inside the master order timeline
+    this.appendOrderTimelineEvent(target.orderId, {
+      id: `tl-${Date.now()}-ret-recv`,
+      orderId: target.orderId,
+      timestamp: now,
+      user: receiver,
+      role: globalUser.role,
+      action: "Return Received",
+      details: `Physical return parcel checked in by ${receiver}. Expected: ${target.requestedQuantity}, Received: ${totalReceived}${shortNote}. Note: ${params.receivingNote || "Parcel in warehouse"}`,
+      eventType: "RETURN",
+    });
 
     return { success: true };
   },
@@ -2155,6 +2601,18 @@ export const orderflowStore = {
     newReturns[index] = updatedCase;
     persistReturns(newReturns);
 
+    // 24. Return events must also appear inside the master order timeline
+    this.appendOrderTimelineEvent(target.orderId, {
+      id: `tl-${Date.now()}-ret-qc`,
+      orderId: target.orderId,
+      timestamp: now,
+      user: inspector,
+      role: globalUser.role,
+      action: params.qcResult === "Rejected" ? "QC Rejected" : "QC Approved",
+      details: timelineNotes,
+      eventType: "RETURN",
+    });
+
     return { success: true };
   },
 
@@ -2219,6 +2677,18 @@ export const orderflowStore = {
     newReturns[index] = updatedCase;
     persistReturns(newReturns);
 
+    // 24. Return events must also appear inside the master order timeline
+    this.appendOrderTimelineEvent(target.orderId, {
+      id: `tl-${Date.now()}-ret-ref`,
+      orderId: target.orderId,
+      timestamp: now,
+      user: processor,
+      role: globalUser.role,
+      action: isRefundCompleted ? "Refund Completed" : "Refund Processing",
+      details: `Refund ${params.refundStatus}: ₹${refundAmount} via ${refundRecord.refundMethod}${refundRecord.utrReference ? ` (UTR: ${refundRecord.utrReference})` : ""}. Note: ${params.refundNotes || "Processed"}`,
+      eventType: "RETURN",
+    });
+
     return { success: true };
   },
 
@@ -2275,6 +2745,20 @@ export const orderflowStore = {
     newReturns[index] = updatedCase;
     persistReturns(newReturns);
 
+    // 24 & 25. Replacement events appear inside master order timeline
+    this.appendOrderTimelineEvent(target.orderId, {
+      id: `tl-${Date.now()}-ret-rep-create`,
+      orderId: target.orderId,
+      timestamp: now,
+      user: globalUser.name,
+      role: globalUser.role,
+      action: "Replacement Created",
+      details: `Replacement task ${repId} created (${replacementRecord.replacementItem}, Qty: ${replacementRecord.quantity})`,
+      eventType: "REPLACEMENT",
+    }, {
+      linkedReplacementId: repId,
+    });
+
     return { success: true, replacementId: repId };
   },
 
@@ -2319,7 +2803,7 @@ export const orderflowStore = {
       nextReturnStatus = "Completed";
     }
 
-    const actionTitle = newStatus === "Packing" ? "Replacement Packing Started" : newStatus === "Packed" ? "Replacement Packed" : newStatus === "Dispatched" ? "Replacement Dispatched" : "Replacement Delivered";
+    const actionTitle = newStatus === "Packing" ? "Replacement Packing Started" : newStatus === "Packed" ? "Replacement Packed" : newStatus === "Dispatched" ? "Replacement Dispatched" : "Replacement Completed";
     const actionDetails = `${actionTitle}: Dispatch ID ${dispatchId}, Courier: ${updatedReplacement.courier}${updatedReplacement.llr ? `, LLR: ${updatedReplacement.llr}` : ""}`;
 
     const timelineEntry: ReturnTimelineEvent = {
@@ -2343,6 +2827,18 @@ export const orderflowStore = {
     const newReturns = [...globalReturns];
     newReturns[index] = updatedCase;
     persistReturns(newReturns);
+
+    // 24 & 25. Replacement events appear inside master order timeline
+    this.appendOrderTimelineEvent(target.orderId, {
+      id: `tl-${Date.now()}-ret-rep-disp`,
+      orderId: target.orderId,
+      timestamp: now,
+      user: globalUser.name,
+      role: globalUser.role,
+      action: actionTitle,
+      details: actionDetails,
+      eventType: "REPLACEMENT",
+    });
 
     return { success: true };
   },

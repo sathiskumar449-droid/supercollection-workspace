@@ -55,13 +55,12 @@ function SmsMonitoringContent() {
   const [bulkStatus, setBulkStatus] = useState<string>("");
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
-  // ONLY orders that have been marked as "SHIPPED" in Courier Hub (after being dispatched from packing)
+  // ONLY orders that have reached "SHIPPED" in Courier Hub (when LLR / Tracking is entered)
   // Filtered by global TopBar date filter / calendar picker
   const shippedOrders = useMemo(() => {
     return orders.filter((o) => 
-      matchesDateFilter(o.sms.sentAt || o.dispatch?.deliveredAt || o.createdAt, dateFilter, customDate) &&
-      (o.dispatch.courierStatus === "SHIPPED" || (o.dispatch.courierStatus as string) === "DELIVERED" || Boolean(o.dispatch.llrNumber)) &&
-      (Boolean(o.dispatchedAt) || Boolean(o.dispatch.dispatchedAt) || Boolean(o.dispatch.deliveredAt))
+      matchesDateFilter(o.sms.sentAt || o.dispatch?.shippedAt || o.shippedAt || o.createdAt, dateFilter, customDate) &&
+      (o.dispatch.courierStatus === "SHIPPED" || Boolean(o.dispatch.llrNumber) || Boolean(o.shippedAt))
     );
   }, [orders, dateFilter, customDate]);
 

@@ -298,36 +298,42 @@ function CourierHubContent() {
       });
   }, [verifiedOrders, activePartnerCode]);
 
+  // Multiple matching orders dialog state (Section 10)
+  const [multipleMatchingOrders, setMultipleMatchingOrders] = useState<Order[] | null>(null);
+  const [multipleMatchingPhone, setMultipleMatchingPhone] = useState<string>("");
+
   // Automatic pickup execution when valid 10-digit mobile number is entered
-  const processPickup = (cleanPhone: string) => {
+  const processPickup = (cleanPhone: string, specificOrderId?: string) => {
     const res = verifyCourierPickupByCustomerMobile({
       mobile: cleanPhone,
       courierPartnerCode: activePartnerCode,
+      orderId: specificOrderId,
     });
 
     if (!res.success) {
       setSearchFeedback({
         type: "error",
-        message: res.error || "No order found",
+        message: res.error || "No eligible dispatched order found.",
       });
       return;
     }
 
+    // 10. Multiple Orders with Same Customer Phone: Do NOT choose automatically
+    if (res.multipleMatches && res.matchingOrders && res.matchingOrders.length > 1) {
+      setMultipleMatchingOrders(res.matchingOrders);
+      setMultipleMatchingPhone(cleanPhone);
+      setSearchFeedback(null);
+      return;
+    }
+
     if (res.order) {
-      const newIds = res.matchingOrders ? res.matchingOrders.map((o) => o.id) : [res.order.id];
-      setSessionPickedUpIds((prev) => Array.from(new Set([...prev, ...newIds])));
+      setSessionPickedUpIds((prev) => Array.from(new Set([...prev, res.order!.id])));
       setHighlightedOrderId(res.order.id);
       setSearchFeedback({
         type: "success",
-        message: res.matchingOrders && res.matchingOrders.length > 1
-          ? `${res.matchingOrders.length} orders auto-filled & added to table!`
-          : `Order ${res.order.orderNumber} auto-filled & added to table!`,
+        message: `Order ${res.order.orderNumber} auto-filled & marked as Picked Up!`,
       });
-      triggerToast(
-        res.matchingOrders && res.matchingOrders.length > 1
-          ? `${res.matchingOrders.length} orders marked as Picked Up!`
-          : `Order ${res.order.orderNumber} added to table as Picked Up!`
-      );
+      triggerToast(`Order ${res.order.orderNumber} added to table as Picked Up!`);
 
       // Auto-clear input after a brief delay so staff can immediately enter next number
       setTimeout(() => {
@@ -336,6 +342,13 @@ function CourierHubContent() {
         setHighlightedOrderId(null);
       }, 3500);
     }
+  };
+
+  const selectOrderPickup = (selectedOrder: Order) => {
+    processPickup(multipleMatchingPhone, selectedOrder.id);
+    setMultipleMatchingOrders(null);
+    setMultipleMatchingPhone("");
+    setCustomerMobileInput("");
   };
 
   const handleCustomerMobileChange = (val: string) => {
@@ -355,7 +368,7 @@ function CourierHubContent() {
       if (clean.length >= 10) {
         processPickup(clean);
       } else if (customerMobileInput.trim()) {
-        setSearchFeedback({ type: "error", message: "No order found" });
+        setSearchFeedback({ type: "error", message: "No eligible dispatched order found." });
       }
     }
   };
@@ -667,7 +680,7 @@ function CourierHubContent() {
           {[
             { key: "ALL", label: "All Picked Up" },
             { key: "PICKED_UP", label: "Picked Up" },
-            { key: "DELIVERED", label: "Delivered" },
+            { key: "SHIPPED", label: "Shipped" },
             ...(!isCourierUser ? [{ key: "MISSING_LLR", label: "Missing LLR" }] : []),
           ].map((tab) => (
             <button
@@ -715,10 +728,10 @@ function CourierHubContent() {
                 </th>
                 <th className="py-2.5 px-2 w-12 text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Date</th>
+                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer Mobile</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Dispatch ID</th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer Name</th>
-                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer Mobile</th>
+                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
                 <th className="py-2.5 px-3 min-w-[150px] border-r border-b-2 border-slate-300 bg-slate-100">LLR / Tracking</th>
                 <th className="py-2.5 px-3 min-w-[130px] border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
@@ -765,22 +778,30 @@ function CourierHubContent() {
                         />
                       </td>
 
-                      {/* S.No */}
+                      {/* 1. S.No */}
                       <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-500 border-r border-slate-200">
                         {(page - 1) * pageSize + idx + 1}
                       </td>
 
-                      {/* Date */}
+                      {/* 2. Date */}
                       <td className="py-2.5 px-3 whitespace-nowrap text-slate-600 font-medium border-r border-slate-200">
                         {formatDate(order.createdAt)}
                       </td>
 
-                      {/* Order ID */}
+                      {/* 3. Customer Mobile */}
+                      <td className="py-2.5 px-3 whitespace-nowrap font-mono text-slate-700 border-r border-slate-200">
+                        <div className="flex items-center gap-1.5">
+                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>{order.customer.mobile}</span>
+                        </div>
+                      </td>
+
+                      {/* 4. Order ID */}
                       <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-slate-900 border-r border-slate-200">
                         {order.orderNumber}
                       </td>
 
-                      {/* Dispatch ID */}
+                      {/* 5. Dispatch ID */}
                       <td className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200">
                         {order.dispatch?.dispatchId || order.dispatch?.llrNumber ? (
                           <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-orange-100 text-orange-800 border border-orange-200">
@@ -793,22 +814,14 @@ function CourierHubContent() {
                         )}
                       </td>
 
-                      {/* Customer Name */}
+                      {/* 6. Customer */}
                       <td className="py-2.5 px-3 border-r border-slate-200">
                         <div className="font-semibold text-slate-800 truncate max-w-[160px]">
                           {order.customer.name}
                         </div>
                       </td>
 
-                      {/* Customer Mobile */}
-                      <td className="py-2.5 px-3 whitespace-nowrap font-mono text-slate-700 border-r border-slate-200">
-                        <div className="flex items-center gap-1.5">
-                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>{order.customer.mobile}</span>
-                        </div>
-                      </td>
-
-                      {/* Courier Partner */}
+                      {/* 7. Courier */}
                       <td className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200">
                         <span className={cn(
                           "px-2 py-0.5 rounded text-[11px] font-bold border",
@@ -824,7 +837,7 @@ function CourierHubContent() {
                         </span>
                       </td>
 
-                      {/* LLR / Tracking Number */}
+                      {/* 8. LLR / Tracking Number */}
                       <td className="py-2 px-3 border-r border-slate-200" onClick={(e) => e.stopPropagation()}>
                         <InlineLlrInput
                           orderId={order.id}
@@ -840,22 +853,22 @@ function CourierHubContent() {
                         />
                       </td>
 
-                      {/* Courier Status: Automatically "Picked Up" with server timestamp */}
+                      {/* 9. Courier Status: "Picked Up" or "Shipped" */}
                       <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
                         <span 
                           className={cn(
                             "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border shadow-2xs",
-                            cStatus === "DELIVERED"
+                            cStatus === "SHIPPED"
                               ? "bg-emerald-50 text-emerald-800 border-emerald-300"
                               : "bg-blue-50 text-blue-800 border-blue-300"
                           )}
-                          title={order.dispatch?.pickedUpAt ? `Picked up at ${formatDate(order.dispatch.pickedUpAt)}` : "Picked Up"}
+                          title={cStatus === "SHIPPED" ? "Shipped" : "Picked Up"}
                         >
                           <span className={cn(
                             "w-1.5 h-1.5 rounded-full shrink-0",
-                            cStatus === "DELIVERED" ? "bg-emerald-500" : "bg-blue-500"
+                            cStatus === "SHIPPED" ? "bg-emerald-500" : "bg-blue-500"
                           )} />
-                          <span>{cStatus === "DELIVERED" ? "Delivered" : "Picked Up"}</span>
+                          <span>{cStatus === "SHIPPED" ? "Shipped" : "Picked Up"}</span>
                         </span>
                       </td>
                     </tr>
@@ -912,6 +925,94 @@ function CourierHubContent() {
           </div>
         </div>
       </div>
+
+      {/* Multiple Matching Orders Selection Modal (Section 10) */}
+      {multipleMatchingOrders && multipleMatchingOrders.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in">
+          <div 
+            className="bg-white rounded-xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-slate-200 bg-orange-50/70 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-orange-600" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    Multiple Dispatched Orders Found ({multipleMatchingOrders.length})
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Customer Mobile: <strong className="font-mono text-slate-700">{multipleMatchingPhone}</strong>. Select the specific order to pick up:
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setMultipleMatchingOrders(null);
+                  setMultipleMatchingPhone("");
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-md cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 max-h-[60vh] overflow-y-auto">
+              <table className="w-full text-left text-xs border-collapse border border-slate-200">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-bold uppercase text-[10.5px]">
+                    <th className="py-2 px-3 border-b border-r border-slate-200">Order ID</th>
+                    <th className="py-2 px-3 border-b border-r border-slate-200">Dispatch ID</th>
+                    <th className="py-2 px-3 border-b border-r border-slate-200">Customer</th>
+                    <th className="py-2 px-3 border-b border-r border-slate-200">Order Date</th>
+                    <th className="py-2 px-3 border-b text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {multipleMatchingOrders.map((ord) => (
+                    <tr key={ord.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2.5 px-3 font-mono font-bold text-slate-900 border-r border-slate-200">
+                        {ord.orderNumber}
+                      </td>
+                      <td className="py-2.5 px-3 font-mono text-slate-700 border-r border-slate-200">
+                        {ord.dispatch?.dispatchId || "-"}
+                      </td>
+                      <td className="py-2.5 px-3 border-r border-slate-200">
+                        <span className="font-semibold text-slate-800 block truncate">{ord.customer.name}</span>
+                        {ord.customer.city && <span className="text-[10px] text-slate-400 block">{ord.customer.city}</span>}
+                      </td>
+                      <td className="py-2.5 px-3 whitespace-nowrap text-slate-600 border-r border-slate-200">
+                        {formatDate(ord.createdAt)}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => selectOrderPickup(ord)}
+                          className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                        >
+                          Select & Pick Up
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setMultipleMatchingOrders(null);
+                  setMultipleMatchingPhone("");
+                }}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-semibold text-xs hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Inspect Order Drawer */}
       <OrderDetailsDrawer

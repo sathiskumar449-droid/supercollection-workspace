@@ -122,11 +122,13 @@ CREATE TABLE IF NOT EXISTS order_items (
     product_name VARCHAR(255) NOT NULL,
     sku VARCHAR(64),
     size VARCHAR(32) NOT NULL DEFAULT 'M',
+    color VARCHAR(64),
     quantity INTEGER NOT NULL DEFAULT 1,
     unit_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
     subtotal NUMERIC(10, 2) NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS color VARCHAR(64);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 
 -- 8. DISPATCHES

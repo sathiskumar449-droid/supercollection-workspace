@@ -746,15 +746,8 @@ export function ReturnDetailsDrawer({
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-slate-800">{item.action}</span>
                       <span className="text-slate-400 text-[10.5px]">•</span>
-                      <span className="text-slate-500 text-[10.5px]">{item.user} ({item.role})</span>
-                      <span className="text-slate-400 text-[10.5px]">•</span>
                       <span className="text-slate-400 font-mono text-[10px]">{formatDate(item.timestamp)}</span>
                     </div>
-                    {item.notes && (
-                      <p className="text-slate-600 mt-0.5 bg-slate-50 p-1.5 rounded border border-slate-100 text-[11px]">
-                        {item.notes}
-                      </p>
-                    )}
                   </div>
                 </div>
               ))}

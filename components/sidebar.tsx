@@ -104,15 +104,6 @@ export function Sidebar({
       badgeType: "warning",
     },
     {
-      id: "returns",
-      label: "Returns",
-      href: "/returns",
-      exact: false,
-      icon: RotateCcw,
-      badge: badgeCounts.returnsCount && badgeCounts.returnsCount > 0 ? badgeCounts.returnsCount : undefined,
-      badgeType: "warning",
-    },
-    {
       id: "courier",
       label: "Courier",
       href: "/couriers",
@@ -134,6 +125,15 @@ export function Sidebar({
       icon: Send,
       badge: badgeCounts.smsFailed && badgeCounts.smsFailed > 0 ? badgeCounts.smsFailed : undefined,
       badgeType: "danger",
+    },
+    {
+      id: "returns",
+      label: "Returns",
+      href: "/returns",
+      exact: false,
+      icon: RotateCcw,
+      badge: badgeCounts.returnsCount && badgeCounts.returnsCount > 0 ? badgeCounts.returnsCount : undefined,
+      badgeType: "warning",
     },
     {
       id: "reports",

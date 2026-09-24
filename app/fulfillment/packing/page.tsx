@@ -157,10 +157,10 @@ export default function PackingPage() {
     setPendingModalOrder(order);
     const standardReasons = [
       "Product unavailable",
-      "Waiting for stock",
-      "Damaged / Defect item",
-      "Customer request",
-      "Address verification needed",
+      "Stock mismatch",
+      "Customer confirmation pending",
+      "Address issue",
+      "System issue",
     ];
     if (order.pendingReason && !standardReasons.includes(order.pendingReason)) {
       setPendingReason("Other");
@@ -174,6 +174,10 @@ export default function PackingPage() {
 
   const handleSavePending = () => {
     if (!pendingModalOrder) return;
+    if (pendingReason === "Other" && !pendingNote.trim() && !pendingCustomReason.trim()) {
+      alert("Pending Note is mandatory when 'Other' is selected.");
+      return;
+    }
     const finalReason =
       pendingReason === "Other" && pendingCustomReason.trim()
         ? pendingCustomReason.trim()
@@ -817,6 +821,11 @@ export default function PackingPage() {
                               <span className="font-semibold text-slate-800 block truncate" title={it.productName}>
                                 {it.productName}
                               </span>
+                              {it.color && it.color !== "Standard" && (
+                                <span className="text-[10px] text-slate-500 font-medium block truncate">
+                                  Color: {it.color}
+                                </span>
+                              )}
                             </div>
                           ))}
                           {hasMultipleItems && (
@@ -892,21 +901,29 @@ export default function PackingPage() {
                         />
                       </td>
 
-                      {/* 12. Order Status Badge */}
-                      <td className="py-1 px-1.5 text-center whitespace-normal border-b border-slate-300 bg-slate-50/40 align-top" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex flex-col items-center gap-1">
+                      {/* 12. Order Status & Action */}
+                      <td className="py-1 px-1.5 text-center whitespace-normal border-b border-slate-300 bg-slate-50/40 align-middle" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col items-center justify-center">
                           {(() => {
                             const linkedRtn = returns.find((r) => (r.orderId === order.id || r.orderNumber === order.orderNumber) && r.status !== "Rejected" && r.status !== "Cancelled");
                             const isReturn = order.orderStatus === "RETURN" || Boolean(linkedRtn);
+                            const returnId = linkedRtn?.returnId || order.linkedReturnId;
 
                             if (isReturn) {
                               return (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-300 shadow-2xs select-none"
-                                >
-                                  <RotateCcw className="w-3 h-3 text-rose-600 shrink-0" />
-                                  <span>Return</span>
-                                </span>
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-300 shadow-2xs select-none"
+                                  >
+                                    <RotateCcw className="w-3 h-3 text-rose-600 shrink-0" />
+                                    <span>Return</span>
+                                  </span>
+                                  {returnId && (
+                                    <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-100/80 px-1.5 py-0.5 rounded border border-rose-200">
+                                      {returnId}
+                                    </span>
+                                  )}
+                                </div>
                               );
                             }
 
@@ -937,33 +954,28 @@ export default function PackingPage() {
                               );
                             }
 
-                            if (order.orderStatus === "PACKING") {
+                            if (order.orderStatus === "PACKING" || order.orderStatus === "PACKED") {
                               return (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200 shadow-2xs">
-                                  Packaging
-                                </span>
-                              );
-                            }
-
-                            if (order.orderStatus === "PACKED") {
-                              return (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs">
-                                  Packed
+                                <span className={cn(
+                                  "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border shadow-2xs",
+                                  order.orderStatus === "PACKED"
+                                    ? "bg-purple-50 text-purple-700 border-purple-200"
+                                    : "bg-orange-50 text-orange-700 border-orange-200"
+                                )}>
+                                  {order.orderStatus === "PACKED" ? "Packed" : "Packaging"}
                                 </span>
                               );
                             }
 
                             if (order.orderStatus === "NEW") {
                               return (
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleOpenPendingModal(order, e)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 hover:border-amber-400 transition-all shadow-2xs cursor-pointer group"
-                                  title={order.pendingReason ? `Pending Reason: ${order.pendingReason} (Click to view/edit)` : "Click to view pending reason & details"}
+                                <span
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs"
+                                  title={order.pendingReason ? `Pending: ${order.pendingReason}` : undefined}
                                 >
-                                  <Clock className="w-3 h-3 text-amber-600 group-hover:rotate-12 transition-transform" />
+                                  <Clock className="w-3 h-3 text-amber-600" />
                                   <span>Pending</span>
-                                </button>
+                                </span>
                               );
                             }
 
@@ -1050,18 +1062,18 @@ export default function PackingPage() {
                   className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-slate-800 outline-none focus:border-amber-500 focus:bg-white cursor-pointer"
                 >
                   <option value="Product unavailable">Product unavailable</option>
-                  <option value="Waiting for stock">Waiting for stock</option>
-                  <option value="Damaged / Defect item">Damaged / Defect item</option>
-                  <option value="Customer request">Customer request</option>
-                  <option value="Address verification needed">Address verification needed</option>
-                  <option value="Other">Other (Custom reason)</option>
+                  <option value="Stock mismatch">Stock mismatch</option>
+                  <option value="Customer confirmation pending">Customer confirmation pending</option>
+                  <option value="Address issue">Address issue</option>
+                  <option value="System issue">System issue</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
 
               {pendingReason === "Other" && (
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    Custom Reason
+                    Custom Reason <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -1075,13 +1087,13 @@ export default function PackingPage() {
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Pending Note <span className="text-slate-400 font-normal">(Optional context)</span>
+                  Pending Note {pendingReason === "Other" ? <span className="text-rose-500 font-bold">* (Mandatory)</span> : <span className="text-slate-400 font-normal">(Optional context)</span>}
                 </label>
                 <textarea
                   value={pendingNote}
                   onChange={(e) => setPendingNote(e.target.value)}
                   rows={3}
-                  placeholder="e.g. Waiting for stock from vendor / ETA tomorrow..."
+                  placeholder={pendingReason === "Other" ? "Explain reason for delay (mandatory)..." : "e.g. Waiting for customer confirmation / ETA tomorrow..."}
                   className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 outline-none focus:border-amber-500 focus:bg-white resize-none"
                 />
               </div>

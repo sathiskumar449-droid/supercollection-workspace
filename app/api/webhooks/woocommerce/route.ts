@@ -210,49 +210,53 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 4. Initial Dispatch record
+      // 4. Initial Activity Logs (Section 2 & 3: Order Created, Processing Started, and Order Completed / Ready for Packing if completed)
+      // DO NOT automatically create Courier Hub dispatch record or assign ST Courier (Section 7)
       if (order) {
-        const { data: stCourier } = await db
-          .from("couriers")
-          .select("id")
-          .eq("code", "ST_COURIER")
-          .maybeSingle();
-
-        const { data: existingDisp } = await db
-          .from("dispatches")
-          .select("id")
-          .eq("order_id", order.id)
-          .maybeSingle();
-
-        if (!existingDisp) {
-          await db.from("dispatches").insert({
-            order_id: order.id,
-            courier_id: stCourier?.id || "1646c4ed-2883-4f72-b3c8-aab24f7631b6",
-            courier_status: "PENDING",
-          });
-        }
-
-        // 5. Initial Activity Logs (Order placed & Order processing)
         const orderPlacedAt = parseWooCommerceDate(body.date_created_gmt, body.date_created);
         const orderPlacedMs = new Date(orderPlacedAt).getTime();
-        await db.from("activity_logs").insert([
+        const initialLogs: any[] = [
           {
             order_id: order.id,
-            user_name: "Website",
-            user_role: "ORDER_STAFF",
-            action: "Order placed",
-            details: "Order received from website",
+            user_name: "WooCommerce",
+            user_role: "SYSTEM",
+            action: "Order Created",
+            details: "Order created in WooCommerce",
             created_at: orderPlacedAt,
           },
           {
             order_id: order.id,
-            user_name: "Orders System",
-            user_role: "ORDER_STAFF",
-            action: "Order processing",
-            details: "Order is being processed",
+            user_name: "WooCommerce",
+            user_role: "SYSTEM",
+            action: "Processing Started",
+            details: "Order processing started",
             created_at: new Date(orderPlacedMs + 1000).toISOString(),
           },
-        ]);
+        ];
+
+        if (body.status === "completed") {
+          const completedTimestamp = parseWooCommerceDate(body.date_modified_gmt, body.date_modified) || new Date(orderPlacedMs + 2000).toISOString();
+          initialLogs.push(
+            {
+              order_id: order.id,
+              user_name: "WooCommerce",
+              user_role: "SYSTEM",
+              action: "Order Completed",
+              details: "Order completed in WooCommerce",
+              created_at: completedTimestamp,
+            },
+            {
+              order_id: order.id,
+              user_name: "Packing Station",
+              user_role: "PACKING_STAFF",
+              action: "Waiting for Packing",
+              details: "Order completed, waiting for packing in fulfillment station",
+              created_at: new Date(new Date(completedTimestamp).getTime() + 1000).toISOString(),
+            }
+          );
+        }
+
+        await db.from("activity_logs").insert(initialLogs);
       }
 
       return NextResponse.json({

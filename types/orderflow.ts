@@ -16,6 +16,14 @@ export type Role = "ADMIN" | "MANAGER" | "ORDER_STAFF" | "PACKING_STAFF" | "DISP
 
 export type PaymentStatus = "PAID" | "COD" | "PENDING";
 
+export type PendingReason =
+  | "Product unavailable"
+  | "Stock mismatch"
+  | "Customer confirmation pending"
+  | "Address issue"
+  | "System issue"
+  | "Other";
+
 export interface Customer {
   id: string;
   name: string;
@@ -33,6 +41,7 @@ export interface OrderItem {
   productId: string;
   productName: string;
   sku: string;
+  color?: string;
   size: "XS" | "S" | "M" | "L" | "XL" | "XXL" | "Free Size";
   quantity: number;
   unitPrice: number;
@@ -44,13 +53,18 @@ export interface DispatchInfo {
   courierId?: string;
   courierName?: string;
   courierPartnerId?: string; // e.g. "ST_COURIER" | "PROFESSIONAL" | "DTDC" | "UNASSIGNED"
-  dispatchId?: string; // Auto-generated e.g. "DSP-260922-001"
+  dispatchId?: string; // Auto-generated or manual e.g. "DSP-260922-001"
   llrNumber?: string;
+  trackingNumber?: string;
+  trackingUrl?: string;
   pickupPhone?: string; // Courier pickup person's phone number (separate from customer mobile)
+  verifiedCustomerPhone?: string; // Customer phone verified at pickup
+  pickedUpBy?: string;
   courierStatus: CourierStatus;
   dispatchedAt?: string;
   pickedUpAt?: string;
   deliveredAt?: string;
+  shippedAt?: string;
   estimatedDelivery?: string;
   notes?: string;
 }
@@ -60,6 +74,7 @@ export interface SmsInfo {
   provider: string; // "Ping4SMS"
   providerMessageId?: string;
   sentAt?: string;
+  sentBy?: string;
   deliveredAt?: string;
   lastCheckedAt?: string;
   responseSnippet?: string;
@@ -73,8 +88,13 @@ export interface ActivityLog {
   role: Role;
   action: string;
   details?: string;
+  eventType?: string;
+  duration?: string;
   oldValue?: string;
   newValue?: string;
+  oldDispatchNo?: string;
+  newDispatchNo?: string;
+  reason?: string;
 }
 
 export interface Order {
@@ -95,13 +115,19 @@ export interface Order {
   packingStartedAt?: string;
   packedAt?: string;
   dispatchedAt?: string;
+  pickedUpAt?: string;
+  shippedAt?: string;
   completedAt?: string;
   packingStaff?: string;
   orderTakenBy?: string;
   returnStatus?: string;
+  linkedReturnId?: string;
+  linkedReplacementId?: string;
   notes?: string;
   pendingReason?: string;
   pendingNote?: string;
+  pendingAt?: string;
+  pendingBy?: string;
   timeline: ActivityLog[];
 }
 

@@ -109,3 +109,55 @@ export function normalizePhoneDigits(phone?: string): string {
   const digits = phone.replace(/\D/g, "");
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }
+
+/**
+ * Format timestamp into exact unified timeline specification, e.g. "24 Sep 08:44 AM"
+ */
+export function formatTimelineDateTime(dateString?: string): string {
+  if (!dateString) return "-";
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "-";
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = d.toLocaleString("en-IN", { month: "short", timeZone: "Asia/Kolkata" });
+    const time = d.toLocaleString("en-IN", { 
+      hour: "2-digit", 
+      minute: "2-digit", 
+      hour12: true, 
+      timeZone: "Asia/Kolkata" 
+    });
+    return `${day} ${month} ${time}`;
+  } catch {
+    return dateString;
+  }
+}
+
+/**
+ * Calculate human-readable duration between two stage timestamps.
+ * e.g., "1h 20m", "3h 50m", "2h 05m", "25m"
+ */
+export function formatStageDuration(startIso?: string, endIso?: string): string | null {
+  if (!startIso || !endIso) return null;
+  try {
+    const start = new Date(startIso).getTime();
+    const end = new Date(endIso).getTime();
+    if (isNaN(start) || isNaN(end) || end < start) return null;
+
+    const diffMinutes = Math.floor((end - start) / (1000 * 60));
+    if (diffMinutes < 1) return "< 1m";
+
+    const days = Math.floor(diffMinutes / (60 * 24));
+    const hours = Math.floor((diffMinutes % (60 * 24)) / 60);
+    const mins = diffMinutes % 60;
+
+    if (days > 0) {
+      return `${days}d ${hours}h ${mins > 0 ? `${mins}m` : ""}`.trim();
+    }
+    if (hours > 0) {
+      return `${hours}h ${mins.toString().padStart(2, "0")}m`;
+    }
+    return `${mins}m`;
+  } catch {
+    return null;
+  }
+}

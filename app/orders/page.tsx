@@ -19,7 +19,8 @@ import {
   X,
   FileSpreadsheet,
   FileText,
-  Globe
+  Globe,
+  MessageSquare
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
 import { Order, OrderStatus, CourierStatus, SmsStatus, OrderSource, ReturnCase } from "@/types/orderflow";
@@ -28,6 +29,7 @@ import { ReturnCompactIndicator } from "@/components/returns/return-status-badge
 import { ReturnDetailsDrawer } from "@/components/returns/return-details-drawer";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { SyncWooCommerceDialog } from "@/components/sync-woocommerce-dialog";
+import { SyncWhatsAppDialog } from "@/components/sync-whatsapp-dialog";
 import { formatINR, formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
@@ -51,6 +53,7 @@ function OrdersContent() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedReturn, setSelectedReturn] = useState<ReturnCase | null>(null);
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [whatsappSyncDialogOpen, setWhatsappSyncDialogOpen] = useState(false);
 
   // Filters state
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
@@ -67,10 +70,8 @@ function OrdersContent() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
 
-  // All active/processed orders (including RETURN orders) are shown in Orders page (strictly exclude unconfirmed NEW)
-  const baseOrders = useMemo(() => {
-    return orders.filter((o) => o.orderStatus !== "NEW");
-  }, [orders]);
+  // 21. All Orders remains the master overview: all orders stay visible across every lifecycle stage
+  const baseOrders = orders;
 
   // Filtered & Sorted orders calculation
   const filteredOrders = useMemo(() => {
@@ -586,13 +587,22 @@ function OrdersContent() {
                         : "Try adjusting your filters or search query."}
                     </p>
                     {orders.length === 0 && (
-                      <button
-                        onClick={() => setSyncDialogOpen(true)}
-                        className="mt-3.5 inline-flex items-center gap-1.5 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
-                      >
-                        <Globe className="w-3.5 h-3.5" />
-                        <span>Sync Orders from WooCommerce</span>
-                      </button>
+                      <div className="mt-3.5 flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => setSyncDialogOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                        >
+                          <Globe className="w-3.5 h-3.5" />
+                          <span>Sync Website Orders</span>
+                        </button>
+                        <button
+                          onClick={() => setWhatsappSyncDialogOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          <span>Sync WhatsApp Orders</span>
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -842,6 +852,12 @@ function OrdersContent() {
       <SyncWooCommerceDialog
         isOpen={syncDialogOpen}
         onClose={() => setSyncDialogOpen(false)}
+      />
+
+      {/* Sync WhatsApp Dialog */}
+      <SyncWhatsAppDialog
+        isOpen={whatsappSyncDialogOpen}
+        onClose={() => setWhatsappSyncDialogOpen(false)}
       />
     </div>
   );

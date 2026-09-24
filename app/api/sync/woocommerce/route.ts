@@ -247,22 +247,8 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // 4. Ensure Dispatch record exists without overwriting staff updates
-        const { data: existingDisp } = await supabase
-          .from("dispatches")
-          .select("id")
-          .eq("order_id", order.id)
-          .maybeSingle();
-
-        if (!existingDisp) {
-          await supabase.from("dispatches").insert({
-            order_id: order.id,
-            courier_id: defaultCourierId,
-            courier_status: "PENDING",
-          });
-        }
-
-        // 5. Activity Log (Only log Order completed when WooCommerce status is actually completed)
+        // 4. Initial Activity Logs (Section 2 & 3: Order Created, Processing Started, and Order Completed / Ready for Packing if completed)
+        // DO NOT automatically create Courier Hub dispatch record or assign ST Courier (Section 7)
         const { data: existingLogs } = await supabase
           .from("activity_logs")
           .select("id, action")
@@ -275,18 +261,18 @@ export async function POST(req: NextRequest) {
           const initialLogs: any[] = [
             {
               order_id: order.id,
-              user_name: "Website",
-              user_role: "ORDER_STAFF",
-              action: "Order placed",
-              details: "Order received from website",
+              user_name: "WooCommerce",
+              user_role: "SYSTEM",
+              action: "Order Created",
+              details: "Order created in WooCommerce",
               created_at: new Date(baseTime).toISOString(),
             },
             {
               order_id: order.id,
-              user_name: "Orders System",
-              user_role: "ORDER_STAFF",
-              action: "Order processing",
-              details: "Order is being processed",
+              user_name: "WooCommerce",
+              user_role: "SYSTEM",
+              action: "Processing Started",
+              details: "Order processing started",
               created_at: new Date(baseTime + 1000).toISOString(),
             },
           ];
@@ -297,8 +283,8 @@ export async function POST(req: NextRequest) {
               {
                 order_id: order.id,
                 user_name: "WooCommerce",
-                user_role: "ORDER_STAFF",
-                action: "Order completed",
+                user_role: "SYSTEM",
+                action: "Order Completed",
                 details: "Order completed in WooCommerce",
                 created_at: completedTimestamp,
               },
@@ -306,8 +292,8 @@ export async function POST(req: NextRequest) {
                 order_id: order.id,
                 user_name: "Packing Station",
                 user_role: "PACKING_STAFF",
-                action: "Waiting for packing",
-                details: "Order is ready for packing",
+                action: "Waiting for Packing",
+                details: "Order completed, waiting for packing in fulfillment station",
                 created_at: new Date(new Date(completedTimestamp).getTime() + 1000).toISOString(),
               }
             );
@@ -325,8 +311,8 @@ export async function POST(req: NextRequest) {
               {
                 order_id: order.id,
                 user_name: "WooCommerce",
-                user_role: "ORDER_STAFF",
-                action: "Order completed",
+                user_role: "SYSTEM",
+                action: "Order Completed",
                 details: "Order completed in WooCommerce",
                 created_at: completedTimestamp,
               },
@@ -334,8 +320,8 @@ export async function POST(req: NextRequest) {
                 order_id: order.id,
                 user_name: "Packing Station",
                 user_role: "PACKING_STAFF",
-                action: "Waiting for packing",
-                details: "Order is ready for packing",
+                action: "Waiting for Packing",
+                details: "Order completed, waiting for packing in fulfillment station",
                 created_at: new Date(new Date(completedTimestamp).getTime() + 1000).toISOString(),
               },
             ]);

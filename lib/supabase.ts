@@ -100,36 +100,48 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
           (resolvedCourierName?.includes("Professional") ? "PROFESSIONAL" : resolvedCourierName?.includes("DTDC") ? "DTDC" : (resolvedCourierName?.includes("ST") ? "ST_COURIER" : undefined));
       }
 
-      let resolvedCourierStatus: CourierStatus = defaultCourierStatus;
-      const rawCStatus = rawDispatch?.courier_status || rawDispatch?.courierStatus;
-      if (rawCStatus === "DELIVERED" || notesStr.includes("courier_status:DELIVERED")) {
-        resolvedCourierStatus = "DELIVERED";
-      } else if (rawCStatus === "SHIPPED" || rawCStatus === "PICKED_UP" || rawDispatch?.picked_up_at || notesStr.includes("courier_status:PICKED_UP")) {
-        resolvedCourierStatus = "PICKED_UP";
-      } else if (rawCStatus) {
-        resolvedCourierStatus = rawCStatus as CourierStatus;
-      }
-
       const notesMatch = raw.notes ? String(raw.notes).match(/dispatch_id:([^\s;|]+)/) : null;
       const parsedDispatchId = rawDispatch?.dispatch_id || rawDispatch?.dispatchId || (notesMatch ? notesMatch[1] : undefined);
+
+      const rawLlr = String(rawDispatch?.llr_number || rawDispatch?.llrNumber || "").trim();
+      const hasValidLlr = Boolean(
+        rawLlr && 
+        rawLlr.toLowerCase() !== "pending" && 
+        rawLlr.toLowerCase() !== "available" && 
+        rawLlr.toLowerCase() !== "/available" &&
+        !rawLlr.toLowerCase().startsWith("dsp") &&
+        rawLlr !== parsedDispatchId
+      );
+
+      let resolvedCourierStatus: CourierStatus = defaultCourierStatus;
+      const rawCStatus = rawDispatch?.courier_status || rawDispatch?.courierStatus;
+      if (hasValidLlr) {
+        resolvedCourierStatus = "SHIPPED";
+      } else if (rawCStatus === "PICKED_UP" || rawDispatch?.picked_up_at || notesStr.includes("courier_status:PICKED_UP")) {
+        resolvedCourierStatus = "PICKED_UP";
+      } else if (rawCStatus && rawCStatus !== "SHIPPED" && rawCStatus !== "DELIVERED") {
+        resolvedCourierStatus = rawCStatus as CourierStatus;
+      }
 
       const dispatchInfo: DispatchInfo = {
         courierId: isActivelyAssigned ? (rawDispatch?.courier_id || courierObj?.id) : undefined,
         courierName: resolvedCourierName,
         courierPartnerId: resolvedPartnerCode,
         dispatchId: parsedDispatchId,
-        llrNumber: rawDispatch?.llr_number || rawDispatch?.llrNumber || undefined,
+        llrNumber: hasValidLlr ? rawLlr : undefined,
         pickupPhone: rawDispatch?.pickup_phone || rawDispatch?.pickupPhone || undefined,
+        verifiedCustomerPhone: rawDispatch?.verified_customer_phone || cust.mobile,
         courierStatus: resolvedCourierStatus,
         dispatchedAt: rawDispatch?.dispatched_at || rawDispatch?.dispatchedAt || raw.dispatched_at,
         pickedUpAt: rawDispatch?.picked_up_at || rawDispatch?.pickedUpAt,
-        deliveredAt: rawDispatch?.shipped_at || rawDispatch?.delivered_at || rawDispatch?.deliveredAt || raw.shipped_at,
+        deliveredAt: undefined,
+        shippedAt: hasValidLlr ? (rawDispatch?.shipped_at || rawDispatch?.delivered_at || rawDispatch?.deliveredAt || raw.shipped_at) : undefined,
         notes: rawDispatch?.notes,
       };
 
       const rawSms = Array.isArray(raw.sms) ? raw.sms[0] : raw.sms;
       const smsInfo: SmsInfo = {
-        status: (rawSms?.status === "SENT" ? "SENT" : "PENDING") as SmsStatus,
+        status: (rawSms?.status === "SENT" ? "SENT" : rawSms?.status === "FAILED" ? "FAILED" : "PENDING") as SmsStatus,
         provider: rawSms?.provider || "Ping4SMS",
         providerMessageId: rawSms?.provider_message_id || rawSms?.providerMessageId,
         sentAt: rawSms?.sent_at || rawSms?.sentAt,
@@ -159,6 +171,7 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
             productName: it.product_name,
             sku: it.sku || "OF-ITEM",
             size: it.size || "M",
+            color: it.color || undefined,
             quantity: Number(it.quantity) || 1,
             unitPrice: Number(it.unit_price) || 0,
             subtotal: Number(it.subtotal) || 0,
@@ -202,13 +215,17 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         packingStartedAt: raw.packing_started_at,
         packedAt: raw.packed_at,
         dispatchedAt: raw.dispatched_at,
+        pickedUpAt: dispatchInfo.pickedUpAt,
+        shippedAt: dispatchInfo.shippedAt,
         notes: raw.notes,
-        pendingReason: raw.status === "NEW" && raw.notes?.includes("Reason:") 
+        pendingReason: raw.pending_reason || (raw.status === "NEW" && raw.notes?.includes("Reason:") 
           ? raw.notes.split("Reason:")[1]?.split("|")[0]?.trim() 
-          : (raw.status === "NEW" ? raw.notes : undefined),
-        pendingNote: raw.status === "NEW" && raw.notes?.includes("Note:") 
+          : (raw.status === "NEW" ? raw.notes : undefined)),
+        pendingNote: raw.pending_note || (raw.status === "NEW" && raw.notes?.includes("Note:") 
           ? raw.notes.split("Note:")[1]?.trim() 
-          : undefined,
+          : undefined),
+        pendingAt: raw.pending_at,
+        pendingBy: raw.pending_by,
         timeline,
       };
     });
@@ -350,6 +367,16 @@ export async function updateSupabaseCourierDetails(
       }
     }
 
+    if (details.verifiedCustomerPhone) {
+      updates.verified_customer_phone = details.verifiedCustomerPhone;
+    }
+    if (details.pickedUpAt) {
+      updates.picked_up_at = details.pickedUpAt;
+    }
+    if (details.shippedAt) {
+      updates.shipped_at = details.shippedAt;
+    }
+
     if (details.courierStatus) {
       // PostgreSQL enum courier_status only accepts 'PENDING' and 'SHIPPED'
       const pgStatus = (details.courierStatus === "PICKED_UP" || details.courierStatus === "DELIVERED" || details.courierStatus === "SHIPPED")
@@ -358,13 +385,13 @@ export async function updateSupabaseCourierDetails(
       updates.courier_status = pgStatus;
 
       const currentNotes = updates.notes || "";
-      if (details.courierStatus === "PICKED_UP" || details.courierStatus === "SHIPPED") {
-        updates.picked_up_at = new Date().toISOString();
+      if (details.courierStatus === "PICKED_UP") {
+        updates.picked_up_at = details.pickedUpAt || new Date().toISOString();
         updates.notes = currentNotes ? `${currentNotes};courier_status:PICKED_UP` : "courier_status:PICKED_UP";
       }
-      if (details.courierStatus === "DELIVERED") {
-        updates.shipped_at = new Date().toISOString();
-        updates.notes = currentNotes ? `${currentNotes};courier_status:DELIVERED` : "courier_status:DELIVERED";
+      if (details.courierStatus === "SHIPPED") {
+        updates.shipped_at = details.shippedAt || new Date().toISOString();
+        updates.notes = currentNotes ? `${currentNotes};courier_status:SHIPPED` : "courier_status:SHIPPED";
       }
     }
 

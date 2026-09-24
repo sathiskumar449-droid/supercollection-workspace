@@ -17,8 +17,9 @@ import {
   Eye
 } from "lucide-react";
 import { OrderStatusBadge, SmsStatusBadge } from "@/components/ui/status-badge";
-import { formatINR, cn } from "@/lib/utils";
+import { formatINR, cn, formatTimelineDateTime } from "@/lib/utils";
 import { useOrderFlow } from "@/lib/hooks";
+import { normalizeOrderTimeline } from "@/lib/store";
 import { ReturnStatusBadge } from "@/components/returns/return-status-badge";
 import { ReturnDetailsDrawer } from "@/components/returns/return-details-drawer";
 
@@ -174,12 +175,13 @@ export function OrderDetailsDrawer({
   const canEditCourier = ["ADMIN", "MANAGER", "DISPATCH_STAFF", "COURIER"].includes(userRole);
   const displayOrderNum = order.externalOrderId || order.orderNumber.replace(/^(SC-WC-|OF-)/, "");
 
-  // Build strictly deduplicated chronological order history
+  // Build strictly deduplicated chronological order history with all unified stages populated
   const chronologicalHistory = (() => {
-    if (!order.timeline || !Array.isArray(order.timeline)) return [];
+    const normalized = normalizeOrderTimeline(order);
+    if (!normalized || !Array.isArray(normalized)) return [];
 
     const seen = new Set<string>();
-    const sorted = [...order.timeline].sort(
+    const sorted = [...normalized].sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
@@ -293,6 +295,12 @@ export function OrderDetailsDrawer({
                       <span className="font-medium text-slate-900 block">{item.productName}</span>
                       <div className="flex items-center gap-2 text-slate-500 text-[11px] mt-0.5">
                         <span>Size: <strong className="text-slate-700">{item.size}</strong></span>
+                        {item.color && (
+                          <>
+                            <span>•</span>
+                            <span>Color: <strong className="text-slate-700">{item.color}</strong></span>
+                          </>
+                        )}
                         <span>•</span>
                         <span>Quantity: <strong className="text-slate-700">{item.quantity}</strong></span>
                         <span>•</span>
@@ -554,13 +562,13 @@ export function OrderDetailsDrawer({
             )}
           </div>
 
-          {/* 6. SIMPLE CHRONOLOGICAL ORDER HISTORY (Flipkart / Amazon Style) */}
+          {/* 6. MASTER ORDER TIMELINE (Section 18, 20, 27) */}
           <div className="p-4 bg-white rounded-lg border border-slate-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-slate-500" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                  Order History
+                  Master Order Timeline
                 </h3>
               </div>
               <span className="text-[11px] text-slate-400">
@@ -574,36 +582,57 @@ export function OrderDetailsDrawer({
               <div className="relative pl-6 space-y-5 ml-1 mt-3">
                 {chronologicalHistory.map((item, idx) => {
                   const isLast = idx === chronologicalHistory.length - 1;
+                  const isWaitingEvent = item.action?.toLowerCase().includes("waiting");
+                  const isCurrentWaiting = isWaitingEvent && isLast;
 
                   return (
                     <div key={item.id || idx} className="relative group">
                       {/* Vertical line connecting events */}
                       {!isLast && (
-                        <div className="absolute -left-[17px] top-4 w-0.5 h-[calc(100%+12px)] bg-slate-200" />
+                        <div className="absolute -left-[17px] top-4 w-0.5 h-[calc(100%+16px)] bg-slate-200" />
                       )}
 
                       {/* Status Dot */}
-                      <div className="absolute -left-[23px] top-1 w-3.5 h-3.5 rounded-full bg-emerald-600 text-white flex items-center justify-center ring-4 ring-emerald-50 shadow-2xs">
-                        <span className="text-[8px]">✓</span>
+                      <div className={cn(
+                        "absolute -left-[23px] top-1 w-3.5 h-3.5 rounded-full flex items-center justify-center ring-4 shadow-2xs",
+                        isCurrentWaiting 
+                          ? "bg-amber-500 text-white ring-amber-100 animate-pulse" 
+                          : "bg-emerald-600 text-white ring-emerald-50"
+                      )}>
+                        <span className="text-[8px]">{isCurrentWaiting ? "⏳" : "✓"}</span>
                       </div>
 
                       {/* Content Block */}
                       <div className="text-xs">
-                        {/* Timestamp */}
-                        <span className="text-[11px] font-mono text-slate-400 block font-medium">
-                          {formatDateTime(item.timestamp)}
-                        </span>
-
-                        {/* Title */}
-                        <div className="font-semibold text-slate-900 text-xs mt-0.5">
-                          {item.action}
+                        {/* Timestamp: exact unified format "24 Sep 08:44 AM" */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-mono text-slate-500 font-semibold">
+                            {formatTimelineDateTime(item.timestamp)}
+                          </span>
                         </div>
 
-                        {/* Details */}
-                        {item.details && (
-                          <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
-                            {item.details}
-                          </p>
+                        {/* Title */}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={cn(
+                            "font-bold text-xs",
+                            isCurrentWaiting ? "text-amber-800" : "text-slate-900"
+                          )}>
+                            {item.action}
+                          </span>
+                          {isCurrentWaiting && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider">
+                              Active Stage
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Dispatch number change transparency (Rule 20) */}
+                        {item.oldDispatchNo && item.newDispatchNo && (
+                          <div className="mt-1 p-2 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-900 space-y-0.5">
+                            <div>Old Dispatch No: <code className="font-mono font-bold">{item.oldDispatchNo}</code></div>
+                            <div>New Dispatch No: <code className="font-mono font-bold">{item.newDispatchNo}</code></div>
+                            {item.reason && <div>Reason: <span className="font-medium">{item.reason}</span></div>}
+                          </div>
                         )}
                       </div>
                     </div>
