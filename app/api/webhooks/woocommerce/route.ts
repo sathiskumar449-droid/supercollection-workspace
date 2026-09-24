@@ -66,8 +66,8 @@ export async function POST(req: NextRequest) {
     const paymentStatus = body.status === "processing" || body.status === "completed" ? "PAID" : body.payment_method === "cod" ? "COD" : "PENDING";
     const courierStatus = "PENDING"; // Webhook orders start as PENDING courier status; only dispatched orders from packing reach courier hub
 
-    // Detect source from WooCommerce order data (created_via, meta_data, UTM, referrer)
-    const orderSource = detectWooCommerceSource(body);
+    // All WooCommerce webhook orders are strictly WEBSITE source
+    const orderSource: OrderSource = "WEBSITE";
 
     const items = (body.line_items || []).map((item: any, idx: number) => ({
       product_name: item.name || "Product",

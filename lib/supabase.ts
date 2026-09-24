@@ -184,7 +184,7 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         id: raw.id,
         orderNumber: raw.order_number,
         externalOrderId: raw.external_order_id,
-        source: raw.source,
+        source: (String(raw.order_number || "").startsWith("SC-WC-") ? "WEBSITE" : raw.source) as OrderSource,
         customer: cust,
         items,
         totalAmount: Number(raw.total_amount) || 0,

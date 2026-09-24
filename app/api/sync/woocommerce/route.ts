@@ -102,8 +102,8 @@ export async function POST(req: NextRequest) {
       const paymentStatus = wc.status === "processing" || wc.status === "completed" ? "PAID" : wc.payment_method === "cod" ? "COD" : "PENDING";
       const courierStatus = "PENDING"; // Synced orders start as PENDING courier status; only dispatched orders from packing reach courier hub
 
-      // Detect source from WooCommerce order data (created_via, meta_data, UTM, referrer)
-      const orderSource = detectWooCommerceSource(wc);
+      // All WooCommerce orders are strictly WEBSITE source
+      const orderSource: OrderSource = "WEBSITE";
 
       // 1. Safe Customer Lookup / Upsert (avoid 42P10 constraint error)
       let customerId: string | null = null;

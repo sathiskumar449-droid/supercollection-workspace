@@ -40,64 +40,9 @@ export function parseWooCommerceDate(dateCreatedGmt?: string | null, dateCreated
 
 /**
  * Detect the order source from WooCommerce order data.
- * 
- * WooCommerce provides:
- * - `created_via`: "checkout" (website), "rest-api", "admin", "phone", etc.
- * - `meta_data`: Array of { key, value } from WooCommerce Order Attribution or custom plugins
- *   e.g. { key: "_wc_order_attribution_utm_source", value: "Whatsapp" }
- *        { key: "_wc_order_attribution_source_type", value: "typein" }
- *        { key: "_wc_order_attribution_origin", value: "Source: Whatsapp" }
- *        { key: "_order_source", value: "whatsapp" }
+ * All orders from WooCommerce are strictly "WEBSITE".
+ * Only orders from WhatsApp Chat Box app are "WHATSAPP".
  */
-export function detectWooCommerceSource(wcOrder: any): OrderSource {
-  const metaData: Array<{ key: string; value: any }> = wcOrder.meta_data || [];
-  const createdVia = (wcOrder.created_via || "").toLowerCase().trim();
-
-  // 1. Check meta_data for explicit source markers (WooCommerce 8.5+ Order Attribution & custom fields)
-  for (const meta of metaData) {
-    const key = String(meta.key || "").toLowerCase();
-    const valStr = String(meta.value || "").toLowerCase().trim();
-
-    if (!valStr) continue;
-
-    // Check if key is related to source / attribution / origin / utm
-    const isAttributionKey =
-      key.includes("source") ||
-      key.includes("attribution") ||
-      key.includes("origin") ||
-      key.includes("referrer") ||
-      key.includes("medium") ||
-      key.includes("campaign");
-
-    if (isAttributionKey) {
-      if (valStr.includes("whatsapp") || valStr.includes("wa.me") || valStr.includes("whats app")) {
-        return "WHATSAPP";
-      }
-      if (valStr.includes("instagram") || valStr.includes("ig.me") || valStr.includes("ig")) {
-        return "INSTAGRAM";
-      }
-      if (
-        valStr === "direct" ||
-        valStr.includes("typein") ||
-        valStr.includes("walk-in") ||
-        valStr.includes("walkin") ||
-        valStr.includes("manual")
-      ) {
-        return "DIRECT";
-      }
-    }
-  }
-
-  // 2. Check created_via field
-  if (createdVia === "admin" || createdVia === "phone" || createdVia === "pos") {
-    return "DIRECT";
-  }
-
-  // "checkout" = standard website purchase, "store-api" = WooCommerce block checkout
-  if (createdVia === "checkout" || createdVia === "store-api" || createdVia === "rest-api") {
-    return "WEBSITE";
-  }
-
-  // 3. Default
+export function detectWooCommerceSource(_wcOrder?: any): OrderSource {
   return "WEBSITE";
 }

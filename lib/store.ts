@@ -463,6 +463,11 @@ export function sanitizeOrders(orders: Order[]): Order[] {
   return orders.map((ord) => {
     if (!ord) return ord;
 
+    // Ensure all WooCommerce orders (SC-WC-) are strictly WEBSITE source
+    if (ord.orderNumber?.startsWith("SC-WC-") || String(ord.id || "").startsWith("SC-WC-")) {
+      ord.source = "WEBSITE";
+    }
+
     // 1. Deduplicate items
     if (Array.isArray(ord?.items) && ord.items.length > 1) {
       const map = new Map<string, OrderItem>();
