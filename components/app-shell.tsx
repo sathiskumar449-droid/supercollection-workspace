@@ -1,16 +1,21 @@
 "use client";
 
-import React, { useState } from "react";
-import { usePathname } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
 import { GlobalSearchDialog } from "./global-search-dialog";
 import { OrderDetailsDrawer } from "./orders/order-details-drawer";
 import { useOrderFlow } from "@/lib/hooks";
 import { Order } from "@/types/orderflow";
+import { useAuth } from "@/lib/auth-context";
+import { LoginScreen } from "./auth/login-screen";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user: authUser, isAuthenticated, isLoading, logout } = useAuth();
+
   const {
     orders,
     activeReturnsCount,
@@ -31,6 +36,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
+
+  // Sync effective user session with authenticated account
+  const effectiveUser = React.useMemo(() => {
+    if (!authUser) return user;
+    return {
+      ...user,
+      role: authUser.role,
+      name: authUser.name || user.name,
+      courierPartnerId: authUser.courierPartnerId,
+    };
+  }, [user, authUser]);
+
+  // Strict route protection: Courier is strictly restricted to /couriers
+  useEffect(() => {
+    if (isAuthenticated && authUser?.role === "COURIER") {
+      if (pathname && !pathname.startsWith("/couriers")) {
+        router.replace("/couriers");
+      }
+    }
+  }, [isAuthenticated, authUser, pathname, router]);
 
   // Dynamic page title and breadcrumbs
   const getPageInfo = () => {
@@ -111,13 +136,53 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }).length;
   }, [orders, user]);
 
+  // 1. Loading session from storage
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-900 text-white">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-semibold tracking-wide text-slate-300">
+            Loading SuperCollection Work Desk...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. If not authenticated, render Login Screen
+  if (!isAuthenticated) {
+    return (
+      <LoginScreen
+        onSuccess={(role) => {
+          if (role === "COURIER") {
+            router.replace("/couriers");
+          }
+        }}
+      />
+    );
+  }
+
+  // 3. Strict privacy & route restriction: Courier user can ONLY access /couriers
+  if (authUser?.role === "COURIER" && pathname && !pathname.startsWith("/couriers")) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#f8fafc]">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-semibold text-slate-700">Redirecting to Courier Hub...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#f8fafc]">
       {/* Collapsible Sidebar */}
       <Sidebar
-        user={user}
+        user={effectiveUser}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onLogout={logout}
         badgeCounts={{
           packingCount: metrics.confirmedOrders,
           dispatchCount: metrics.packedOrders,
@@ -133,7 +198,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <TopBar
           title={pageInfo.title}
           breadcrumbs={pageInfo.breadcrumbs}
-          user={user}
+          user={effectiveUser}
           onRoleChange={switchRole}
           onOpenSearch={() => setSearchOpen(true)}
           onResetData={resetData}
@@ -143,6 +208,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onDateFilterChange={setDateFilter}
           customDate={customDate}
           onCustomDateChange={setCustomDate}
+          onLogout={logout}
         />
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-6">
@@ -165,8 +231,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onClose={() => setActiveOrder(null)}
         onUpdateStatus={updateOrderStatus}
         onUpdateCourier={updateCourierDetails}
-        userRole={user.role}
-        courierPartnerId={user.courierPartnerId}
+        userRole={effectiveUser.role}
+        courierPartnerId={effectiveUser.courierPartnerId}
       />
     </div>
   );

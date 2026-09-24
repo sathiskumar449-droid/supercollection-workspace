@@ -13,7 +13,9 @@ import {
   X,
   RefreshCw,
   Globe,
-  MessageSquare
+  MessageSquare,
+  LogOut,
+  Truck
 } from "lucide-react";
 import { Role, UserSession } from "@/types/orderflow";
 import { cn } from "@/lib/utils";
@@ -33,6 +35,7 @@ interface TopBarProps {
   onDateFilterChange?: (df: string) => void;
   customDate?: string;
   onCustomDateChange?: (date: string) => void;
+  onLogout?: () => void;
 }
 
 interface RoleOption {
@@ -66,6 +69,7 @@ export function TopBar({
   onDateFilterChange,
   customDate = "",
   onCustomDateChange,
+  onLogout,
 }: TopBarProps) {
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -235,61 +239,92 @@ export function TopBar({
           )}
         </div>
 
-        {/* Live Role Switcher (RBAC Showcase) */}
-        <div className="relative">
-          <button
-            onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
-            className="flex items-center gap-2 pl-2.5 pr-2 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs transition-colors"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-orange-600" />
-            <div className="text-left hidden sm:block">
-              <span className="text-[10px] text-slate-400 block -mb-0.5 uppercase tracking-wide">Role</span>
-              <span className="font-semibold text-slate-800 text-xs">
-                {ROLES_LIST.find((r) => r.role === user.role && (!r.courierPartnerId || user.courierPartnerId === r.courierPartnerId))?.label ||
-                  (user.role === "COURIER" ? `${user.name || "Courier Portal"}` : user.role)}
-              </span>
+        {/* Role Display / Switcher */}
+        {user.role === "COURIER" ? (
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 border border-blue-200 text-blue-900 rounded-lg text-xs font-bold">
+              <Truck className="w-3.5 h-3.5 text-blue-600" />
+              <span>Courier Portal</span>
             </div>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-1" />
-          </button>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-colors shadow-2xs shrink-0 cursor-pointer"
+                title="Sign Out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Logout</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="relative">
+              <button
+                onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
+                className="flex items-center gap-2 pl-2.5 pr-2 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs transition-colors"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-orange-600" />
+                <div className="text-left hidden sm:block">
+                  <span className="text-[10px] text-slate-400 block -mb-0.5 uppercase tracking-wide">Role</span>
+                  <span className="font-semibold text-slate-800 text-xs">
+                    {ROLES_LIST.find((r) => r.role === user.role && (!r.courierPartnerId || user.courierPartnerId === r.courierPartnerId))?.label || user.role}
+                  </span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-1" />
+              </button>
 
-          {roleDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 max-h-[80vh] overflow-y-auto">
-              <div className="px-2.5 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                Switch Role / Portal (Test RBAC)
-              </div>
-              <div className="space-y-0.5">
-                {ROLES_LIST.map((r) => {
-                  const isSelected =
-                    user.role === r.role &&
-                    (!r.courierPartnerId || user.courierPartnerId === r.courierPartnerId);
-                  return (
-                    <button
-                      key={`${r.role}-${r.courierPartnerId || "default"}`}
-                      onClick={() => {
-                        onRoleChange(r.role, r.courierPartnerId);
-                        setRoleDropdownOpen(false);
-                      }}
-                      className={cn(
-                        "w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors",
-                        isSelected
-                          ? "bg-orange-50 text-orange-950 font-semibold"
-                          : "hover:bg-slate-50 text-slate-700"
-                      )}
-                    >
-                      <div>
-                        <div className="font-medium">{r.label}</div>
-                        <div className="text-[10px] text-slate-400 font-normal">{r.desc}</div>
-                      </div>
-                      {isSelected && (
-                        <Check className="w-4 h-4 text-orange-600 shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              {roleDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 max-h-[80vh] overflow-y-auto">
+                  <div className="px-2.5 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Switch Role / Portal (Test RBAC)
+                  </div>
+                  <div className="space-y-0.5">
+                    {ROLES_LIST.map((r) => {
+                      const isSelected =
+                        user.role === r.role &&
+                        (!r.courierPartnerId || user.courierPartnerId === r.courierPartnerId);
+                      return (
+                        <button
+                          key={`${r.role}-${r.courierPartnerId || "default"}`}
+                          onClick={() => {
+                            onRoleChange(r.role, r.courierPartnerId);
+                            setRoleDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors",
+                            isSelected
+                              ? "bg-orange-50 text-orange-950 font-semibold"
+                              : "hover:bg-slate-50 text-slate-700"
+                          )}
+                        >
+                          <div>
+                            <div className="font-medium">{r.label}</div>
+                            <div className="text-[10px] text-slate-400 font-normal">{r.desc}</div>
+                          </div>
+                          {isSelected && (
+                            <Check className="w-4 h-4 text-orange-600 shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs shrink-0 cursor-pointer"
+                title="Sign Out"
+              >
+                <LogOut className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <SyncWooCommerceDialog

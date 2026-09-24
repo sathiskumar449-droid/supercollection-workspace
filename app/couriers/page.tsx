@@ -181,7 +181,7 @@ function CourierHubContent() {
 
   // Active courier partner code
   const activePartnerCode = useMemo(() => {
-    if (isCourierUser) return userCourierPartnerId || "ST_COURIER";
+    if (isCourierUser && userCourierPartnerId) return userCourierPartnerId;
     return adminPartnerFilter || courierPartners[0]?.code || "ST_COURIER";
   }, [isCourierUser, userCourierPartnerId, adminPartnerFilter, courierPartners]);
 
@@ -256,8 +256,8 @@ function CourierHubContent() {
         return false;
       }
 
-      // Strict courier partner isolation for courier user
-      if (isCourierUser) {
+      // Strict courier partner isolation for courier user only if a specific partner is bound to their account
+      if (isCourierUser && userCourierPartnerId) {
         return partnerCode === userCourierPartnerId;
       }
 
@@ -265,9 +265,9 @@ function CourierHubContent() {
     });
   }, [orders, isCourierUser, userCourierPartnerId, sessionPickedUpIds]);
 
-  // Partner order counts for Admin tabs
+  // Partner order counts for tabs
   const partnerCounts = useMemo(() => {
-    if (isCourierUser) return {};
+    if (isCourierUser && userCourierPartnerId) return {};
 
     const counts: Record<string, number> = {};
     courierPartners.forEach((cp) => {
@@ -603,7 +603,7 @@ function CourierHubContent() {
 
       {/* Courier Partner Tabs & Export Buttons */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-200">
-        {!isCourierUser ? (
+        {(!isCourierUser || !userCourierPartnerId) ? (
           <div className="flex items-center gap-2 overflow-x-auto text-xs py-0.5">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0">
               Courier Partner:
@@ -654,25 +654,23 @@ function CourierHubContent() {
           </div>
         )}
 
-        {/* Admin Export Buttons */}
-        {!isCourierUser && (
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleExportExcel}
-              className="inline-flex items-center justify-center p-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-              title="Export Excel"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleExportPdf}
-              className="inline-flex items-center justify-center p-2 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-              title="Export PDF"
-            >
-              <FileText className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        {/* Manifest Export Buttons */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={handleExportExcel}
+            className="inline-flex items-center justify-center p-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+            title="Export Excel"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleExportPdf}
+            className="inline-flex items-center justify-center p-2 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+            title="Export PDF"
+          >
+            <FileText className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Status Filter Sub-tabs & Search Input */}

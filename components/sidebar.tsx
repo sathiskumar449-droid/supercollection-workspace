@@ -12,6 +12,7 @@ import {
   Send, 
   BarChart3, 
   Settings,
+  LogOut,
 } from "lucide-react";
 import { UserSession } from "@/types/orderflow";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ interface SidebarProps {
   user: UserSession;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  onLogout?: () => void;
   badgeCounts?: {
     packingCount?: number;
     dispatchCount?: number;
@@ -33,6 +35,7 @@ interface SidebarProps {
 export function Sidebar({
   user,
   badgeCounts = {},
+  onLogout,
 }: SidebarProps) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
@@ -230,15 +233,25 @@ export function Sidebar({
       <div className="p-2 border-t border-slate-100 bg-slate-50/70 flex flex-col items-center text-center">
         <div className="relative mb-1">
           <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-800 font-bold text-xs flex items-center justify-center border border-orange-200 shadow-xs">
-            {user.role === "ADMIN" ? "AD" : user.name.split(" ").map((n) => n[0]).join("")}
+            {user.role === "ADMIN" ? "AD" : user.role === "COURIER" ? "CR" : user.name.split(" ").map((n) => n[0]).join("")}
           </div>
           {user.online && (
             <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-white" />
           )}
         </div>
         <span className="text-[8px] font-bold text-orange-700 px-1 py-0.5 bg-orange-50 rounded border border-orange-200/60 inline-block uppercase tracking-wide">
-          {user.role === "ADMIN" ? "Admin" : user.role === "MANAGER" ? "Mgr" : "Staff"}
+          {user.role === "ADMIN" ? "Admin" : user.role === "COURIER" ? "Courier" : user.role === "MANAGER" ? "Mgr" : "Staff"}
         </span>
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            title="Sign Out / Exit"
+            className="mt-2 w-full flex items-center justify-center gap-1 py-1 px-1 rounded-lg text-[10px] font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200/80 hover:border-rose-200 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-3 h-3 text-slate-400 group-hover:text-rose-600" />
+            <span>Exit</span>
+          </button>
+        )}
       </div>
     </aside>
   );
