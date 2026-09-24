@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
-import { OrderStatus } from "@/types/orderflow";
+import { OrderStatus, OrderSource } from "@/types/orderflow";
 import { detectWooCommerceSource, parseWooCommerceDate } from "@/lib/woocommerce-source";
 
 /**

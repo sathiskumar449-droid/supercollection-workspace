@@ -75,31 +75,7 @@ function ReturnsContent() {
     return returns.filter((r) => matchesDateFilter(r.createdAt, dateFilter, customDate));
   }, [returns, dateFilter, customDate]);
 
-  // 2. Compute dynamic Summary Card counts based on currently selected date range
-  const summaryCards = useMemo(() => {
-    let total = dateFilteredReturns.length;
-    let requested = 0;
-    let refunds = 0;
-    let exchanges = 0;
-    let completed = 0;
-
-    dateFilteredReturns.forEach((r) => {
-      if (r.status === "Return Requested" || r.status === "Return Approved") requested++;
-      if (r.returnType === "Refund") refunds++;
-      if (r.returnType === "Replacement" || r.returnType === "Exchange") exchanges++;
-      if (r.status === "Completed") completed++;
-    });
-
-    return {
-      total,
-      requested,
-      refunds,
-      exchanges,
-      completed,
-    };
-  }, [dateFilteredReturns]);
-
-  // 3. Tab Definitions with Counts
+  // 2. Tab Definitions with Counts
   const tabs = useMemo(() => {
     const counts: Record<string, number> = {
       ALL: dateFilteredReturns.length,
@@ -315,79 +291,6 @@ function ReturnsContent() {
 
   return (
     <div className="space-y-3.5 max-w-full mx-auto select-none">
-      {/* KPI STATUS FILTER BUTTONS ROW (Compact with matching colored borders like other pages) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-        {/* 1. ALL RETURNS */}
-        <button
-          onClick={() => { setActiveTab("ALL"); setPage(1); }}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "ALL" 
-              ? "border-orange-600 ring-2 ring-orange-500/20 bg-orange-50/10" 
-              : "border-slate-300 hover:border-orange-400"
-          )}
-        >
-          <span className="text-[11px] text-slate-500 block font-medium">All Returns</span>
-          <span className="text-base font-bold text-slate-900 font-mono mt-0.5 block">{summaryCards.total}</span>
-        </button>
-
-        {/* 2. RETURN REQUESTED */}
-        <button
-          onClick={() => { setActiveTab("Return Requested"); setPage(1); }}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "Return Requested" 
-              ? "border-amber-600 ring-2 ring-amber-500/20 bg-amber-50/10" 
-              : "border-amber-300 hover:border-amber-400"
-          )}
-        >
-          <span className="text-[11px] text-amber-700 font-medium block">Return Requested</span>
-          <span className="text-base font-bold text-amber-800 font-mono mt-0.5 block">{summaryCards.requested}</span>
-        </button>
-
-        {/* 3. REFUNDS */}
-        <button
-          onClick={() => { setActiveTab("Refund"); setPage(1); }}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "Refund" 
-              ? "border-rose-600 ring-2 ring-rose-500/20 bg-rose-50/10" 
-              : "border-rose-300 hover:border-rose-400"
-          )}
-        >
-          <span className="text-[11px] text-rose-700 font-medium block">Refunds</span>
-          <span className="text-base font-bold text-rose-800 font-mono mt-0.5 block">{summaryCards.refunds}</span>
-        </button>
-
-        {/* 4. EXCHANGES */}
-        <button
-          onClick={() => { setActiveTab("Exchange"); setPage(1); }}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "Exchange" 
-              ? "border-purple-600 ring-2 ring-purple-500/20 bg-purple-50/10" 
-              : "border-purple-300 hover:border-purple-400"
-          )}
-        >
-          <span className="text-[11px] text-purple-700 font-medium block">Exchanges</span>
-          <span className="text-base font-bold text-purple-800 font-mono mt-0.5 block">{summaryCards.exchanges}</span>
-        </button>
-
-        {/* 5. COMPLETED */}
-        <button
-          onClick={() => { setActiveTab("Completed"); setPage(1); }}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "Completed" 
-              ? "border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/10" 
-              : "border-emerald-300 hover:border-emerald-400"
-          )}
-        >
-          <span className="text-[11px] text-emerald-700 font-medium block">Completed</span>
-          <span className="text-base font-bold text-emerald-800 font-mono mt-0.5 block">{summaryCards.completed}</span>
-        </button>
-      </div>
-
       {/* STATUS TABS */}
       <div className="border-b border-slate-200 flex items-center gap-1 overflow-x-auto scrollbar-none pb-px">
         {tabs.map((tab) => {
@@ -529,7 +432,7 @@ function ReturnsContent() {
               </th>
               <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
               <th 
-                className="py-2 px-1 w-[9%] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
+                className="py-2 px-1 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
                 onClick={() => {
                   setSortField("returnId");
                   setSortAsc(!sortAsc);
@@ -540,7 +443,7 @@ function ReturnsContent() {
                   <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                 </div>
               </th>
-              <th className="py-2 px-1 w-[8.5%] border-r border-b-2 border-slate-300 bg-slate-100 truncate">ORDER ID</th>
+              <th className="py-2 px-1 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100 truncate">ORDER ID</th>
               <th 
                 className="py-2 px-1 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
                 onClick={() => {
@@ -553,12 +456,12 @@ function ReturnsContent() {
                   <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                 </div>
               </th>
-              <th className="py-2 px-1.5 w-[11.5%] border-r border-b-2 border-slate-300 bg-slate-100 truncate">CUSTOMER</th>
-              <th className="py-2 px-1.5 w-[15.5%] border-r border-b-2 border-slate-300 bg-slate-100 truncate">ITEMS</th>
+              <th className="py-2 px-1.5 w-[12%] border-r border-b-2 border-slate-300 bg-slate-100 truncate">CUSTOMER</th>
+              <th className="py-2 px-1.5 w-[16%] border-r border-b-2 border-slate-300 bg-slate-100 truncate">ITEMS</th>
               <th className="py-2 px-1 w-[9%] border-r border-b-2 border-slate-300 bg-slate-100 truncate">RETURN REASON</th>
               <th className="py-2 px-1 w-[4%] text-center border-r border-b-2 border-slate-300 bg-slate-100">QTY</th>
               <th 
-                className="py-2 px-1 w-[7.5%] text-right border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
+                className="py-2 px-1 w-[6%] text-right border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
                 onClick={() => {
                   setSortField("expectedAmount");
                   setSortAsc(!sortAsc);
@@ -570,8 +473,8 @@ function ReturnsContent() {
                 </div>
               </th>
               <th className="py-2 px-1 w-[10%] text-center border-r border-b-2 border-slate-300 bg-slate-100">RETURN STATUS</th>
-              <th className="py-2 px-1 w-[12%] text-center border-r border-b-2 border-slate-300 bg-slate-100">DISPATCH NO.</th>
-              <th className="py-2 px-1 w-[6.5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">ACTION</th>
+              <th className="py-2 px-1 w-[8.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">DISPATCH NO.</th>
+              <th className="py-2 px-1 w-[6%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">ACTION</th>
             </tr>
           </thead>
 

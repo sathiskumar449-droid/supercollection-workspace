@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { Order, OrderStatus, CourierStatus, SmsStatus, Customer, OrderItem, DispatchInfo, SmsInfo, ActivityLog } from "@/types/orderflow";
+import { Order, OrderStatus, CourierStatus, SmsStatus, Customer, OrderItem, DispatchInfo, SmsInfo, ActivityLog, OrderSource } from "@/types/orderflow";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";

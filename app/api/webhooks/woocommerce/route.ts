@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 import { detectWooCommerceSource, parseWooCommerceDate } from "@/lib/woocommerce-source";
-import { OrderStatus } from "@/types/orderflow";
+import { OrderStatus, OrderSource } from "@/types/orderflow";
 
 export async function GET() {
   return NextResponse.json({ status: "active", message: "SuperCollection WooCommerce Webhook Endpoint is live" }, { status: 200 });

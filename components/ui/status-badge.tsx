@@ -126,17 +126,17 @@ export function SmsStatusBadge({ status, className }: { status: SmsStatus; class
     SENT: {
       label: "Sent",
       text: "text-emerald-600",
-      icon: <Send className="w-3 h-3 text-emerald-600" />,
+      icon: <Send className="w-3 h-3 text-emerald-600 shrink-0" />,
     },
     PENDING: {
       label: "Waiting for SMS",
       text: "text-amber-600",
-      icon: <Clock className="w-3 h-3 text-amber-600" />,
+      icon: <Clock className="w-3 h-3 text-amber-600 shrink-0" />,
     },
     FAILED: {
       label: "Failed",
       text: "text-red-600",
-      icon: <AlertCircle className="w-3 h-3 text-red-600" />,
+      icon: <AlertCircle className="w-3 h-3 text-red-600 shrink-0" />,
     },
   };
 
@@ -145,7 +145,7 @@ export function SmsStatusBadge({ status, className }: { status: SmsStatus; class
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 text-xs font-semibold select-none",
+        "inline-flex items-center gap-1 text-[11px] font-semibold select-none whitespace-nowrap",
         c.text,
         className
       )}

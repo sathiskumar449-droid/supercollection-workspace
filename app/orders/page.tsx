@@ -396,8 +396,33 @@ function OrdersContent() {
 
       {/* Filter Toolbar (Search is cleanly unified in TopBar) */}
       <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-subtle flex flex-wrap items-center justify-between gap-3">
-        {/* Filter Dropdowns */}
+        {/* Filter Dropdowns & Search */}
         <div className="flex flex-wrap items-center gap-2.5">
+          {/* Search Input right before Order Status Filter */}
+          <div className="relative flex items-center">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search Order ID, Customer, Phone..."
+              className="text-xs pl-8 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-800 placeholder-slate-400 w-48 sm:w-60 transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
           {/* Order Status Filter */}
           <select
             value={statusFilter}
@@ -521,11 +546,11 @@ function OrdersContent() {
                     title={isAllPageSelected ? "Deselect page" : "Select all orders on this page"}
                   />
                 </th>
-                <th className="py-2 px-1 w-[3.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
                   S.No
                 </th>
                 <th
-                  className="py-2 px-1.5 w-[8.5%] cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
+                  className="py-2 px-1.5 w-[7.5%] cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
                   onClick={() => {
                     setSortField("orderNumber");
                     setSortAsc(!sortAsc);
@@ -537,7 +562,7 @@ function OrdersContent() {
                   </div>
                 </th>
                 <th
-                  className="py-2 px-1.5 w-[8.5%] cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
+                  className="py-2 px-1.5 w-[7.5%] cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
                   onClick={() => {
                     setSortField("createdAt");
                     setSortAsc(!sortAsc);
@@ -548,13 +573,13 @@ function OrdersContent() {
                     <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                   </div>
                 </th>
-                <th className="py-2 px-1.5 w-[11%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="py-2 px-1.5 w-[11.5%] border-r border-b-2 border-slate-300 bg-slate-100">
                   Customer Name
                 </th>
-                <th className="py-2 px-1 w-[6.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Source</th>
+                <th className="py-2 px-1 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Source</th>
                 <th className="py-2 px-1 w-[4.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
                 <th
-                  className="py-2 px-1.5 w-[6%] text-right cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
+                  className="py-2 px-1.5 w-[5%] text-right cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
                   onClick={() => {
                     setSortField("totalAmount");
                     setSortAsc(!sortAsc);
@@ -566,12 +591,12 @@ function OrdersContent() {
                   </div>
                 </th>
                 <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Order Status</th>
-                <th className="py-2 px-1 w-[7%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Return</th>
-                <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
-                <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">LLR</th>
+                <th className="py-2 px-1 w-[6.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Return</th>
+                <th className="py-2 px-1 w-[7%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
+                <th className="py-2 px-1 w-[6.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">LLR</th>
                 <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
-                <th className="py-2 px-1 w-[7%] text-center border-r border-b-2 border-slate-300 bg-slate-100">SMS Status</th>
-                <th className="py-2 px-1 w-[7.5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">Tracking</th>
+                <th className="py-2 px-1 w-[11.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">SMS Status</th>
+                <th className="py-2 px-1 w-[6%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">Tracking</th>
               </tr>
             </thead>
 
@@ -720,8 +745,8 @@ function OrdersContent() {
                       </td>
 
                       {/* SMS Status */}
-                      <td className="py-2 px-1 text-center truncate border-r border-b border-slate-300">
-                        <SmsStatusBadge status={order.sms.status} className="justify-center text-[11px]" />
+                      <td className="py-2 px-1 text-center whitespace-nowrap border-r border-b border-slate-300">
+                        <SmsStatusBadge status={order.sms.status} className="justify-center" />
                       </td>
 
                       {/* Order Tracking */}
