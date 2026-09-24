@@ -233,19 +233,17 @@ function CourierHubContent() {
         return false;
       }
 
-      // Must be picked up (either in this session or marked as picked up / delivered / shipped or has pickedUpAt or has LLR)
+      // Must be picked up (ONLY when Customer Mobile Number was entered & verified, or has active LLR or explicit pickup)
       const isSessionPicked = sessionPickedUpIds.includes(o.id);
       const cStatus = o.dispatch?.courierStatus;
       const hasLlr = Boolean(o.dispatch?.llrNumber && o.dispatch.llrNumber.trim());
+      const hasVerifiedCustomerPhone = Boolean(o.dispatch?.verifiedCustomerPhone && o.dispatch.verifiedCustomerPhone.trim());
       const isPickedUp =
         isSessionPicked ||
         cStatus === "PICKED_UP" ||
         cStatus === "DELIVERED" ||
         cStatus === "SHIPPED" ||
-        Boolean(o.dispatch?.pickedUpAt) ||
-        Boolean(o.pickedUpAt) ||
-        Boolean(o.dispatch?.shippedAt) ||
-        Boolean(o.shippedAt) ||
+        hasVerifiedCustomerPhone ||
         hasLlr;
 
       if (!isPickedUp) {

@@ -118,7 +118,6 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
       // Only actively assigned if courier partner or actual pickup/LLR exists (DISPATCHED alone does NOT assign courier)
       const isActivelyAssigned = Boolean(explicitCourierName) ||
                                 Boolean(explicitPartnerCode) ||
-                                Boolean(courierObj?.code) ||
                                 (rawDispatch?.courier_status && rawDispatch.courier_status !== "PENDING") ||
                                 Boolean(rawDispatch?.picked_up_at) ||
                                 Boolean(parsedPickedUpAt) ||
@@ -152,12 +151,12 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         dispatchId: parsedDispatchId,
         llrNumber: hasValidLlr ? rawLlr : undefined,
         pickupPhone: parsedPickupPhone || rawDispatch?.pickup_phone || rawDispatch?.pickupPhone || undefined,
-        verifiedCustomerPhone: rawDispatch?.verified_customer_phone || cust.mobile,
+        verifiedCustomerPhone: rawDispatch?.verified_customer_phone || (notesStr.includes("verified_phone:") ? cust.mobile : undefined),
         courierStatus: resolvedCourierStatus,
         dispatchedAt: rawDispatch?.dispatched_at || rawDispatch?.dispatchedAt || raw.dispatched_at,
-        pickedUpAt: parsedPickedUpAt || rawDispatch?.picked_up_at || rawDispatch?.pickedUpAt || (resolvedCourierStatus === "PICKED_UP" || resolvedCourierStatus === "SHIPPED" ? (raw.shipped_at || rawDispatch?.shipped_at || raw.updated_at) : undefined),
+        pickedUpAt: parsedPickedUpAt || rawDispatch?.picked_up_at || rawDispatch?.pickedUpAt || (resolvedCourierStatus === "PICKED_UP" || resolvedCourierStatus === "SHIPPED" ? rawDispatch?.shipped_at : undefined),
         deliveredAt: undefined,
-        shippedAt: (hasValidLlr || resolvedCourierStatus === "SHIPPED") ? (rawDispatch?.shipped_at || rawDispatch?.delivered_at || rawDispatch?.deliveredAt || raw.shipped_at || raw.updated_at) : undefined,
+        shippedAt: (hasValidLlr || resolvedCourierStatus === "SHIPPED") ? (rawDispatch?.shipped_at || rawDispatch?.delivered_at || rawDispatch?.deliveredAt) : undefined,
         notes: rawDispatch?.notes,
       };
 
@@ -304,7 +303,7 @@ export async function updateSupabaseOrderStatus(
     if (newStatus === "PACKING") updates.packing_started_at = updates.updated_at;
     if (newStatus === "PACKED") updates.packed_at = updates.updated_at;
     if (newStatus === "DISPATCHED") updates.dispatched_at = updates.updated_at;
-    if (newStatus === "COMPLETED") updates.shipped_at = updates.updated_at;
+    if (newStatus === "COMPLETED") updates.completed_at = updates.updated_at;
 
     if (dispatchId !== undefined) {
       const { data: existingOrd } = await db.from("orders").select("notes").eq("id", orderId).maybeSingle();

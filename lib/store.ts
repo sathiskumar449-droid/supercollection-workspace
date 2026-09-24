@@ -1161,6 +1161,7 @@ export const orderflowStore = {
     const updatedTimeline: ActivityLog[] = [...order.timeline, ...newEntries];
 
     const isDispatched = newStatus === "DISPATCHED";
+    const wasAlreadyPickedUp = Boolean(order.dispatch?.verifiedCustomerPhone || order.dispatch?.llrNumber);
 
     const updatedOrder: Order = {
       ...order,
@@ -1172,6 +1173,8 @@ export const orderflowStore = {
       packedAt: (newStatus === "PACKED" || isDispatched) && !order.packedAt ? now : order.packedAt,
       dispatchedAt: isDispatched && !order.dispatchedAt ? now : order.dispatchedAt,
       completedAt: newStatus === "COMPLETED" && !order.completedAt ? now : order.completedAt,
+      pickedUpAt: wasAlreadyPickedUp ? order.pickedUpAt : undefined,
+      shippedAt: order.dispatch?.llrNumber ? order.shippedAt : undefined,
       packingStaff: newStatus === "PACKING" ? globalUser.name : order.packingStaff,
       dispatch: {
         ...order.dispatch,
@@ -1182,7 +1185,13 @@ export const orderflowStore = {
               ? order.dispatch.llrNumber
               : undefined),
         dispatchedAt: isDispatched && !order.dispatch.dispatchedAt ? now : order.dispatch.dispatchedAt,
-        courierName: order.dispatch.courierName,
+        // When becoming Dispatched from Packing, DO NOT assign courier, DO NOT set picked up, DO NOT set shipped
+        courierId: wasAlreadyPickedUp ? order.dispatch.courierId : undefined,
+        courierName: wasAlreadyPickedUp ? order.dispatch.courierName : undefined,
+        courierPartnerId: wasAlreadyPickedUp ? order.dispatch.courierPartnerId : undefined,
+        courierStatus: wasAlreadyPickedUp ? order.dispatch.courierStatus : "PENDING",
+        pickedUpAt: wasAlreadyPickedUp ? order.dispatch.pickedUpAt : undefined,
+        shippedAt: order.dispatch?.llrNumber ? order.dispatch.shippedAt : undefined,
       },
       sms: {
         ...order.sms,
