@@ -4,6 +4,7 @@ export const INITIAL_COURIERS: Courier[] = [
   { id: "cour-1", name: "ST Courier", code: "ST_COURIER", isStCourier: true, trackingUrlPattern: "https://stcourier.com/track?llr={llr}", active: true },
   { id: "cour-2", name: "Professional Courier", code: "PROFESSIONAL", isStCourier: false, trackingUrlPattern: "https://www.tpcindia.com/track.aspx?doc_no={llr}", active: true },
   { id: "cour-3", name: "DTDC", code: "DTDC", isStCourier: false, trackingUrlPattern: "https://www.dtdc.in/tracking/tracking_results.asp?trkid={llr}", active: true },
+  { id: "cour-4", name: "India Post", code: "INDIA_POST", isStCourier: false, trackingUrlPattern: "https://www.indiapost.gov.in/VAS/Pages/trackconsignment.aspx?id={llr}", active: true },
 ];
 
 export const CURRENT_USER: UserSession = {

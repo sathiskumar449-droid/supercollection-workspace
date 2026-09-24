@@ -190,7 +190,7 @@ function CourierHubContent() {
     return (
       courierPartners.find((c) => c.code === activePartnerCode) || {
         id: "cour-1",
-        name: activePartnerCode === "PROFESSIONAL" ? "Professional Courier" : activePartnerCode === "DTDC" ? "DTDC" : "ST Courier",
+        name: activePartnerCode === "PROFESSIONAL" ? "Professional Courier" : activePartnerCode === "DTDC" ? "DTDC" : activePartnerCode === "INDIA_POST" ? "India Post" : "ST Courier",
         code: activePartnerCode,
       }
     );

@@ -394,12 +394,12 @@ function OrdersContent() {
         isLoading={isBulkUpdating}
       />
 
-      {/* Filter Toolbar (Search is cleanly unified in TopBar) */}
-      <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-subtle flex flex-wrap items-center justify-between gap-3">
-        {/* Filter Dropdowns & Search */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Search Input right before Order Status Filter */}
-          <div className="relative flex items-center">
+      {/* Filter Toolbar */}
+      <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-subtle space-y-2.5">
+        {/* Row 1: Search + Filters + Export */}
+        <div className="flex items-center gap-2.5 flex-nowrap overflow-x-auto">
+          {/* Search Input */}
+          <div className="relative flex items-center shrink-0">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
             <input
               type="text"
@@ -409,7 +409,7 @@ function OrdersContent() {
                 setPage(1);
               }}
               placeholder="Search Order ID, Customer, Phone..."
-              className="text-xs pl-8 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-800 placeholder-slate-400 w-48 sm:w-60 transition-all"
+              className="text-xs pl-8 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-800 placeholder-slate-400 w-52 transition-all"
             />
             {searchQuery && (
               <button
@@ -430,7 +430,7 @@ function OrdersContent() {
               setStatusFilter(e.target.value);
               setPage(1);
             }}
-            className="text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer"
+            className="text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer shrink-0"
           >
             <option value="ALL">All Order Statuses</option>
             <option value="CONFIRMED">Processing</option>
@@ -446,7 +446,7 @@ function OrdersContent() {
               setSourceFilter(e.target.value);
               setPage(1);
             }}
-            className="text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer"
+            className="text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer shrink-0"
           >
             <option value="ALL">All Sources</option>
             <option value="WEBSITE">Website (WooCommerce)</option>
@@ -460,12 +460,14 @@ function OrdersContent() {
               setCourierFilter(e.target.value);
               setPage(1);
             }}
-            className="text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer"
+            className="text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer shrink-0"
           >
             <option value="ALL">All Couriers</option>
             <option value="ST Courier">ST Courier</option>
-            <option value="Delhivery">Delhivery</option>
+            <option value="Professional Courier">Professional Courier</option>
             <option value="DTDC">DTDC</option>
+            <option value="India Post">India Post</option>
+            <option value="Delhivery">Delhivery</option>
             <option value="Blue Dart">Blue Dart</option>
           </select>
 
@@ -476,7 +478,7 @@ function OrdersContent() {
               setCourierStatusFilter(e.target.value);
               setPage(1);
             }}
-            className="text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer"
+            className="text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer shrink-0"
           >
             <option value="ALL">All Courier Statuses</option>
             <option value="PENDING">Courier Pending</option>
@@ -490,7 +492,7 @@ function OrdersContent() {
               setSmsStatusFilter(e.target.value);
               setPage(1);
             }}
-            className="text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer"
+            className="text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer shrink-0"
           >
             <option value="ALL">All SMS Statuses</option>
             <option value="SENT">SMS Sent</option>
@@ -502,20 +504,21 @@ function OrdersContent() {
           {activeFilterCount > 0 && (
             <button
               onClick={handleResetFilters}
-              className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 px-2 py-1.5 rounded hover:bg-red-50 transition-colors"
+              className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 px-2 py-1.5 rounded hover:bg-red-50 transition-colors shrink-0"
             >
               <X className="w-3.5 h-3.5" />
               <span>Clear ({activeFilterCount})</span>
             </button>
           )}
-        </div>
 
-        {/* Export Actions (Last/Rightmost) */}
-        <div className="flex items-center gap-2">
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Export Actions (inline, rightmost) */}
           <button
             onClick={handleExportExcel}
             title="Download filtered orders as Excel Spreadsheet (.csv)"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Export Excel</span>
@@ -523,7 +526,7 @@ function OrdersContent() {
           <button
             onClick={handleExportPdf}
             title="Print or Save PDF Report"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0"
           >
             <FileText className="w-3.5 h-3.5" />
             <span>Export PDF</span>
@@ -579,24 +582,24 @@ function OrdersContent() {
                 <th className="py-2 px-1 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Source</th>
                 <th className="py-2 px-1 w-[4.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
                 <th
-                  className="py-2 px-1.5 w-[5%] text-right cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
+                  className="py-2 px-1.5 w-[6%] text-right cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
                   onClick={() => {
                     setSortField("totalAmount");
                     setSortAsc(!sortAsc);
                   }}
                 >
-                  <div className="flex items-center justify-end gap-1 truncate">
+                  <div className="flex items-center justify-end gap-1">
                     <span>Amount</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                   </div>
                 </th>
                 <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Order Status</th>
-                <th className="py-2 px-1 w-[6.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Return</th>
+                <th className="py-2 px-1 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Return</th>
                 <th className="py-2 px-1 w-[7%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
                 <th className="py-2 px-1 w-[6.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">LLR</th>
                 <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
-                <th className="py-2 px-1 w-[11.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">SMS Status</th>
-                <th className="py-2 px-1 w-[6%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">Tracking</th>
+                <th className="py-2 px-1 w-[11%] text-center border-r border-b-2 border-slate-300 bg-slate-100">SMS Status</th>
+                <th className="py-2 px-1 w-[4%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap"></th>
               </tr>
             </thead>
 
@@ -690,7 +693,7 @@ function OrdersContent() {
                       </td>
 
                       {/* Amount */}
-                      <td className="py-2 px-1.5 text-right font-semibold text-slate-900 truncate border-r border-b border-slate-300 text-xs">
+                      <td className="py-2 px-1.5 text-right font-semibold text-slate-900 whitespace-nowrap border-r border-b border-slate-300 text-xs">
                         {formatINR(order.totalAmount)}
                       </td>
 
@@ -750,14 +753,13 @@ function OrdersContent() {
                       </td>
 
                       {/* Order Tracking */}
-                      <td className="py-2 px-1 text-center truncate border-b border-slate-300 bg-slate-50/50" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2 px-1 text-center border-b border-slate-300 bg-slate-50/50" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => setSelectedOrder(order)}
-                          className="px-1.5 py-1 text-[11px] font-semibold text-orange-700 hover:bg-orange-100/70 border border-orange-200 rounded transition-colors inline-flex items-center gap-1 shadow-2xs whitespace-nowrap"
+                          className="p-1.5 text-orange-700 hover:bg-orange-100/70 border border-orange-200 rounded transition-colors inline-flex items-center justify-center shadow-2xs"
                           title="View order tracking details"
                         >
-                          <Eye className="w-3 h-3 shrink-0" />
-                          <span>Tracking</span>
+                          <Eye className="w-3.5 h-3.5" />
                         </button>
                       </td>
                     </tr>
