@@ -124,11 +124,11 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
 
       let resolvedCourierStatus: CourierStatus = defaultCourierStatus;
       const rawCStatus = rawDispatch?.courier_status || rawDispatch?.courierStatus;
-      if (hasValidLlr) {
+      if (hasValidLlr || notesStr.includes("courier_status:SHIPPED") || rawCStatus === "SHIPPED") {
         resolvedCourierStatus = "SHIPPED";
       } else if (rawCStatus === "PICKED_UP" || rawDispatch?.picked_up_at || notesStr.includes("courier_status:PICKED_UP")) {
         resolvedCourierStatus = "PICKED_UP";
-      } else if (rawCStatus && rawCStatus !== "SHIPPED" && rawCStatus !== "DELIVERED") {
+      } else if (rawCStatus && rawCStatus !== "DELIVERED") {
         resolvedCourierStatus = rawCStatus as CourierStatus;
       }
 
@@ -144,7 +144,7 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         dispatchedAt: rawDispatch?.dispatched_at || rawDispatch?.dispatchedAt || raw.dispatched_at,
         pickedUpAt: rawDispatch?.picked_up_at || rawDispatch?.pickedUpAt,
         deliveredAt: undefined,
-        shippedAt: hasValidLlr ? (rawDispatch?.shipped_at || rawDispatch?.delivered_at || rawDispatch?.deliveredAt || raw.shipped_at) : undefined,
+        shippedAt: (hasValidLlr || resolvedCourierStatus === "SHIPPED") ? (rawDispatch?.shipped_at || rawDispatch?.delivered_at || rawDispatch?.deliveredAt || raw.shipped_at || raw.updated_at) : undefined,
         notes: rawDispatch?.notes,
       };
 
@@ -208,6 +208,8 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
           llrNumber: dispatchInfo.llrNumber || undefined,
           courierStatus: dispatchInfo.courierStatus,
           dispatchedAt: dispatchInfo.dispatchedAt,
+          pickedUpAt: dispatchInfo.pickedUpAt,
+          shippedAt: dispatchInfo.shippedAt,
           deliveredAt: dispatchInfo.deliveredAt,
           notes: dispatchInfo.notes,
         },
@@ -398,7 +400,7 @@ export async function updateSupabaseCourierDetails(
         updates.picked_up_at = details.pickedUpAt || new Date().toISOString();
         updates.notes = currentNotes ? `${currentNotes};courier_status:PICKED_UP` : "courier_status:PICKED_UP";
       }
-      if (details.courierStatus === "SHIPPED") {
+      if (details.courierStatus === "SHIPPED" || details.courierStatus === "DELIVERED") {
         updates.shipped_at = details.shippedAt || new Date().toISOString();
         updates.notes = currentNotes ? `${currentNotes};courier_status:SHIPPED` : "courier_status:SHIPPED";
       }
@@ -446,10 +448,14 @@ export async function updateSupabaseCourierDetails(
       }
     }
 
-    // If marked as SHIPPED or PICKED_UP, record shipped_at timestamp without overwriting SMS status
-    if (details.courierStatus === "SHIPPED" || details.courierStatus === "PICKED_UP") {
+    // If marked as SHIPPED, PICKED_UP, DELIVERED or has LLR, record shipped_at timestamp without overwriting SMS status
+    if (details.courierStatus === "SHIPPED" || details.courierStatus === "DELIVERED" || details.llrNumber) {
       await db.from("orders").update({
-        shipped_at: new Date().toISOString(),
+        shipped_at: details.shippedAt || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", orderId);
+    } else if (details.courierStatus === "PICKED_UP") {
+      await db.from("orders").update({
         updated_at: new Date().toISOString(),
       }).eq("id", orderId);
     }

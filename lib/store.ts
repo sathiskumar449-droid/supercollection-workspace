@@ -1463,11 +1463,15 @@ export const orderflowStore = {
         dispatchId: updatedOrder.dispatch.dispatchId,
         pickupPhone: updatedOrder.dispatch.pickupPhone,
         courierPartnerId: updatedOrder.dispatch.courierPartnerId,
-        llrNumber: params.llrNumber,
+        llrNumber: params.llrNumber !== undefined ? params.llrNumber : updatedOrder.dispatch.llrNumber,
         courierStatus: finalCourierStatus,
         pickedUpAt: pickedUpAtTime,
         shippedAt: shippedAtTime,
       }, timelineEntries[0]);
+
+      if (finalCourierStatus === "SHIPPED") {
+        updateSupabaseSmsStatus(orderId, updatedOrder.sms.status || "PENDING");
+      }
     }
 
     return { success: true };

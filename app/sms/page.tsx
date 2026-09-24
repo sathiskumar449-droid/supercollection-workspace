@@ -58,10 +58,20 @@ function SmsMonitoringContent() {
   // ONLY orders that have reached "SHIPPED" in Courier Hub (when LLR / Tracking is entered)
   // Filtered by global TopBar date filter / calendar picker
   const shippedOrders = useMemo(() => {
-    return orders.filter((o) => 
-      matchesDateFilter(o.sms.sentAt || o.dispatch?.shippedAt || o.shippedAt || o.createdAt, dateFilter, customDate) &&
-      (o.dispatch.courierStatus === "SHIPPED" || Boolean(o.dispatch.llrNumber) || Boolean(o.shippedAt))
-    );
+    return orders.filter((o) => {
+      const isShipped = 
+        o.dispatch?.courierStatus === "SHIPPED" || 
+        o.dispatch?.courierStatus === "DELIVERED" || 
+        Boolean(o.dispatch?.llrNumber && o.dispatch.llrNumber.trim()) || 
+        Boolean(o.shippedAt) || 
+        Boolean(o.dispatch?.shippedAt);
+
+      if (!isShipped) return false;
+
+      // Relevant date: when SMS sent, when parcel shipped, or fallback to updated/created
+      const relevantDate = o.sms?.sentAt || o.dispatch?.shippedAt || o.shippedAt || o.updatedAt || o.createdAt;
+      return matchesDateFilter(relevantDate, dateFilter, customDate);
+    });
   }, [orders, dateFilter, customDate]);
 
   // Orders that have SMS logged (shipped orders)

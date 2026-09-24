@@ -228,22 +228,27 @@ function CourierHubContent() {
       }
       seenIds.add(o.id);
 
-      // Must be picked up (either in this session or marked as picked up / delivered / shipped)
+      // Must not be cancelled or returned
+      if (o.orderStatus === "CANCELLED" || o.orderStatus === "RETURNED" || o.orderStatus === "RETURN") {
+        return false;
+      }
+
+      // Must be picked up (either in this session or marked as picked up / delivered / shipped or has pickedUpAt or has LLR)
       const isSessionPicked = sessionPickedUpIds.includes(o.id);
       const cStatus = o.dispatch?.courierStatus;
+      const hasLlr = Boolean(o.dispatch?.llrNumber && o.dispatch.llrNumber.trim());
       const isPickedUp =
         isSessionPicked ||
         cStatus === "PICKED_UP" ||
         cStatus === "DELIVERED" ||
         cStatus === "SHIPPED" ||
-        Boolean(o.dispatch?.pickedUpAt);
+        Boolean(o.dispatch?.pickedUpAt) ||
+        Boolean(o.pickedUpAt) ||
+        Boolean(o.dispatch?.shippedAt) ||
+        Boolean(o.shippedAt) ||
+        hasLlr;
 
       if (!isPickedUp) {
-        return false;
-      }
-
-      // Must be in DISPATCHED status from packing or picked up in session
-      if (o.orderStatus !== "DISPATCHED" && !isSessionPicked) {
         return false;
       }
 
@@ -378,8 +383,19 @@ function CourierHubContent() {
     return currentPartnerOrders.filter((o) => {
       // Status tab filter
       const cStatus = o.dispatch?.courierStatus;
+      const hasLlr = Boolean(
+        o.dispatch?.llrNumber &&
+        o.dispatch.llrNumber.trim() &&
+        o.dispatch.llrNumber !== o.dispatch.dispatchId &&
+        !o.dispatch.llrNumber.toLowerCase().startsWith("dsp")
+      );
+
       if (statusFilter === "PICKED_UP") {
         if (cStatus !== "PICKED_UP" && cStatus !== "SHIPPED") {
+          return false;
+        }
+      } else if (statusFilter === "SHIPPED") {
+        if (cStatus !== "SHIPPED" && !hasLlr) {
           return false;
         }
       } else if (statusFilter === "DELIVERED") {
@@ -387,11 +403,6 @@ function CourierHubContent() {
           return false;
         }
       } else if (statusFilter === "MISSING_LLR") {
-        const hasLlr =
-          o.dispatch?.llrNumber &&
-          o.dispatch.llrNumber.trim() &&
-          o.dispatch.llrNumber !== o.dispatch.dispatchId &&
-          !o.dispatch.llrNumber.toLowerCase().startsWith("dsp");
         if (hasLlr) {
           return false;
         }
@@ -440,9 +451,9 @@ function CourierHubContent() {
     if (trimmed) {
       updateCourierDetails(orderId, {
         llrNumber: trimmed,
-        courierStatus: "DELIVERED",
+        courierStatus: "SHIPPED",
       });
-      triggerToast(`Order ${orderNumber} LLR ${trimmed} saved & status marked Delivered!`);
+      triggerToast(`Order ${orderNumber} LLR ${trimmed} saved & status marked Shipped!`);
     } else {
       updateCourierDetails(orderId, {
         llrNumber: undefined,
@@ -853,21 +864,26 @@ function CourierHubContent() {
 
                       {/* 9. Courier Status: "Picked Up" or "Shipped" */}
                       <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
-                        <span 
+                        <select
+                          value={cStatus === "SHIPPED" ? "SHIPPED" : "PICKED_UP"}
+                          onChange={(e) => {
+                            const newStatus = e.target.value as CourierStatus;
+                            updateCourierDetails(order.id, {
+                              courierStatus: newStatus,
+                              llrNumber: order.dispatch?.llrNumber,
+                            });
+                            triggerToast(`Order ${order.orderNumber} status updated to ${newStatus === "SHIPPED" ? "Shipped" : "Picked Up"}`);
+                          }}
                           className={cn(
-                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border shadow-2xs",
+                            "text-xs font-bold rounded px-2 py-1 border shadow-2xs outline-none cursor-pointer transition-colors",
                             cStatus === "SHIPPED"
-                              ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                              : "bg-blue-50 text-blue-800 border-blue-300"
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                              : "bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100"
                           )}
-                          title={cStatus === "SHIPPED" ? "Shipped" : "Picked Up"}
                         >
-                          <span className={cn(
-                            "w-1.5 h-1.5 rounded-full shrink-0",
-                            cStatus === "SHIPPED" ? "bg-emerald-500" : "bg-blue-500"
-                          )} />
-                          <span>{cStatus === "SHIPPED" ? "Shipped" : "Picked Up"}</span>
-                        </span>
+                          <option value="PICKED_UP">Picked Up</option>
+                          <option value="SHIPPED">Shipped</option>
+                        </select>
                       </td>
                     </tr>
                   );
