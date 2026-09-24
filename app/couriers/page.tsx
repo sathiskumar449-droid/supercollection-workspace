@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, Suspense } from "react";
+import React, { useState, useMemo, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { 
   Truck, 
@@ -19,7 +19,7 @@ import {
 import { useOrderFlow } from "@/lib/hooks";
 import { Order, CourierStatus } from "@/types/orderflow";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
-import { formatDate, cn, matchesDateFilter } from "@/lib/utils";
+import { formatDate, cn, normalizePhoneDigits } from "@/lib/utils";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 
 /**
@@ -87,7 +87,6 @@ function InlinePickupPhoneInput({
 
 /**
  * Inline editor for LLR / Tracking Number
- * Kept individual per order - never bulk applied.
  */
 function InlineLlrInput({
   orderId,
@@ -155,11 +154,9 @@ function CourierHubContent() {
   const { 
     orders, 
     user, 
+    verifyCourierPickupByCustomerMobile,
     updateCourierDetails, 
-    bulkUpdateCourierStatus, 
     courierPartners,
-    dateFilter, 
-    customDate 
   } = useOrderFlow();
 
   const isCourierUser = user.role === "COURIER";
@@ -182,6 +179,23 @@ function CourierHubContent() {
     }
   }, [searchParams, courierPartners, adminPartnerFilter]);
 
+  // Active courier partner code
+  const activePartnerCode = useMemo(() => {
+    if (isCourierUser) return userCourierPartnerId || "ST_COURIER";
+    return adminPartnerFilter || courierPartners[0]?.code || "ST_COURIER";
+  }, [isCourierUser, userCourierPartnerId, adminPartnerFilter, courierPartners]);
+
+  // Current Partner Object
+  const currentPartner = useMemo(() => {
+    return (
+      courierPartners.find((c) => c.code === activePartnerCode) || {
+        id: "cour-1",
+        name: activePartnerCode === "PROFESSIONAL" ? "Professional Courier" : activePartnerCode === "DTDC" ? "DTDC" : "ST Courier",
+        code: activePartnerCode,
+      }
+    );
+  }, [courierPartners, activePartnerCode]);
+
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const triggerToast = (msg: string) => {
@@ -189,39 +203,63 @@ function CourierHubContent() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Bulk selection state
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [bulkTargetStatus, setBulkTargetStatus] = useState<CourierStatus>("PICKED_UP");
-  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  // Top Customer Mobile Input State (automatic search & pickup)
+  const [customerMobileInput, setCustomerMobileInput] = useState("");
+  const [searchFeedback, setSearchFeedback] = useState<{
+    type: "error" | "success";
+    message: string;
+  } | null>(null);
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
+  const mobileInputRef = useRef<HTMLInputElement>(null);
 
-  // Active courier partner code
-  const activePartnerCode = useMemo(() => {
-    if (isCourierUser) return userCourierPartnerId || "ST_COURIER";
-    return adminPartnerFilter || courierPartners[0]?.code || "ST_COURIER";
-  }, [isCourierUser, userCourierPartnerId, adminPartnerFilter, courierPartners]);
+  // Track orders picked up in this session to ensure they accumulate and never get removed
+  const [sessionPickedUpIds, setSessionPickedUpIds] = useState<string[]>([]);
 
-  // 1. Base eligibility: Orders marked as DISPATCHED in Packing Station
-  const eligibleDispatchedOrders = useMemo(() => {
+  // Core Rule:
+  // Dispatched = Ready for Courier Pickup (remains in Packing & All Orders as "Dispatched")
+  // Do NOT automatically show in Courier Hub until Customer Mobile is verified!
+  // Customer Mobile Verified = Picked Up
+  // Only orders verified / Picked Up or Delivered appear in the Courier Hub table!
+  const verifiedOrders = useMemo(() => {
+    const seenIds = new Set<string>();
     return orders.filter((o) => {
-      // Must be currently in DISPATCHED status from packing station
-      if (o.orderStatus !== "DISPATCHED") {
+      if (seenIds.has(o.id)) {
+        return false;
+      }
+      seenIds.add(o.id);
+
+      // Must be picked up (either in this session or marked as picked up / delivered / shipped)
+      const isSessionPicked = sessionPickedUpIds.includes(o.id);
+      const cStatus = o.dispatch?.courierStatus;
+      const isPickedUp =
+        isSessionPicked ||
+        cStatus === "PICKED_UP" ||
+        cStatus === "DELIVERED" ||
+        cStatus === "SHIPPED" ||
+        Boolean(o.dispatch?.pickedUpAt);
+
+      if (!isPickedUp) {
         return false;
       }
 
-      // Date filtering
-      if (!matchesDateFilter(o.createdAt, dateFilter, customDate)) {
+      // Must be in DISPATCHED status from packing or picked up in session
+      if (o.orderStatus !== "DISPATCHED" && !isSessionPicked) {
+        return false;
+      }
+
+      // Must have an assigned courier partner
+      if (!o.dispatch?.courierPartnerId) {
         return false;
       }
 
       // Strict courier partner isolation for courier user
       if (isCourierUser) {
-        return (o.dispatch?.courierPartnerId || "ST_COURIER") === userCourierPartnerId;
+        return o.dispatch.courierPartnerId === userCourierPartnerId;
       }
 
       return true;
     });
-  }, [orders, dateFilter, customDate, isCourierUser, userCourierPartnerId]);
+  }, [orders, isCourierUser, userCourierPartnerId, sessionPickedUpIds]);
 
   // Partner order counts for Admin tabs
   const partnerCounts = useMemo(() => {
@@ -232,67 +270,102 @@ function CourierHubContent() {
       counts[cp.code] = 0;
     });
 
-    eligibleDispatchedOrders.forEach((o) => {
-      const code = o.dispatch?.courierPartnerId || "ST_COURIER";
-      if (counts[code] !== undefined) {
-        counts[code]++;
-      } else {
-        counts[code] = 1;
+    verifiedOrders.forEach((o) => {
+      const code = o.dispatch?.courierPartnerId;
+      if (code) {
+        if (counts[code] !== undefined) {
+          counts[code]++;
+        } else {
+          counts[code] = 1;
+        }
       }
     });
 
     return counts;
-  }, [eligibleDispatchedOrders, courierPartners, isCourierUser]);
+  }, [verifiedOrders, courierPartners, isCourierUser]);
 
-  // Orders belonging specifically to the active partner
+  // Orders belonging specifically to the active partner - strictly isolated, no cross-tab duplicates
   const currentPartnerOrders = useMemo(() => {
-    return eligibleDispatchedOrders.filter((o) => {
-      const code = o.dispatch?.courierPartnerId || "ST_COURIER";
-      return code === activePartnerCode;
-    });
-  }, [eligibleDispatchedOrders, activePartnerCode]);
+    return verifiedOrders
+      .filter((o) => {
+        const code = o.dispatch?.courierPartnerId;
+        return code === activePartnerCode;
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.dispatch?.pickedUpAt || a.updatedAt).getTime();
+        const timeB = new Date(b.dispatch?.pickedUpAt || b.updatedAt).getTime();
+        return timeB - timeA;
+      });
+  }, [verifiedOrders, activePartnerCode]);
 
-  // 2. Metrics calculation for active partner
-  const metrics = useMemo(() => {
-    let waiting = 0;
-    let pickedUp = 0;
-    let delivered = 0;
-    let missingLlr = 0;
-
-    currentPartnerOrders.forEach((o) => {
-      const cStatus = o.dispatch?.courierStatus;
-      if (cStatus === "DELIVERED") {
-        delivered++;
-      } else if (cStatus === "PICKED_UP" || cStatus === "SHIPPED") {
-        pickedUp++;
-      } else {
-        waiting++;
-      }
-
-      if (!o.dispatch?.llrNumber || !o.dispatch.llrNumber.trim()) {
-        missingLlr++;
-      }
+  // Automatic pickup execution when valid 10-digit mobile number is entered
+  const processPickup = (cleanPhone: string) => {
+    const res = verifyCourierPickupByCustomerMobile({
+      mobile: cleanPhone,
+      courierPartnerCode: activePartnerCode,
     });
 
-    return {
-      total: currentPartnerOrders.length,
-      waiting,
-      pickedUp,
-      delivered,
-      missingLlr,
-    };
-  }, [currentPartnerOrders]);
+    if (!res.success) {
+      setSearchFeedback({
+        type: "error",
+        message: res.error || "No order found",
+      });
+      return;
+    }
 
-  // 3. Filtered Orders for the active partner based on Status Filter and Search Query
+    if (res.order) {
+      const newIds = res.matchingOrders ? res.matchingOrders.map((o) => o.id) : [res.order.id];
+      setSessionPickedUpIds((prev) => Array.from(new Set([...prev, ...newIds])));
+      setHighlightedOrderId(res.order.id);
+      setSearchFeedback({
+        type: "success",
+        message: res.matchingOrders && res.matchingOrders.length > 1
+          ? `${res.matchingOrders.length} orders auto-filled & added to table!`
+          : `Order ${res.order.orderNumber} auto-filled & added to table!`,
+      });
+      triggerToast(
+        res.matchingOrders && res.matchingOrders.length > 1
+          ? `${res.matchingOrders.length} orders marked as Picked Up!`
+          : `Order ${res.order.orderNumber} added to table as Picked Up!`
+      );
+
+      // Auto-clear input after a brief delay so staff can immediately enter next number
+      setTimeout(() => {
+        setCustomerMobileInput("");
+        setSearchFeedback(null);
+        setHighlightedOrderId(null);
+      }, 3500);
+    }
+  };
+
+  const handleCustomerMobileChange = (val: string) => {
+    setCustomerMobileInput(val);
+    const clean = normalizePhoneDigits(val);
+    if (clean.length === 10) {
+      processPickup(clean);
+    } else {
+      setSearchFeedback(null);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const clean = normalizePhoneDigits(customerMobileInput);
+      if (clean.length >= 10) {
+        processPickup(clean);
+      } else if (customerMobileInput.trim()) {
+        setSearchFeedback({ type: "error", message: "No order found" });
+      }
+    }
+  };
+
+  // Filtered Orders for the active partner based on Status Filter and Search Query
   const displayedOrders = useMemo(() => {
     return currentPartnerOrders.filter((o) => {
       // Status tab filter
       const cStatus = o.dispatch?.courierStatus;
-      if (statusFilter === "WAITING_FOR_PICKUP") {
-        if (cStatus === "PICKED_UP" || cStatus === "SHIPPED" || cStatus === "DELIVERED") {
-          return false;
-        }
-      } else if (statusFilter === "PICKED_UP") {
+      if (statusFilter === "PICKED_UP") {
         if (cStatus !== "PICKED_UP" && cStatus !== "SHIPPED") {
           return false;
         }
@@ -301,7 +374,12 @@ function CourierHubContent() {
           return false;
         }
       } else if (statusFilter === "MISSING_LLR") {
-        if (o.dispatch?.llrNumber && o.dispatch.llrNumber.trim()) {
+        const hasLlr =
+          o.dispatch?.llrNumber &&
+          o.dispatch.llrNumber.trim() &&
+          o.dispatch.llrNumber !== o.dispatch.dispatchId &&
+          !o.dispatch.llrNumber.toLowerCase().startsWith("dsp");
+        if (hasLlr) {
           return false;
         }
       }
@@ -323,7 +401,7 @@ function CourierHubContent() {
     });
   }, [currentPartnerOrders, statusFilter, searchQuery]);
 
-  // Pagination state (like Orders page)
+  // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
 
@@ -338,24 +416,31 @@ function CourierHubContent() {
     setPage(1);
   }, [statusFilter, searchQuery, adminPartnerFilter]);
 
-  // 4. Inline handlers
+  // Inline handlers
   const handleSavePickupPhone = (orderId: string, orderNumber: string, val: string) => {
     updateCourierDetails(orderId, { pickupPhone: val });
     triggerToast(`Pickup phone saved for ${orderNumber}`);
   };
 
   const handleSaveLlr = (orderId: string, orderNumber: string, val: string) => {
-    updateCourierDetails(orderId, { llrNumber: val });
-    triggerToast(val ? `LLR ${val} saved for ${orderNumber}` : `LLR cleared for ${orderNumber}`);
+    const trimmed = (val || "").trim();
+    if (trimmed) {
+      updateCourierDetails(orderId, {
+        llrNumber: trimmed,
+        courierStatus: "DELIVERED",
+      });
+      triggerToast(`Order ${orderNumber} LLR ${trimmed} saved & status marked Delivered!`);
+    } else {
+      updateCourierDetails(orderId, {
+        llrNumber: undefined,
+        courierStatus: "PICKED_UP",
+      });
+      triggerToast(`LLR cleared for ${orderNumber}`);
+    }
   };
 
-  const handleStatusChange = (orderId: string, newStatus: CourierStatus) => {
-    updateCourierDetails(orderId, { courierStatus: newStatus });
-    const label = newStatus === "WAITING_FOR_PICKUP" ? "Waiting for Pickup" : newStatus === "PICKED_UP" ? "Picked Up" : "Delivered";
-    triggerToast(`Courier status updated to "${label}"`);
-  };
-
-  // 5. Bulk selection
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const isAllDisplayedSelected =
     paginatedOrders.length > 0 &&
     paginatedOrders.every((o) => selectedIds.includes(o.id));
@@ -376,29 +461,19 @@ function CourierHubContent() {
     );
   };
 
-  const handleExecuteBulkUpdate = () => {
-    setIsBulkUpdating(true);
-    const res = bulkUpdateCourierStatus(selectedIds, bulkTargetStatus);
-    setIsBulkUpdating(false);
-    setIsConfirmDialogOpen(false);
-    setSelectedIds([]);
-    const label = bulkTargetStatus === "WAITING_FOR_PICKUP" ? "Waiting for Pickup" : bulkTargetStatus === "PICKED_UP" ? "Picked Up" : "Delivered";
-    triggerToast(`Successfully updated ${res.successCount} orders to "${label}"`);
-  };
-
-  // 6. Export handlers (Admin only)
+  // Export handlers (Admin only)
   const handleExportExcel = () => {
     const headers = [
       "S.No",
       "Order ID",
       "Dispatch ID",
       "Customer Name",
-      "Customer Phone",
+      "Customer Mobile",
       "Pickup Phone",
       "Courier Partner",
       "LLR / Tracking #",
       "Courier Status",
-      "Dispatched Date",
+      "Picked Up Timestamp",
       "Destination City",
       "Destination State",
       "Pincode",
@@ -411,10 +486,10 @@ function CourierHubContent() {
       order.customer.name,
       order.customer.mobile,
       order.dispatch.pickupPhone || "",
-      order.dispatch.courierName || "-",
+      order.dispatch.courierName || currentPartner.name,
       order.dispatch.llrNumber || "",
       order.dispatch.courierStatus,
-      order.dispatch.dispatchedAt ? new Date(order.dispatch.dispatchedAt).toLocaleDateString("en-IN") : "",
+      order.dispatch.pickedUpAt ? formatDate(order.dispatch.pickedUpAt) : "",
       order.customer.city,
       order.customer.state,
       order.customer.pincode,
@@ -429,12 +504,12 @@ function CourierHubContent() {
       "S.No",
       "Order ID",
       "Dispatch ID",
-      "Customer",
-      "Pickup Phone",
+      "Customer Name",
+      "Customer Mobile",
       "Courier",
       "LLR / Tracking #",
       "Courier Status",
-      "City, Pincode",
+      "Picked Up Timestamp",
     ];
 
     const rows = displayedOrders.map((order, index) => [
@@ -442,16 +517,16 @@ function CourierHubContent() {
       order.orderNumber,
       order.dispatch.dispatchId || "",
       order.customer.name,
-      order.dispatch.pickupPhone || "-",
-      order.dispatch.courierName || "-",
+      order.customer.mobile,
+      order.dispatch.courierName || currentPartner.name,
       order.dispatch.llrNumber || "-",
       order.dispatch.courierStatus,
-      `${order.customer.city} - ${order.customer.pincode}`,
+      order.dispatch.pickedUpAt ? formatDate(order.dispatch.pickedUpAt) : "-",
     ]);
 
     const dateStr = new Date().toISOString().slice(0, 10);
     exportToPdf({
-      title: "Courier Hub Handoff Manifest",
+      title: `${currentPartner.name} - Picked Up Manifest`,
       subtitle: `Total Orders: ${displayedOrders.length} | Export Date: ${new Date().toLocaleDateString("en-IN")}`,
       filename: `Courier_Hub_Manifest_${dateStr}`,
       headers,
@@ -459,17 +534,6 @@ function CourierHubContent() {
       orientation: "landscape",
     });
   };
-
-  // Helper display name for current partner
-  const currentPartner = useMemo(() => {
-    return (
-      courierPartners.find((c) => c.code === activePartnerCode) || {
-        id: "cour-1",
-        name: activePartnerCode === "PROFESSIONAL" ? "Professional Courier" : activePartnerCode === "DTDC" ? "DTDC" : "ST Courier",
-        code: activePartnerCode,
-      }
-    );
-  }, [courierPartners, activePartnerCode]);
 
   return (
     <div className="space-y-4 max-w-full pb-16">
@@ -481,98 +545,43 @@ function CourierHubContent() {
         </div>
       )}
 
-      {/* Metric Cards (Compact at the top with matching border colors) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-        {/* Total Orders */}
-        <div 
-          onClick={() => { setStatusFilter("ALL"); setPage(1); }}
-          className={cn(
-            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "ALL" 
-              ? "border-orange-500 ring-1 ring-orange-500/20 bg-orange-50/10" 
-              : "border-slate-300 hover:border-orange-400"
-          )}
+      {/* TOP SECTION: Customer Mobile Number Input ONLY */}
+      <div className="bg-white p-3.5 rounded-lg border border-slate-300 shadow-2xs">
+        <label 
+          htmlFor="customer-mobile-input" 
+          className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5"
         >
-          <span className="text-[10.5px] font-bold text-slate-500 block uppercase tracking-wider">
-            {isCourierUser ? "Today's Orders" : "Total Dispatched"}
-          </span>
-          <div className="text-xl font-black text-slate-900 mt-0.5 tracking-tight">
-            {metrics.total}
-          </div>
+          Customer Mobile Number
+        </label>
+        <div className="relative max-w-sm">
+          <input
+            id="customer-mobile-input"
+            ref={mobileInputRef}
+            type="tel"
+            inputMode="numeric"
+            value={customerMobileInput}
+            onChange={(e) => handleCustomerMobileChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Enter customer mobile number"
+            className="w-full text-xs font-mono py-2 px-3 rounded-md border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 outline-none transition-all shadow-2xs"
+            autoFocus
+          />
         </div>
 
-        {/* Waiting for Pickup */}
-        <div 
-          onClick={() => { setStatusFilter("WAITING_FOR_PICKUP"); setPage(1); }}
-          className={cn(
-            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "WAITING_FOR_PICKUP" 
-              ? "border-amber-500 ring-1 ring-amber-500/20 bg-amber-50/10" 
-              : "border-amber-300 hover:border-amber-400"
-          )}
-        >
-          <span className="text-[10.5px] font-bold text-amber-700 block uppercase tracking-wider">
-            Waiting for Pickup
-          </span>
-          <div className="text-xl font-black text-amber-600 mt-0.5 tracking-tight">
-            {metrics.waiting}
-          </div>
-        </div>
+        {/* Small "No order found" message */}
+        {searchFeedback?.type === "error" && (
+          <p className="text-xs text-rose-600 font-medium mt-1.5 flex items-center gap-1 animate-in fade-in">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span>{searchFeedback.message}</span>
+          </p>
+        )}
 
-        {/* Picked Up */}
-        <div 
-          onClick={() => { setStatusFilter("PICKED_UP"); setPage(1); }}
-          className={cn(
-            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "PICKED_UP" 
-              ? "border-blue-500 ring-1 ring-blue-500/20 bg-blue-50/10" 
-              : "border-blue-300 hover:border-blue-400"
-          )}
-        >
-          <span className="text-[10.5px] font-bold text-blue-700 block uppercase tracking-wider">
-            Picked Up
-          </span>
-          <div className="text-xl font-black text-blue-600 mt-0.5 tracking-tight">
-            {metrics.pickedUp}
-          </div>
-        </div>
-
-        {/* Delivered */}
-        <div 
-          onClick={() => { setStatusFilter("DELIVERED"); setPage(1); }}
-          className={cn(
-            "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
-            statusFilter === "DELIVERED" 
-              ? "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/10" 
-              : "border-emerald-300 hover:border-emerald-400"
-          )}
-        >
-          <span className="text-[10.5px] font-bold text-emerald-700 block uppercase tracking-wider">
-            Delivered
-          </span>
-          <div className="text-xl font-black text-emerald-600 mt-0.5 tracking-tight">
-            {metrics.delivered}
-          </div>
-        </div>
-
-        {/* Missing LLR (Admin only) */}
-        {!isCourierUser && (
-          <div 
-            onClick={() => { setStatusFilter("MISSING_LLR"); setPage(1); }}
-            className={cn(
-              "px-3.5 py-2 rounded-lg border bg-white shadow-2xs cursor-pointer transition-all",
-              statusFilter === "MISSING_LLR" 
-                ? "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/10" 
-                : "border-rose-300 hover:border-rose-400"
-            )}
-          >
-            <span className="text-[10.5px] font-bold text-rose-700 block uppercase tracking-wider">
-              Missing LLR
-            </span>
-            <div className="text-xl font-black text-rose-600 mt-0.5 tracking-tight">
-              {metrics.missingLlr}
-            </div>
-          </div>
+        {/* Success auto-pickup confirmation */}
+        {searchFeedback?.type === "success" && (
+          <p className="text-xs text-emerald-600 font-semibold mt-1.5 flex items-center gap-1 animate-in fade-in">
+            <Check className="w-3.5 h-3.5 shrink-0" />
+            <span>{searchFeedback.message}</span>
+          </p>
         )}
       </div>
 
@@ -635,7 +644,7 @@ function CourierHubContent() {
             <button
               onClick={handleExportExcel}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-              title="Export filtered courier manifest to Excel"
+              title="Export picked up courier manifest to Excel"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Export Excel</span>
@@ -643,7 +652,7 @@ function CourierHubContent() {
             <button
               onClick={handleExportPdf}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-              title="Export filtered courier manifest to PDF"
+              title="Export picked up courier manifest to PDF"
             >
               <FileText className="w-3.5 h-3.5" />
               <span>Export PDF</span>
@@ -656,8 +665,7 @@ function CourierHubContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 p-0.5 rounded-lg text-xs overflow-x-auto">
           {[
-            { key: "ALL", label: "All Orders" },
-            { key: "WAITING_FOR_PICKUP", label: "Waiting for Pickup" },
+            { key: "ALL", label: "All Picked Up" },
             { key: "PICKED_UP", label: "Picked Up" },
             { key: "DELIVERED", label: "Delivered" },
             ...(!isCourierUser ? [{ key: "MISSING_LLR", label: "Missing LLR" }] : []),
@@ -690,93 +698,7 @@ function CourierHubContent() {
         </div>
       </div>
 
-      {/* Bulk Actions Toolbar (Requirement 15) */}
-      {selectedIds.length > 0 && (
-        <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl shadow-xs flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-1">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-orange-600 animate-pulse" />
-            <span className="text-xs font-bold text-orange-950">
-              {selectedIds.length} {selectedIds.length === 1 ? "order" : "orders"} selected
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 text-xs">
-              <span className="text-slate-600 font-medium">Change Status:</span>
-              <select
-                value={bulkTargetStatus}
-                onChange={(e) => setBulkTargetStatus(e.target.value as CourierStatus)}
-                className="text-xs font-bold px-2 py-1 bg-white border border-slate-300 rounded-md outline-none cursor-pointer"
-              >
-                <option value="WAITING_FOR_PICKUP">Waiting for Pickup</option>
-                <option value="PICKED_UP">Picked Up</option>
-                <option value="DELIVERED">Delivered</option>
-              </select>
-            </div>
-
-            <button
-              onClick={() => setIsConfirmDialogOpen(true)}
-              className="px-3.5 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-xs font-bold shadow-xs transition-colors cursor-pointer"
-            >
-              Update {selectedIds.length} Orders
-            </button>
-
-            <button
-              onClick={() => setSelectedIds([])}
-              className="text-xs text-slate-500 hover:text-slate-800 px-2 py-1 font-medium cursor-pointer"
-            >
-              Deselect All
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation Dialog for Bulk Update */}
-      {isConfirmDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-sm w-full p-5 space-y-4 animate-in zoom-in-95">
-            <div className="flex items-center gap-2.5 text-orange-600 font-bold text-sm">
-              <AlertCircle className="w-5 h-5" />
-              <span>Confirm Bulk Status Update</span>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Update <strong>{selectedIds.length} orders</strong> to{" "}
-              <strong>
-                {bulkTargetStatus === "WAITING_FOR_PICKUP"
-                  ? "Waiting for Pickup"
-                  : bulkTargetStatus === "PICKED_UP"
-                  ? "Picked Up"
-                  : "Delivered"}
-              </strong>?
-              <br />
-              <span className="text-[11px] text-slate-400 block mt-1">
-                An individual tracking event will be created for every updated order.
-              </span>
-            </p>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsConfirmDialogOpen(false)}
-                className="px-3.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-xs cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteBulkUpdate}
-                disabled={isBulkUpdating}
-                className="px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs cursor-pointer"
-              >
-                {isBulkUpdating ? "Updating..." : "Update"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Table Section (Full-width Excel Spreadsheet Grid Style like Orders Page) */}
+      {/* Table Section (Compact Full-Width Spreadsheet Grid) */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
         <div className="overflow-x-auto w-full">
           <table className="w-full text-left text-xs border-collapse border border-slate-300">
@@ -795,31 +717,29 @@ function CourierHubContent() {
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Date</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Dispatch ID</th>
-                {/* Admin sees Customer column; Courier sees minimal or read-only info */}
-                {!isCourierUser && <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer</th>}
-                {!isCourierUser && <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>}
-                <th className="py-2.5 px-3 min-w-[160px] border-r border-b-2 border-slate-300 bg-slate-100">Pickup Phone</th>
-                <th className="py-2.5 px-3 min-w-[160px] border-r border-b-2 border-slate-300 bg-slate-100">LLR / Tracking</th>
-                <th className="py-2.5 px-3 min-w-[150px] border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
+                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer Name</th>
+                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer Mobile</th>
+                <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
+                <th className="py-2.5 px-3 min-w-[150px] border-r border-b-2 border-slate-300 bg-slate-100">LLR / Tracking</th>
+                <th className="py-2.5 px-3 min-w-[130px] border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-200">
               {paginatedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={isCourierUser ? 8 : 10} className="py-16 text-center text-slate-400 border-b border-slate-300">
-                    <Package className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                    <p className="text-sm font-bold text-slate-700">No orders in this courier queue</p>
+                  <td colSpan={10} className="py-16 text-center text-slate-400 border-b border-slate-300">
+                    <Package className="w-9 h-9 mx-auto mb-2 text-slate-300" />
+                    <p className="text-sm font-bold text-slate-700">No picked up orders in this queue</p>
                     <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                      {isCourierUser 
-                        ? "Any orders dispatched to your courier will appear here automatically."
-                        : "Orders marked as Dispatched in Packing Station will automatically arrive here."}
+                      Enter a customer mobile number above to automatically verify and auto-fill parcel pickup into this table.
                     </p>
                   </td>
                 </tr>
               ) : (
                 paginatedOrders.map((order, idx) => {
                   const isSelected = selectedIds.includes(order.id);
+                  const isHighlighted = highlightedOrderId === order.id;
                   const cStatus = order.dispatch?.courierStatus;
 
                   return (
@@ -828,7 +748,8 @@ function CourierHubContent() {
                       onClick={() => setInspectOrder(order)}
                       className={cn(
                         "hover:bg-orange-50/40 transition-colors cursor-pointer border-b border-slate-200",
-                        isSelected && "bg-orange-50/60"
+                        isSelected && "bg-orange-50/60",
+                        isHighlighted && "bg-emerald-50 ring-2 ring-emerald-400 font-semibold"
                       )}
                     >
                       {/* Checkbox */}
@@ -861,56 +782,46 @@ function CourierHubContent() {
 
                       {/* Dispatch ID */}
                       <td className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200">
-                        {order.dispatch?.dispatchId ? (
+                        {order.dispatch?.dispatchId || order.dispatch?.llrNumber ? (
                           <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-orange-100 text-orange-800 border border-orange-200">
-                            {order.dispatch.dispatchId}
+                            {order.dispatch.dispatchId || order.dispatch.llrNumber}
                           </span>
                         ) : (
-                          <span className="font-mono text-[11px] text-slate-400 italic">
-                            Pending ID
+                          <span className="font-mono text-[11px] text-slate-400">
+                            -
                           </span>
                         )}
                       </td>
 
-                      {/* Customer (Admin only) */}
-                      {!isCourierUser && (
-                        <td className="py-2.5 px-3 border-r border-slate-200">
-                          <div className="font-semibold text-slate-800 truncate max-w-[160px]">
-                            {order.customer.name}
-                          </div>
-                          <div className="text-[11px] font-mono text-slate-500 flex items-center gap-1 mt-0.5">
-                            <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span>{order.customer.mobile}</span>
-                          </div>
-                        </td>
-                      )}
+                      {/* Customer Name */}
+                      <td className="py-2.5 px-3 border-r border-slate-200">
+                        <div className="font-semibold text-slate-800 truncate max-w-[160px]">
+                          {order.customer.name}
+                        </div>
+                      </td>
 
-                      {/* Courier Partner (Admin only) */}
-                      {!isCourierUser && (
-                        <td className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200">
-                          <span className={cn(
-                            "px-2 py-0.5 rounded text-[11px] font-bold border",
-                            order.dispatch?.courierPartnerId === "PROFESSIONAL"
-                              ? "bg-purple-50 text-purple-700 border-purple-200"
-                              : order.dispatch?.courierPartnerId === "DTDC"
-                              ? "bg-cyan-50 text-cyan-700 border-cyan-200"
-                              : order.dispatch?.courierPartnerId === "ST_COURIER"
-                              ? "bg-orange-50 text-orange-700 border-orange-200"
-                              : "bg-slate-100 text-slate-600 border-slate-200"
-                          )}>
-                            {order.dispatch?.courierName || "Unassigned"}
-                          </span>
-                        </td>
-                      )}
+                      {/* Customer Mobile */}
+                      <td className="py-2.5 px-3 whitespace-nowrap font-mono text-slate-700 border-r border-slate-200">
+                        <div className="flex items-center gap-1.5">
+                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>{order.customer.mobile}</span>
+                        </div>
+                      </td>
 
-                      {/* Pickup Phone (Separate from Customer Phone) */}
-                      <td className="py-2 px-3 border-r border-slate-200" onClick={(e) => e.stopPropagation()}>
-                        <InlinePickupPhoneInput
-                          orderId={order.id}
-                          orderNumber={order.orderNumber}
-                          initialValue={order.dispatch?.pickupPhone}
-                          onSave={handleSavePickupPhone}
-                        />
+                      {/* Courier Partner */}
+                      <td className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded text-[11px] font-bold border",
+                          order.dispatch?.courierPartnerId === "PROFESSIONAL"
+                            ? "bg-purple-50 text-purple-700 border-purple-200"
+                            : order.dispatch?.courierPartnerId === "DTDC"
+                            ? "bg-cyan-50 text-cyan-700 border-cyan-200"
+                            : order.dispatch?.courierPartnerId === "ST_COURIER"
+                            ? "bg-orange-50 text-orange-700 border-orange-200"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                        )}>
+                          {order.dispatch?.courierName || currentPartner.name}
+                        </span>
                       </td>
 
                       {/* LLR / Tracking Number */}
@@ -918,35 +829,34 @@ function CourierHubContent() {
                         <InlineLlrInput
                           orderId={order.id}
                           orderNumber={order.orderNumber}
-                          initialValue={order.dispatch?.llrNumber}
+                          initialValue={
+                            order.dispatch?.llrNumber &&
+                            order.dispatch.llrNumber !== order.dispatch.dispatchId &&
+                            !order.dispatch.llrNumber.toLowerCase().startsWith("dsp")
+                              ? order.dispatch.llrNumber
+                              : ""
+                          }
                           onSave={handleSaveLlr}
                         />
                       </td>
 
-                      {/* Courier Status */}
+                      {/* Courier Status: Automatically "Picked Up" with server timestamp */}
                       <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
-                        <select
-                          value={
-                            cStatus === "DELIVERED"
-                              ? "DELIVERED"
-                              : cStatus === "PICKED_UP" || cStatus === "SHIPPED"
-                              ? "PICKED_UP"
-                              : "WAITING_FOR_PICKUP"
-                          }
-                          onChange={(e) => handleStatusChange(order.id, e.target.value as CourierStatus)}
+                        <span 
                           className={cn(
-                            "w-full text-xs font-bold py-1 px-2 rounded-md border outline-none cursor-pointer transition-colors shadow-2xs",
+                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border shadow-2xs",
                             cStatus === "DELIVERED"
                               ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                              : cStatus === "PICKED_UP" || cStatus === "SHIPPED"
-                              ? "bg-blue-50 text-blue-800 border-blue-300"
-                              : "bg-amber-50 text-amber-800 border-amber-300"
+                              : "bg-blue-50 text-blue-800 border-blue-300"
                           )}
+                          title={order.dispatch?.pickedUpAt ? `Picked up at ${formatDate(order.dispatch.pickedUpAt)}` : "Picked Up"}
                         >
-                          <option value="WAITING_FOR_PICKUP">Waiting for Pickup</option>
-                          <option value="PICKED_UP">Picked Up</option>
-                          <option value="DELIVERED">Delivered</option>
-                        </select>
+                          <span className={cn(
+                            "w-1.5 h-1.5 rounded-full shrink-0",
+                            cStatus === "DELIVERED" ? "bg-emerald-500" : "bg-blue-500"
+                          )} />
+                          <span>{cStatus === "DELIVERED" ? "Delivered" : "Picked Up"}</span>
+                        </span>
                       </td>
                     </tr>
                   );
@@ -956,7 +866,7 @@ function CourierHubContent() {
           </table>
         </div>
 
-        {/* Pagination Bar (Like Orders Page) */}
+        {/* Pagination Bar */}
         <div className="px-6 py-3 border-t border-slate-300 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
           <div className="flex items-center gap-2">
             <span>

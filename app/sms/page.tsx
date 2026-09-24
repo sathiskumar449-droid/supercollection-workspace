@@ -16,7 +16,8 @@ import {
   Phone,
   FileSpreadsheet,
   FileText,
-  CheckCheck
+  CheckCheck,
+  ChevronDown
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
 import { SmsStatusBadge, SourceBadge } from "@/components/ui/status-badge";
@@ -30,7 +31,18 @@ function SmsMonitoringContent() {
   const searchParams = useSearchParams();
   const initialStatus = searchParams.get("status") || "ALL";
 
-  const { orders, user, syncPing4SmsStatus, bulkSyncPing4SmsStatus, updateOrderStatus, updateCourierDetails, dateFilter, customDate } = useOrderFlow();
+  const {
+    orders,
+    user,
+    syncPing4SmsStatus,
+    bulkSyncPing4SmsStatus,
+    updateSmsStatus,
+    bulkUpdateSmsStatus,
+    updateOrderStatus,
+    updateCourierDetails,
+    dateFilter,
+    customDate,
+  } = useOrderFlow();
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -40,14 +52,16 @@ function SmsMonitoringContent() {
   // Bulk Selection State
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkRefreshing, setIsBulkRefreshing] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<string>("");
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
   // ONLY orders that have been marked as "SHIPPED" in Courier Hub (after being dispatched from packing)
   // Filtered by global TopBar date filter / calendar picker
   const shippedOrders = useMemo(() => {
     return orders.filter((o) => 
-      matchesDateFilter(o.sms.sentAt || o.createdAt, dateFilter, customDate) &&
-      (o.dispatch.courierStatus === "SHIPPED" || (o.dispatch.courierStatus as string) === "DELIVERED") &&
-      (Boolean(o.dispatchedAt) || Boolean(o.dispatch.dispatchedAt))
+      matchesDateFilter(o.sms.sentAt || o.dispatch?.deliveredAt || o.createdAt, dateFilter, customDate) &&
+      (o.dispatch.courierStatus === "SHIPPED" || (o.dispatch.courierStatus as string) === "DELIVERED" || Boolean(o.dispatch.llrNumber)) &&
+      (Boolean(o.dispatchedAt) || Boolean(o.dispatch.dispatchedAt) || Boolean(o.dispatch.deliveredAt))
     );
   }, [orders, dateFilter, customDate]);
 
@@ -108,9 +122,48 @@ function SmsMonitoringContent() {
       const res = bulkSyncPing4SmsStatus(selectedIds);
       triggerToast(`Polled Ping4SMS gateway. ${res.updatedCount} delivery receipts updated for ${selectedIds.length} orders.`);
       setSelectedIds([]);
+      setBulkStatus("");
     } finally {
       setIsBulkRefreshing(false);
     }
+  };
+
+  const handleBulkMarkSent = () => {
+    if (selectedIds.length === 0) return;
+    setIsBulkUpdating(true);
+    try {
+      const res = bulkUpdateSmsStatus(selectedIds, "SENT");
+      triggerToast(`${selectedIds.length} order(s) marked as SMS Sent!`);
+      setSelectedIds([]);
+      setBulkStatus("");
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
+  const handleApplyBulkStatus = () => {
+    if (selectedIds.length === 0 || !bulkStatus) return;
+    setIsBulkUpdating(true);
+    try {
+      const res = bulkUpdateSmsStatus(selectedIds, bulkStatus as SmsStatus);
+      const label =
+        bulkStatus === "SENT"
+          ? "Sent"
+          : bulkStatus === "PENDING"
+          ? "Waiting for SMS"
+          : "Delivery Failed";
+      triggerToast(`${selectedIds.length} order(s) updated to SMS ${label}!`);
+      setSelectedIds([]);
+      setBulkStatus("");
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
+  const handleUpdateSmsStatus = (orderId: string, orderNumber: string, newStatus: SmsStatus) => {
+    updateSmsStatus(orderId, newStatus);
+    const label = newStatus === "SENT" ? "Sent" : newStatus === "PENDING" ? "Waiting for SMS" : "Failed";
+    triggerToast(`Order ${orderNumber} SMS status updated to ${label}`);
   };
 
   const handleRefresh = async () => {
@@ -236,7 +289,7 @@ function SmsMonitoringContent() {
           </div>
         </div>
 
-        {/* Pending */}
+        {/* Pending / Waiting for SMS */}
         <div
           onClick={() => setStatusFilter("PENDING")}
           className={cn(
@@ -247,7 +300,7 @@ function SmsMonitoringContent() {
           )}
         >
           <div className="flex items-center justify-between text-[10.5px] font-bold text-amber-700 uppercase tracking-wider">
-            <span>Awaiting Carrier DLR</span>
+            <span>Waiting for SMS</span>
             <Clock className="w-3.5 h-3.5 text-amber-600" />
           </div>
           <div className="text-xl font-black text-amber-600 font-mono mt-0.5 tracking-tight">
@@ -278,16 +331,65 @@ function SmsMonitoringContent() {
       {/* Bulk Selection Toolbar */}
       <BulkToolbar
         selectedCount={selectedIds.length}
-        onClearSelection={() => setSelectedIds([])}
+        onClearSelection={() => {
+          setSelectedIds([]);
+          setBulkStatus("");
+        }}
         customAction={
-          <button
-            onClick={handleBulkRefreshSms}
-            disabled={isBulkRefreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-semibold text-xs transition-colors shadow-xs"
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5", isBulkRefreshing && "animate-spin")} />
-            <span>{isBulkRefreshing ? "Polling Gateway..." : `Refresh Selected (${selectedIds.length})`}</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Direct Quick "Mark as Sent" button */}
+            <button
+              type="button"
+              onClick={handleBulkMarkSent}
+              disabled={isBulkUpdating}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer active:scale-98"
+              title="Mark all selected orders as SMS Sent"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Mark as Sent ({selectedIds.length})</span>
+            </button>
+
+            {/* Bulk Edit dropdown */}
+            <div className="relative">
+              <select
+                value={bulkStatus}
+                onChange={(e) => setBulkStatus(e.target.value)}
+                className="appearance-none bg-white text-slate-800 font-semibold border border-orange-300 hover:border-orange-400 pl-3 pr-8 py-1.5 rounded-lg outline-none focus:ring-2 focus:ring-orange-500/20 text-xs shadow-2xs cursor-pointer"
+              >
+                <option value="" disabled>
+                  Bulk Edit Status ▾
+                </option>
+                <option value="SENT">Mark as Sent</option>
+                <option value="PENDING">Mark as Waiting for SMS</option>
+                <option value="FAILED">Mark as Delivery Failed</option>
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-2 pointer-events-none" />
+            </div>
+
+            {/* Apply Button */}
+            {bulkStatus && (
+              <button
+                type="button"
+                onClick={handleApplyBulkStatus}
+                disabled={isBulkUpdating}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-700 hover:bg-orange-800 disabled:opacity-50 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer active:scale-98"
+              >
+                <CheckCheck className="w-3.5 h-3.5" />
+                <span>Apply Status</span>
+              </button>
+            )}
+
+            {/* Polling Gateway Button */}
+            <button
+              type="button"
+              onClick={handleBulkRefreshSms}
+              disabled={isBulkRefreshing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", isBulkRefreshing && "animate-spin")} />
+              <span>{isBulkRefreshing ? "Polling Gateway..." : `Refresh Selected (${selectedIds.length})`}</span>
+            </button>
+          </div>
         }
       />
 
@@ -298,8 +400,8 @@ function SmsMonitoringContent() {
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs w-full md:w-auto overflow-x-auto">
             {[
               { key: "ALL", label: "All Statuses" },
+              { key: "PENDING", label: `Waiting for SMS (${pendingCount})` },
               { key: "SENT", label: `Sent (${sentCount})` },
-              { key: "PENDING", label: `Pending (${pendingCount})` },
               { key: "FAILED", label: `Failed (${failedCount})` },
             ].map((tab) => (
               <button
@@ -476,9 +578,26 @@ function SmsMonitoringContent() {
                       )}
                     </td>
 
-                    {/* 6. SMS Status */}
-                    <td className="py-2.5 px-2 text-center whitespace-nowrap border-b border-slate-300 bg-slate-50/50">
-                      <SmsStatusBadge status={order.sms.status} />
+                    {/* 6. SMS Status (Interactive Manual Dropdown) */}
+                    <td className="py-2.5 px-2 text-center whitespace-nowrap border-b border-slate-300 bg-slate-50/50" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center">
+                        <select
+                          value={order.sms.status}
+                          onChange={(e) => handleUpdateSmsStatus(order.id, order.orderNumber, e.target.value as SmsStatus)}
+                          className={cn(
+                            "text-xs font-semibold py-1 px-2.5 rounded-md border shadow-2xs outline-none cursor-pointer transition-all",
+                            order.sms.status === "SENT"
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                              : order.sms.status === "FAILED"
+                              ? "bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100"
+                              : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 font-bold"
+                          )}
+                        >
+                          <option value="PENDING">Waiting for SMS</option>
+                          <option value="SENT">Sent</option>
+                          <option value="FAILED">Failed</option>
+                        </select>
+                      </div>
                     </td>
                   </tr>
                 ))

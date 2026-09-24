@@ -76,38 +76,51 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
       };
 
       const rawDispatch = Array.isArray(raw.dispatch) ? raw.dispatch[0] : raw.dispatch;
-      const defaultCourierStatus: CourierStatus = raw.status === "DISPATCHED" ? "WAITING_FOR_PICKUP" : "PENDING";
+      const defaultCourierStatus: CourierStatus = "PENDING";
       const courierObj = rawDispatch?.courier;
 
-      // Check if courier was explicitly assigned or order is dispatched
+      // Check if courier was explicitly assigned
       const notesStr = String(rawDispatch?.notes || "");
       const explicitCourierMatch = notesStr.match(/assigned_courier:([a-zA-Z0-9_\s]+)/);
       const explicitCourierName = explicitCourierMatch ? explicitCourierMatch[1].trim() : undefined;
 
-      const isActivelyAssigned = raw.status === "DISPATCHED" || 
+      // Only actively assigned if courier partner or actual pickup/LLR exists (DISPATCHED alone does NOT assign courier)
+      const isActivelyAssigned = Boolean(explicitCourierName) ||
+                                Boolean(rawDispatch?.courier_partner_id) ||
                                 (rawDispatch?.courier_status && rawDispatch.courier_status !== "PENDING") ||
-                                Boolean(rawDispatch?.llr_number) ||
-                                Boolean(rawDispatch?.dispatched_at) ||
-                                Boolean(explicitCourierName) ||
-                                Boolean(rawDispatch?.courier_partner_id);
+                                Boolean(rawDispatch?.picked_up_at) ||
+                                Boolean(rawDispatch?.llr_number);
 
       let resolvedCourierName: string | undefined = undefined;
       let resolvedPartnerCode: string | undefined = undefined;
 
       if (isActivelyAssigned) {
-        resolvedCourierName = explicitCourierName || rawDispatch?.courier_name || courierObj?.name || "ST Courier";
+        resolvedCourierName = explicitCourierName || rawDispatch?.courier_name || courierObj?.name || undefined;
         resolvedPartnerCode = rawDispatch?.courier_partner_id || courierObj?.code || 
-          (resolvedCourierName?.includes("Professional") ? "PROFESSIONAL" : resolvedCourierName?.includes("DTDC") ? "DTDC" : "ST_COURIER");
+          (resolvedCourierName?.includes("Professional") ? "PROFESSIONAL" : resolvedCourierName?.includes("DTDC") ? "DTDC" : (resolvedCourierName?.includes("ST") ? "ST_COURIER" : undefined));
       }
+
+      let resolvedCourierStatus: CourierStatus = defaultCourierStatus;
+      const rawCStatus = rawDispatch?.courier_status || rawDispatch?.courierStatus;
+      if (rawCStatus === "DELIVERED" || notesStr.includes("courier_status:DELIVERED")) {
+        resolvedCourierStatus = "DELIVERED";
+      } else if (rawCStatus === "SHIPPED" || rawCStatus === "PICKED_UP" || rawDispatch?.picked_up_at || notesStr.includes("courier_status:PICKED_UP")) {
+        resolvedCourierStatus = "PICKED_UP";
+      } else if (rawCStatus) {
+        resolvedCourierStatus = rawCStatus as CourierStatus;
+      }
+
+      const notesMatch = raw.notes ? String(raw.notes).match(/dispatch_id:([^\s;|]+)/) : null;
+      const parsedDispatchId = rawDispatch?.dispatch_id || rawDispatch?.dispatchId || (notesMatch ? notesMatch[1] : undefined);
 
       const dispatchInfo: DispatchInfo = {
         courierId: isActivelyAssigned ? (rawDispatch?.courier_id || courierObj?.id) : undefined,
         courierName: resolvedCourierName,
         courierPartnerId: resolvedPartnerCode,
-        dispatchId: rawDispatch?.dispatch_id || rawDispatch?.dispatchId || undefined,
+        dispatchId: parsedDispatchId,
         llrNumber: rawDispatch?.llr_number || rawDispatch?.llrNumber || undefined,
         pickupPhone: rawDispatch?.pickup_phone || rawDispatch?.pickupPhone || undefined,
-        courierStatus: (rawDispatch?.courier_status || rawDispatch?.courierStatus || defaultCourierStatus) as CourierStatus,
+        courierStatus: resolvedCourierStatus,
         dispatchedAt: rawDispatch?.dispatched_at || rawDispatch?.dispatchedAt || raw.dispatched_at,
         pickedUpAt: rawDispatch?.picked_up_at || rawDispatch?.pickedUpAt,
         deliveredAt: rawDispatch?.shipped_at || rawDispatch?.delivered_at || rawDispatch?.deliveredAt || raw.shipped_at,
@@ -116,7 +129,7 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
 
       const rawSms = Array.isArray(raw.sms) ? raw.sms[0] : raw.sms;
       const smsInfo: SmsInfo = {
-        status: (rawSms?.status || (dispatchInfo.courierStatus === "SHIPPED" ? "SENT" : "PENDING")) as SmsStatus,
+        status: (rawSms?.status === "SENT" ? "SENT" : "PENDING") as SmsStatus,
         provider: rawSms?.provider || "Ping4SMS",
         providerMessageId: rawSms?.provider_message_id || rawSms?.providerMessageId,
         sentAt: rawSms?.sent_at || rawSms?.sentAt,
@@ -166,7 +179,7 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         orderStatus: raw.status,
         dispatch: {
           courierId: dispatchInfo.courierId,
-          courierName: dispatchInfo.courierName || "ST Courier",
+          courierName: dispatchInfo.courierName || undefined,
           courierPartnerId: dispatchInfo.courierPartnerId,
           dispatchId: dispatchInfo.dispatchId,
           pickupPhone: dispatchInfo.pickupPhone,
@@ -190,11 +203,37 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
         packedAt: raw.packed_at,
         dispatchedAt: raw.dispatched_at,
         notes: raw.notes,
+        pendingReason: raw.status === "NEW" && raw.notes?.includes("Reason:") 
+          ? raw.notes.split("Reason:")[1]?.split("|")[0]?.trim() 
+          : (raw.status === "NEW" ? raw.notes : undefined),
+        pendingNote: raw.status === "NEW" && raw.notes?.includes("Note:") 
+          ? raw.notes.split("Note:")[1]?.trim() 
+          : undefined,
         timeline,
       };
     });
   } catch (err) {
     console.error("Supabase fetch exception:", err);
+    return null;
+  }
+}
+
+let cachedCourierMap: Record<string, string> | null = null;
+
+async function getCourierIdByCode(db: any, code: string): Promise<string | null> {
+  try {
+    if (!cachedCourierMap) {
+      const { data } = await db.from("couriers").select("id, code, is_st_courier");
+      if (data && data.length > 0) {
+        cachedCourierMap = {};
+        data.forEach((c: any) => {
+          cachedCourierMap![c.code] = c.id;
+          if (c.is_st_courier) cachedCourierMap!["DEFAULT"] = c.id;
+        });
+      }
+    }
+    return cachedCourierMap?.[code] || cachedCourierMap?.["DEFAULT"] || null;
+  } catch {
     return null;
   }
 }
@@ -205,10 +244,14 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
 export async function updateSupabaseOrderStatus(
   orderId: string,
   newStatus: OrderStatus,
-  activity?: ActivityLog
+  activity?: ActivityLog,
+  dispatchId?: string
 ): Promise<boolean> {
   const db = supabaseAdmin || supabase;
   if (!db) return false;
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
+  if (!isUuid) return true;
 
   try {
     const updates: any = {
@@ -222,13 +265,24 @@ export async function updateSupabaseOrderStatus(
     if (newStatus === "DISPATCHED") updates.dispatched_at = updates.updated_at;
     if (newStatus === "COMPLETED") updates.shipped_at = updates.updated_at;
 
+    if (dispatchId !== undefined) {
+      const { data: existingOrd } = await db.from("orders").select("notes").eq("id", orderId).maybeSingle();
+      let currentNotes = existingOrd?.notes || "";
+      currentNotes = currentNotes.replace(/(\s*\|\s*)?dispatch_id:[^\s;|]+/g, "").trim();
+      if (dispatchId) {
+        updates.notes = currentNotes ? `${currentNotes} | dispatch_id:${dispatchId}` : `dispatch_id:${dispatchId}`;
+      } else {
+        updates.notes = currentNotes || null;
+      }
+    }
+
     const { error: orderError } = await db
       .from("orders")
       .update(updates)
       .eq("id", orderId);
 
     if (orderError) {
-      console.error("Error updating order in Supabase:", orderError);
+      console.warn("Supabase order update warning:", orderError?.message || orderError);
       return false;
     }
 
@@ -247,7 +301,7 @@ export async function updateSupabaseOrderStatus(
 
     return true;
   } catch (err) {
-    console.error("Supabase status update exception:", err);
+    console.warn("Supabase status update exception:", err);
     return false;
   }
 }
@@ -263,38 +317,54 @@ export async function updateSupabaseCourierDetails(
   const db = supabaseAdmin || supabase;
   if (!db) return false;
 
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
+  if (!isUuid) return true;
+
   try {
     const updates: any = {
       updated_at: new Date().toISOString(),
     };
 
-    if (details.dispatchId !== undefined) updates.dispatch_id = details.dispatchId;
-    if (details.pickupPhone !== undefined) updates.pickup_phone = details.pickupPhone;
-    if (details.courierPartnerId !== undefined) updates.courier_partner_id = details.courierPartnerId;
-    if (details.llrNumber !== undefined) updates.llr_number = details.llrNumber;
+    if (details.dispatchId !== undefined) {
+      updates.dispatch_id = details.dispatchId && details.dispatchId.trim() ? details.dispatchId.trim() : null;
+    }
+    if (details.pickupPhone !== undefined) {
+      updates.pickup_phone = details.pickupPhone && details.pickupPhone.trim() ? details.pickupPhone.trim() : null;
+    }
+    if (details.courierPartnerId !== undefined) {
+      updates.courier_partner_id = details.courierPartnerId || null;
+    }
+    if (details.llrNumber !== undefined) {
+      updates.llr_number = details.llrNumber && details.llrNumber.trim() ? details.llrNumber.trim() : null;
+    }
 
     if (details.courierName || details.courierPartnerId) {
       const cName = details.courierName || (details.courierPartnerId === "PROFESSIONAL" ? "Professional Courier" : details.courierPartnerId === "DTDC" ? "DTDC" : "ST Courier");
-      if (details.courierPartnerId === "PROFESSIONAL" || cName.includes("Professional")) {
-        updates.courier_id = "b0b76513-6d16-42e1-849c-486afc2f43f6"; // Professional Couriers
-        updates.courier_partner_id = "PROFESSIONAL";
-      } else if (details.courierPartnerId === "DTDC" || cName.includes("DTDC")) {
-        updates.courier_id = "07e42475-8a09-4b2f-8f04-8821c7356f7d"; // DTDC
-        updates.courier_partner_id = "DTDC";
-      } else if (details.courierPartnerId === "ST_COURIER" || cName.includes("ST")) {
-        updates.courier_id = "1646c4ed-2883-4f72-b3c8-aab24f7631b6"; // ST Courier
-        updates.courier_partner_id = "ST_COURIER";
-      }
+      const partnerCode = details.courierPartnerId || (cName.includes("Professional") ? "PROFESSIONAL" : cName.includes("DTDC") ? "DTDC" : "ST_COURIER");
+      updates.courier_partner_id = partnerCode;
       updates.notes = `assigned_courier:${cName}`;
+
+      const realCourierId = await getCourierIdByCode(db, partnerCode);
+      if (realCourierId) {
+        updates.courier_id = realCourierId;
+      }
     }
 
     if (details.courierStatus) {
-      updates.courier_status = details.courierStatus;
+      // PostgreSQL enum courier_status only accepts 'PENDING' and 'SHIPPED'
+      const pgStatus = (details.courierStatus === "PICKED_UP" || details.courierStatus === "DELIVERED" || details.courierStatus === "SHIPPED")
+        ? "SHIPPED"
+        : "PENDING";
+      updates.courier_status = pgStatus;
+
+      const currentNotes = updates.notes || "";
       if (details.courierStatus === "PICKED_UP" || details.courierStatus === "SHIPPED") {
         updates.picked_up_at = new Date().toISOString();
+        updates.notes = currentNotes ? `${currentNotes};courier_status:PICKED_UP` : "courier_status:PICKED_UP";
       }
       if (details.courierStatus === "DELIVERED") {
         updates.shipped_at = new Date().toISOString();
+        updates.notes = currentNotes ? `${currentNotes};courier_status:DELIVERED` : "courier_status:DELIVERED";
       }
     }
 
@@ -310,46 +380,42 @@ export async function updateSupabaseCourierDetails(
         .from("dispatches")
         .update(updates)
         .eq("order_id", orderId);
-      if (updateErr) console.error("Error updating dispatch in Supabase:", updateErr);
+      if (updateErr) {
+        // If unique constraint or foreign key constraint hit, retry without conflicting fields
+        if (updateErr.code === "23505" && updates.dispatch_id) {
+          const fallbackUpdates = { ...updates };
+          delete fallbackUpdates.dispatch_id;
+          await db.from("dispatches").update(fallbackUpdates).eq("order_id", orderId);
+        } else {
+          console.warn("Supabase dispatch update warning:", updateErr?.message || updateErr);
+        }
+      }
     } else {
+      let courierIdToUse: string | null = null;
+      if (updates.courier_partner_id) {
+        courierIdToUse = await getCourierIdByCode(db, updates.courier_partner_id);
+      }
+      const insertPayload: any = {
+        order_id: orderId,
+        ...updates,
+      };
+      if (courierIdToUse && !insertPayload.courier_id) {
+        insertPayload.courier_id = courierIdToUse;
+      }
       const { error: insertErr } = await db
         .from("dispatches")
-        .insert({
-          order_id: orderId,
-          courier_id: updates.courier_id || "1646c4ed-2883-4f72-b3c8-aab24f7631b6",
-          ...updates,
-        });
-      if (insertErr) console.error("Error inserting dispatch in Supabase:", insertErr);
+        .insert(insertPayload);
+      if (insertErr) {
+        console.warn("Supabase dispatch insert warning:", insertErr?.message || insertErr);
+      }
     }
 
-    // If marked as SHIPPED, record shipped_at timestamp and log SMS sent without overwriting order status (keep DISPATCHED)
-    if (details.courierStatus === "SHIPPED") {
+    // If marked as SHIPPED or PICKED_UP, record shipped_at timestamp without overwriting SMS status
+    if (details.courierStatus === "SHIPPED" || details.courierStatus === "PICKED_UP") {
       await db.from("orders").update({
         shipped_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq("id", orderId);
-
-      const { data: existingSms } = await db
-        .from("sms_logs")
-        .select("id")
-        .eq("order_id", orderId)
-        .maybeSingle();
-
-      if (existingSms) {
-        await db.from("sms_logs").update({
-          status: "SENT",
-          sent_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }).eq("id", existingSms.id);
-      } else {
-        await db.from("sms_logs").insert({
-          order_id: orderId,
-          mobile: "N/A",
-          provider: "Ping4SMS",
-          status: "SENT",
-          sent_at: new Date().toISOString(),
-        });
-      }
     }
 
     if (activity) {
@@ -369,6 +435,43 @@ export async function updateSupabaseCourierDetails(
   } catch (err) {
     console.error("Supabase courier update exception:", err);
     return false;
+  }
+}
+
+/**
+ * Update SMS Status in Supabase
+ */
+export async function updateSupabaseSmsStatus(orderId: string, status: SmsStatus) {
+  const db = supabaseAdmin || supabase;
+  if (!db) return false;
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
+  if (!isUuid) return true;
+
+  try {
+    const { data: existingSms } = await db
+      .from("sms_logs")
+      .select("id")
+      .eq("order_id", orderId)
+      .maybeSingle();
+
+    if (existingSms) {
+      await db.from("sms_logs").update({
+        status,
+        sent_at: status === "SENT" ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", existingSms.id);
+    } else {
+      await db.from("sms_logs").insert({
+        order_id: orderId,
+        mobile: "N/A",
+        provider: "Ping4SMS",
+        status,
+        sent_at: status === "SENT" ? new Date().toISOString() : null,
+      });
+    }
+  } catch (err) {
+    console.warn("Supabase updateSupabaseSmsStatus warning:", err);
   }
 }
 

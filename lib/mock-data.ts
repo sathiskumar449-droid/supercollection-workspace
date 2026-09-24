@@ -424,6 +424,7 @@ export function generateMockOrders(): Order[] {
 }
 
 export function generateMockReturns(orders: Order[] = []): ReturnCase[] {
+  return [];
   const getOrder = (idx: number, fallbackNumber: string) => {
     return orders[idx] || {
       id: `ord-${idx + 1}`,

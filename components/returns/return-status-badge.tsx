@@ -101,6 +101,20 @@ export function ReturnStatusBadge({ status, className }: { status: ReturnStatus;
       borderClass: "border-red-200",
       icon: <XCircle className="w-3.5 h-3.5 text-red-600" />,
     },
+    "Exchanged": {
+      label: "Exchanged",
+      textClass: "text-blue-800",
+      bgClass: "bg-blue-50",
+      borderClass: "border-blue-200",
+      icon: <ArrowRightLeft className="w-3.5 h-3.5 text-blue-600" />,
+    },
+    "Dispatched": {
+      label: "Dispatched",
+      textClass: "text-teal-800",
+      bgClass: "bg-teal-50",
+      borderClass: "border-teal-200",
+      icon: <Truck className="w-3.5 h-3.5 text-teal-600" />,
+    },
     "Cancelled": {
       label: "Cancelled",
       textClass: "text-slate-600",

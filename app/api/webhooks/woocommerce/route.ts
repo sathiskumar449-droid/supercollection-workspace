@@ -130,6 +130,18 @@ export async function POST(req: NextRequest) {
         customerId = fallbackCust?.id || null;
       }
 
+      // Check if order already exists in Supabase to preserve active fulfillment progression (e.g. Dispatched)
+      const { data: existingOrder } = await db
+        .from("orders")
+        .select("id, status")
+        .eq("external_order_id", wcId)
+        .maybeSingle();
+
+      let effectiveStatus = orderStatus;
+      if (existingOrder?.status === "DISPATCHED") {
+        effectiveStatus = "DISPATCHED";
+      }
+
       // 2. Insert/Upsert Order
       const orderNumber = `SC-WC-${wcId}`;
       const orderPayload: any = {
@@ -137,7 +149,7 @@ export async function POST(req: NextRequest) {
         external_order_id: wcId,
         source: orderSource,
         customer_id: customerId,
-        status: orderStatus,
+        status: effectiveStatus,
         payment_status: paymentStatus,
         total_amount: totalAmount,
         created_at: parseWooCommerceDate(body.date_created_gmt, body.date_created),

@@ -99,6 +99,8 @@ export interface Order {
   orderTakenBy?: string;
   returnStatus?: string;
   notes?: string;
+  pendingReason?: string;
+  pendingNote?: string;
   timeline: ActivityLog[];
 }
 
@@ -196,6 +198,8 @@ export type ReturnStatus =
   | "Refunded"
   | "Replacement Pending"
   | "Replacement Dispatched"
+  | "Exchanged"
+  | "Dispatched"
   | "Completed"
   | "Rejected"
   | "Cancelled";
@@ -306,10 +310,12 @@ export interface ReturnCase {
   qc?: ReturnQc;
   refund?: ReturnRefund;
   replacement?: ReturnReplacement;
+  returnDate?: string;
   receivedAt?: string;
   receivedBy?: string;
   receivingNote?: string;
   timeline: ReturnTimelineEvent[];
+  dispatchNumber?: string;
   createdAt: string;
   updatedAt: string;
   createdBy: string;

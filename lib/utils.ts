@@ -100,3 +100,12 @@ export function matchesDateFilter(
       return true;
   }
 }
+
+/**
+ * Normalizes phone numbers to their last 10 digits for accurate comparison.
+ */
+export function normalizePhoneDigits(phone?: string): string {
+  if (!phone) return "";
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}

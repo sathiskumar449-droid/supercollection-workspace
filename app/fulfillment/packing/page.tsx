@@ -18,28 +18,32 @@ import {
   Eye, 
   CheckCheck,
   FileSpreadsheet,
-  FileText
+  FileText,
+  X
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
 import { SourceBadge, OrderStatusBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { formatINR, formatTimeAgo, formatDate, cn, matchesDateFilter } from "@/lib/utils";
-import { Order, OrderStatus, ReturnCase, ReturnReplacement } from "@/types/orderflow";
-import { ReturnDetailsDrawer } from "@/components/returns/return-details-drawer";
+import { Order, OrderStatus, ReturnCase } from "@/types/orderflow";
 import { CreateReturnModal } from "@/components/returns/create-return-modal";
+import { MarkAsReturnModal } from "@/components/returns/mark-as-return-modal";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
 
-// Status definitions mapping to the exact terms requested by user:
-// "porcessing pending completed pacakaging packed dispatched nu"
+// Status definitions mapping to workflow requirements:
+// WooCommerce Processing -> Processing
+// WooCommerce Completed -> Completed (Ready)
+// Dispatch Number entered -> Dispatched
+// Pending -> Pending + Reason/Note
 const STATUS_OPTIONS: { key: OrderStatus; label: string; badgeColor: string }[] = [
-  { key: "NEW", label: "Pending", badgeColor: "bg-slate-100 text-slate-700 border-slate-300" },
-  { key: "CONFIRMED", label: "Processing", badgeColor: "bg-blue-50 text-blue-700 border-blue-200" },
+  { key: "NEW", label: "Pending", badgeColor: "bg-amber-50 text-amber-800 border-amber-300" },
+  { key: "CONFIRMED", label: "Processing", badgeColor: "bg-sky-50 text-sky-700 border-sky-200" },
   { key: "PACKING", label: "Packaging", badgeColor: "bg-orange-50 text-orange-700 border-orange-200" },
   { key: "PACKED", label: "Packed", badgeColor: "bg-purple-50 text-purple-700 border-purple-200" },
   { key: "DISPATCHED", label: "Dispatched", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  { key: "COMPLETED", label: "Completed", badgeColor: "bg-orange-50 text-orange-800 border-orange-300" },
+  { key: "COMPLETED", label: "Completed (Ready)", badgeColor: "bg-blue-50 text-blue-800 border-blue-300" },
   { key: "RETURN", label: "↩ Return", badgeColor: "bg-rose-50 text-rose-700 border-rose-300" },
 ];
 
@@ -108,49 +112,104 @@ export default function PackingPage() {
     returns,
     user, 
     updateOrderStatus, 
+    setOrderPending,
+    resolveOrderPending,
     updateCourierDetails, 
-    markAsDispatched, 
-    updateReplacementDispatch,
-    courierPartners, 
     dateFilter, 
     customDate 
   } = useOrderFlow();
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
-  const [inspectReturn, setInspectReturn] = useState<ReturnCase | null>(null);
-
-  // Tab & View: Standard Orders vs Replacement Tasks
-  const [activeTab, setActiveTab] = useState<"ORDERS" | "REPLACEMENTS">("ORDERS");
 
   // Filtering & Search
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [expandedOrderIds, setExpandedOrderIds] = useState<string[]>([]);
+
+  const toggleExpandOrder = (orderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedOrderIds((prev) =>
+      prev.includes(orderId) ? prev.filter((id) => id !== orderId) : [...prev, orderId]
+    );
+  };
 
   // Instant notification feedback when status or dispatch number is updated
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Dispatch Confirmation Modal State (Requirement 18)
-  const [dispatchModalOrder, setDispatchModalOrder] = useState<Order | null>(null);
-  const [selectedCourierPartner, setSelectedCourierPartner] = useState<string>("ST_COURIER");
-
-  // Replacement Dispatch Modal State (Requirement 10)
-  const [dispatchModalReplacement, setDispatchModalReplacement] = useState<{ returnCase: ReturnCase; replacement: ReturnReplacement } | null>(null);
-  const [replacementLlr, setReplacementLlr] = useState("");
-
-  // Create Return Modal State (Packing -> Update Status -> Return -> Create Return)
+  // Create Return Modal State (Packing -> Return -> Create Return)
   const [returnModalOrder, setReturnModalOrder] = useState<Order | null>(null);
+
+  // Mark As Return Modal State (From Selection Toolbar)
+  const [isMarkAsReturnOpen, setIsMarkAsReturnOpen] = useState(false);
+
+  // Pending Reason / Note Modal State
+  const [pendingModalOrder, setPendingModalOrder] = useState<Order | null>(null);
+  const [pendingReason, setPendingReason] = useState<string>("Product unavailable");
+  const [pendingCustomReason, setPendingCustomReason] = useState<string>("");
+  const [pendingNote, setPendingNote] = useState<string>("");
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  const handleOpenPendingModal = (order: Order, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setPendingModalOrder(order);
+    const standardReasons = [
+      "Product unavailable",
+      "Waiting for stock",
+      "Damaged / Defect item",
+      "Customer request",
+      "Address verification needed",
+    ];
+    if (order.pendingReason && !standardReasons.includes(order.pendingReason)) {
+      setPendingReason("Other");
+      setPendingCustomReason(order.pendingReason);
+    } else {
+      setPendingReason(order.pendingReason || "Product unavailable");
+      setPendingCustomReason("");
+    }
+    setPendingNote(order.pendingNote || "");
+  };
+
+  const handleSavePending = () => {
+    if (!pendingModalOrder) return;
+    const finalReason =
+      pendingReason === "Other" && pendingCustomReason.trim()
+        ? pendingCustomReason.trim()
+        : pendingReason;
+
+    if (selectedIds.length > 1 && selectedIds.includes(pendingModalOrder.id)) {
+      selectedIds.forEach((id) => {
+        setOrderPending(id, finalReason, pendingNote.trim());
+      });
+      triggerToast(`${selectedIds.length} orders marked as Pending (${finalReason})`);
+      setSelectedIds([]);
+    } else {
+      setOrderPending(pendingModalOrder.id, finalReason, pendingNote.trim());
+      triggerToast(`Order ${pendingModalOrder.orderNumber} marked as Pending (${finalReason})`);
+      if (selectedIds.includes(pendingModalOrder.id)) {
+        setSelectedIds((prev) => prev.filter((id) => id !== pendingModalOrder.id));
+      }
+    }
+    setPendingModalOrder(null);
+  };
+
+  const handleReturnSuccess = (orderId: string, returnId: string, returnType: ReturnType, amount: number) => {
+    const ord = orders.find((o) => o.id === orderId);
+    updateOrderStatus(orderId, "RETURN", `Return case ${returnId} initiated from Packing Station (Type: ${returnType}, Amount: ${formatINR(amount)})`);
+    triggerToast(`Order ${ord ? ord.orderNumber : orderId} marked as Return (${returnType} - ${formatINR(amount)})`);
+    setSelectedIds((prev) => prev.filter((id) => id !== orderId));
+  };
+
+  const handleResolvePending = (order: Order, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    resolveOrderPending(order.id);
+    triggerToast(`Order ${order.orderNumber} resolved and returned to active workflow`);
+  };
+
   const handleInlineStatusChange = (order: Order, newStatus: OrderStatus) => {
     if (order.orderStatus === newStatus) return;
-    if (newStatus === "DISPATCHED") {
-      setDispatchModalOrder(order);
-      setSelectedCourierPartner(order.dispatch?.courierPartnerId || "ST_COURIER");
-      return;
-    }
     if (newStatus === "RETURN") {
       // Sole entry point: Packing -> Update Status -> Return -> Create Return
       setReturnModalOrder(order);
@@ -161,36 +220,30 @@ export default function PackingPage() {
     triggerToast(`Order ${order.orderNumber} status updated to ${targetLabel}`);
   };
 
-  const handleConfirmDispatch = () => {
-    if (!dispatchModalOrder) return;
-    const partnerObj = courierPartners.find((c) => c.code === selectedCourierPartner) || { name: "ST Courier", code: "ST_COURIER" };
-    markAsDispatched(dispatchModalOrder.id, selectedCourierPartner);
-    triggerToast(`Order ${dispatchModalOrder.orderNumber} dispatched! Moved to ${partnerObj.name} page in Courier Hub.`);
-    setDispatchModalOrder(null);
-  };
-
   const handleDispatchNoChange = (orderId: string, orderNumber: string, newLlr: string) => {
-    updateCourierDetails(orderId, {
-      llrNumber: newLlr || undefined,
-    });
-    triggerToast(
-      newLlr 
-        ? `Order ${orderNumber} dispatch no set to ${newLlr}` 
-        : `Order ${orderNumber} dispatch no cleared`
-    );
-  };
-
-  const handleConfirmReplacementDispatch = () => {
-    if (!dispatchModalReplacement) return;
-    const partnerObj = courierPartners.find((c) => c.code === selectedCourierPartner) || { name: "ST Courier", code: "ST_COURIER" };
-    updateReplacementDispatch(dispatchModalReplacement.returnCase.returnId, {
-      courier: partnerObj.name,
-      llr: replacementLlr.trim() || undefined,
-      status: "Dispatched",
-    });
-    triggerToast(`Replacement ${dispatchModalReplacement.replacement.replacementId} dispatched via ${partnerObj.name}! DSP- ID generated.`);
-    setDispatchModalReplacement(null);
-    setReplacementLlr("");
+    const trimmed = (newLlr || "").trim();
+    if (trimmed) {
+      // 1. Atomically update order status to DISPATCHED with manual dispatchId ONLY (NOT llrNumber)
+      // DO NOT create Courier Hub record, DO NOT assign courier, DO NOT set waiting for pickup
+      updateOrderStatus(
+        orderId, 
+        "DISPATCHED", 
+        `Status updated to Dispatched (Dispatch No: ${trimmed})`,
+        { dispatchId: trimmed }
+      );
+      triggerToast(`Order ${orderNumber} dispatch no set to ${trimmed} & status changed to Dispatched!`);
+    } else {
+      // Revert status to WooCommerce status (COMPLETED if previously completed, or CONFIRMED if processing)
+      const order = orders.find((o) => o.id === orderId);
+      const fallbackStatus: OrderStatus = order?.completedAt ? "COMPLETED" : "CONFIRMED";
+      updateOrderStatus(
+        orderId, 
+        fallbackStatus, 
+        `Dispatch number cleared, reverted to ${fallbackStatus}`,
+        { dispatchId: undefined }
+      );
+      triggerToast(`Order ${orderNumber} dispatch no cleared`);
+    }
   };
 
   // Bulk selection state
@@ -206,58 +259,31 @@ export default function PackingPage() {
     { value: "DISPATCHED", label: "Dispatched" },
   ];
 
-  // Orders eligible for Packing Station (includes active packing orders and Return orders)
-  // Filtered by global TopBar date filter / calendar picker (strictly excluding unconfirmed NEW)
+  // Orders eligible for Packing Station (includes active packing orders, Pending orders, and Return orders)
+  // Filtered by global TopBar date filter / calendar picker
   const packingEligibleOrders = useMemo(() => {
     return orders.filter(
       (o) =>
-        o.orderStatus !== "NEW" &&
         matchesDateFilter(o.createdAt, dateFilter, customDate)
     );
   }, [orders, dateFilter, customDate]);
 
-  // Replacement Tasks from returns
-  const replacementCases = useMemo(() => {
-    return returns.filter(
-      (r) =>
-        r.replacement &&
-        r.replacement.replacementId &&
-        matchesDateFilter(r.createdAt, dateFilter, customDate)
-    );
-  }, [returns, dateFilter, customDate]);
-
-  const activeReplacementCount = useMemo(() => {
-    return replacementCases.filter(
-      (r) => r.replacement && r.replacement.status !== "Dispatched"
-    ).length;
-  }, [replacementCases]);
-
-  const filteredReplacements = useMemo(() => {
-    return replacementCases.filter((rc) => {
-      const rep = rc.replacement!;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matches =
-          rep.replacementId.toLowerCase().includes(q) ||
-          rc.returnId.toLowerCase().includes(q) ||
-          rc.orderNumber.toLowerCase().includes(q) ||
-          rc.customerName.toLowerCase().includes(q) ||
-          rc.customerPhone.toLowerCase().includes(q) ||
-          (rep.replacementItem && rep.replacementItem.toLowerCase().includes(q)) ||
-          (rep.dispatchId && rep.dispatchId.toLowerCase().includes(q)) ||
-          (rep.llr && rep.llr.toLowerCase().includes(q));
-        if (!matches) return false;
-      }
-      return true;
-    });
-  }, [replacementCases, searchQuery]);
+  // Helper to determine if an order is in Return state
+  const isOrderReturn = (o: Order) =>
+    o.orderStatus === "RETURN" ||
+    returns.some((r) => (r.orderId === o.id || r.orderNumber === o.orderNumber) && r.status !== "Rejected" && r.status !== "Cancelled");
 
   // Filtered orders list
   const filteredOrders = useMemo(() => {
     return packingEligibleOrders.filter((order) => {
       // Status filter
-      if (statusFilter !== "ALL" && order.orderStatus !== statusFilter) {
-        return false;
+      if (statusFilter !== "ALL") {
+        const orderIsReturn = isOrderReturn(order);
+        if (statusFilter === "RETURN") {
+          if (!orderIsReturn) return false;
+        } else {
+          if (orderIsReturn || order.orderStatus !== statusFilter) return false;
+        }
       }
 
       // Search query
@@ -274,7 +300,7 @@ export default function PackingPage() {
 
       return true;
     });
-  }, [packingEligibleOrders, statusFilter, searchQuery]);
+  }, [packingEligibleOrders, statusFilter, searchQuery, returns]);
 
   // Validate selected orders against chosen bulk target status
   const { validOrders, skippedOrders } = useMemo(() => {
@@ -351,12 +377,6 @@ export default function PackingPage() {
 
     validOrders.forEach((order) => {
       updateOrderStatus(order.id, targetStatus, `Bulk status updated to ${targetLabel}`);
-      if (targetStatus === "DISPATCHED") {
-        updateCourierDetails(order.id, {
-          courierStatus: "PENDING",
-          courierName: order.dispatch.courierName || "ST Courier",
-        });
-      }
     });
 
     setIsBulkUpdating(false);
@@ -367,12 +387,13 @@ export default function PackingPage() {
   };
 
   // Stage counts for KPI pills (Packing Station)
-  const completedCount = packingEligibleOrders.filter((o) => o.orderStatus === "COMPLETED").length;
-  const processingCount = packingEligibleOrders.filter((o) => o.orderStatus === "CONFIRMED").length;
-  const packagingCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKING").length;
-  const packedCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKED").length;
-  const dispatchedCount = packingEligibleOrders.filter((o) => o.orderStatus === "DISPATCHED").length;
-  const returnOrdersCount = packingEligibleOrders.filter((o) => o.orderStatus === "RETURN").length;
+  const completedCount = packingEligibleOrders.filter((o) => o.orderStatus === "COMPLETED" && !isOrderReturn(o)).length;
+  const processingCount = packingEligibleOrders.filter((o) => o.orderStatus === "CONFIRMED" && !isOrderReturn(o)).length;
+  const pendingOrdersCount = packingEligibleOrders.filter((o) => o.orderStatus === "NEW" && !isOrderReturn(o)).length;
+  const packagingCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKING" && !isOrderReturn(o)).length;
+  const packedCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKED" && !isOrderReturn(o)).length;
+  const dispatchedCount = packingEligibleOrders.filter((o) => o.orderStatus === "DISPATCHED" && !isOrderReturn(o)).length;
+  const returnOrdersCount = packingEligibleOrders.filter((o) => isOrderReturn(o)).length;
 
   // Export handlers
   const handleExportExcel = () => {
@@ -394,7 +415,7 @@ export default function PackingPage() {
       const allItems = order.items.map((it) => it.productName).join("; ");
       const allSizes = Array.from(new Set(order.items.map((it) => it.size))).join(", ");
       const totalQuantity = order.items.reduce((sum, it) => sum + it.quantity, 0);
-      const statusLabel = STATUS_OPTIONS.find((s) => s.key === order.orderStatus)?.label || order.orderStatus;
+      const statusLabel = isOrderReturn(order) ? "Return" : (STATUS_OPTIONS.find((s) => s.key === order.orderStatus)?.label || order.orderStatus);
 
       return [
         index + 1,
@@ -432,7 +453,7 @@ export default function PackingPage() {
     const rows = filteredOrders.map((order, index) => {
       const allSizes = Array.from(new Set(order.items.map((it) => it.size))).join(", ");
       const totalQuantity = order.items.reduce((sum, it) => sum + it.quantity, 0);
-      const statusLabel = STATUS_OPTIONS.find((s) => s.key === order.orderStatus)?.label || order.orderStatus;
+      const statusLabel = isOrderReturn(order) ? "Return" : (STATUS_OPTIONS.find((s) => s.key === order.orderStatus)?.label || order.orderStatus);
 
       return [
         index + 1,
@@ -464,13 +485,10 @@ export default function PackingPage() {
       {/* KPI Status Filter Buttons Row (with matching border colors) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
         <button
-          onClick={() => {
-            setActiveTab("ORDERS");
-            setStatusFilter("ALL");
-          }}
+          onClick={() => setStatusFilter("ALL")}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "ORDERS" && statusFilter === "ALL"
+            statusFilter === "ALL"
               ? "border-orange-600 ring-2 ring-orange-500/20 bg-orange-50/10" 
               : "border-slate-300 hover:border-orange-400"
           )}
@@ -480,13 +498,10 @@ export default function PackingPage() {
         </button>
 
         <button
-          onClick={() => {
-            setActiveTab("ORDERS");
-            setStatusFilter("COMPLETED");
-          }}
+          onClick={() => setStatusFilter("COMPLETED")}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "ORDERS" && statusFilter === "COMPLETED"
+            statusFilter === "COMPLETED"
               ? "border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/10" 
               : "border-blue-300 hover:border-blue-400"
           )}
@@ -496,13 +511,10 @@ export default function PackingPage() {
         </button>
 
         <button
-          onClick={() => {
-            setActiveTab("ORDERS");
-            setStatusFilter("CONFIRMED");
-          }}
+          onClick={() => setStatusFilter("CONFIRMED")}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "ORDERS" && statusFilter === "CONFIRMED"
+            statusFilter === "CONFIRMED"
               ? "border-sky-600 ring-2 ring-sky-500/20 bg-sky-50/10" 
               : "border-sky-300 hover:border-sky-400"
           )}
@@ -512,13 +524,30 @@ export default function PackingPage() {
         </button>
 
         <button
-          onClick={() => {
-            setActiveTab("ORDERS");
-            setStatusFilter("PACKING");
-          }}
+          onClick={() => setStatusFilter("NEW")}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "ORDERS" && statusFilter === "PACKING"
+            statusFilter === "NEW"
+              ? "border-amber-600 ring-2 ring-amber-500/20 bg-amber-50/10" 
+              : "border-amber-300 hover:border-amber-400"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-amber-700 font-medium block">Pending</span>
+            {pendingOrdersCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                {pendingOrdersCount}
+              </span>
+            )}
+          </div>
+          <span className="text-base font-bold text-amber-700 font-mono mt-0.5 block">{pendingOrdersCount}</span>
+        </button>
+
+        <button
+          onClick={() => setStatusFilter("PACKING")}
+          className={cn(
+            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
+            statusFilter === "PACKING"
               ? "border-orange-600 ring-2 ring-orange-500/20 bg-orange-50/10" 
               : "border-orange-300 hover:border-orange-400"
           )}
@@ -528,13 +557,10 @@ export default function PackingPage() {
         </button>
 
         <button
-          onClick={() => {
-            setActiveTab("ORDERS");
-            setStatusFilter("PACKED");
-          }}
+          onClick={() => setStatusFilter("PACKED")}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "ORDERS" && statusFilter === "PACKED"
+            statusFilter === "PACKED"
               ? "border-purple-600 ring-2 ring-purple-500/20 bg-purple-50/10" 
               : "border-purple-300 hover:border-purple-400"
           )}
@@ -544,13 +570,10 @@ export default function PackingPage() {
         </button>
 
         <button
-          onClick={() => {
-            setActiveTab("ORDERS");
-            setStatusFilter("DISPATCHED");
-          }}
+          onClick={() => setStatusFilter("DISPATCHED")}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "ORDERS" && statusFilter === "DISPATCHED"
+            statusFilter === "DISPATCHED"
               ? "border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/10" 
               : "border-emerald-300 hover:border-emerald-400"
           )}
@@ -559,15 +582,12 @@ export default function PackingPage() {
           <span className="text-base font-bold text-emerald-700 font-mono mt-0.5 block">{dispatchedCount}</span>
         </button>
 
-        {/* 7. Return Orders Count */}
+        {/* 8. Return Orders Count */}
         <button
-          onClick={() => {
-            setActiveTab("ORDERS");
-            setStatusFilter("RETURN");
-          }}
+          onClick={() => setStatusFilter("RETURN")}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "ORDERS" && statusFilter === "RETURN"
+            statusFilter === "RETURN"
               ? "border-rose-600 ring-2 ring-rose-500/20 bg-rose-50/10" 
               : "border-rose-300 hover:border-rose-400"
           )}
@@ -582,79 +602,6 @@ export default function PackingPage() {
           </div>
           <span className="text-base font-bold text-rose-700 font-mono mt-0.5 block">{returnOrdersCount}</span>
         </button>
-
-        <button
-          onClick={() => {
-            setActiveTab("REPLACEMENTS");
-          }}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "REPLACEMENTS"
-              ? "border-purple-600 ring-2 ring-purple-500/20 bg-purple-50/20" 
-              : "border-purple-200 hover:border-purple-400"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-purple-700 font-medium block">Replacements</span>
-            {activeReplacementCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-purple-600 text-white animate-pulse">
-                {activeReplacementCount}
-              </span>
-            )}
-          </div>
-          <span className="text-base font-bold text-purple-700 font-mono mt-0.5 block">{activeReplacementCount}</span>
-        </button>
-      </div>
-
-      {/* View Switcher: Standard Orders vs Replacement Tasks */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab("ORDERS")}
-            className={cn(
-              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
-              activeTab === "ORDERS"
-                ? "bg-slate-900 text-white shadow-xs"
-                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-            )}
-          >
-            <Package className="w-3.5 h-3.5" />
-            <span>Standard Orders</span>
-            <span className={cn(
-              "px-1.5 py-0.2 rounded-full text-[10px] font-bold",
-              activeTab === "ORDERS" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-700"
-            )}>
-              {filteredOrders.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("REPLACEMENTS")}
-            className={cn(
-              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
-              activeTab === "REPLACEMENTS"
-                ? "bg-purple-700 text-white shadow-xs"
-                : "bg-white text-purple-700 hover:bg-purple-50 border border-purple-200"
-            )}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Replacement Tasks</span>
-            {activeReplacementCount > 0 && (
-              <span className={cn(
-                "px-1.5 py-0.2 rounded-full text-[10px] font-bold",
-                activeTab === "REPLACEMENTS" ? "bg-purple-900 text-purple-100" : "bg-purple-100 text-purple-800"
-              )}>
-                {activeReplacementCount}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {activeTab === "REPLACEMENTS" && (
-          <span className="text-[11px] text-purple-700 font-medium hidden sm:inline-block">
-            Auto-linked to original WooCommerce orders & return QC records
-          </span>
-        )}
       </div>
 
       {/* Filter, Search & Export Bar */}
@@ -716,12 +663,34 @@ export default function PackingPage() {
       <BulkToolbar
         selectedCount={selectedIds.length}
         onClearSelection={() => setSelectedIds([])}
-        statusOptions={BULK_STATUS_OPTIONS}
-        selectedStatus={bulkStatus}
-        onStatusChange={setBulkStatus}
-        onApplyAction={() => setIsConfirmDialogOpen(true)}
-        isActionDisabled={!bulkStatus || validOrders.length === 0}
-        isLoading={isBulkUpdating}
+        customAction={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedIds.length === 0) return;
+                const firstOrder = orders.find((o) => selectedIds.includes(o.id));
+                if (firstOrder) handleOpenPendingModal(firstOrder);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-xs cursor-pointer active:scale-98 transition-colors"
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Mark as Pending ({selectedIds.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedIds.length === 0) return;
+                setIsMarkAsReturnOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs cursor-pointer active:scale-98 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Mark as Return ({selectedIds.length})</span>
+            </button>
+          </div>
+        }
       />
 
       {/* Bulk Confirmation Modal */}
@@ -736,171 +705,8 @@ export default function PackingPage() {
         isLoading={isBulkUpdating}
       />
 
-      {/* REPLACEMENT TASKS VIEW */}
-      {activeTab === "REPLACEMENTS" ? (
-        <div className="bg-white rounded-lg border border-purple-200 shadow-sm overflow-hidden w-full">
-          <table className="w-full table-fixed text-left text-xs border-collapse border border-purple-200">
-            <thead className="bg-purple-50/80 text-purple-900 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight">
-              <tr>
-                <th className="py-2 px-1 w-[4%] text-center border-r border-b-2 border-purple-200 bg-purple-50">S.No</th>
-                <th className="py-2 px-1.5 w-[14%] border-r border-b-2 border-purple-200 bg-purple-50">Replacement ID</th>
-                <th className="py-2 px-1.5 w-[12%] border-r border-b-2 border-purple-200 bg-purple-50">Return / Order</th>
-                <th className="py-2 px-1.5 w-[13%] border-r border-b-2 border-purple-200 bg-purple-50">Customer</th>
-                <th className="py-2 px-1.5 w-[22%] border-r border-b-2 border-purple-200 bg-purple-50">Replacement Item</th>
-                <th className="py-2 px-1.5 w-[13%] border-r border-b-2 border-purple-200 bg-purple-50">Dispatch Info</th>
-                <th className="py-2 px-1 w-[10%] text-center border-r border-b-2 border-purple-200 bg-purple-50">Status</th>
-                <th className="py-2 px-1 w-[12%] text-center border-b-2 border-purple-200 bg-purple-100 text-purple-950">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredReplacements.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-14 text-center text-slate-400 border-b border-purple-200">
-                    <RotateCcw className="w-8 h-8 mx-auto mb-2 text-purple-300" />
-                    <p className="text-sm font-semibold text-slate-700">No replacement tasks matching criteria</p>
-                    <p className="text-xs text-slate-400 mt-1">Replacement tasks are automatically created when a Replacement return passes QC.</p>
-                  </td>
-                </tr>
-              ) : (
-                filteredReplacements.map((rc, idx) => {
-                  const rep = rc.replacement!;
-                  return (
-                    <tr
-                      key={rep.id || rep.replacementId}
-                      className="hover:bg-purple-50/40 transition-colors border-b border-slate-200"
-                    >
-                      {/* S.No */}
-                      <td className="py-2 px-1 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-slate-200">
-                        {idx + 1}
-                      </td>
-
-                      {/* Replacement ID */}
-                      <td className="py-2 px-1.5 border-r border-slate-200">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-purple-950 text-[11px] block">{rep.replacementId}</span>
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200 uppercase">
-                            Task
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 block">{formatDate(rc.createdAt)}</span>
-                      </td>
-
-                      {/* Return & Order */}
-                      <td className="py-2 px-1.5 border-r border-slate-200 font-mono text-[11px]">
-                        <span className="font-semibold text-slate-800 block truncate" title={rc.returnId}>{rc.returnId}</span>
-                        <span className="text-[10px] text-slate-500 block truncate" title={rc.orderNumber}>{rc.orderNumber}</span>
-                      </td>
-
-                      {/* Customer */}
-                      <td className="py-2 px-1.5 border-r border-slate-200">
-                        <span className="font-semibold text-slate-800 truncate block text-[11px]" title={rc.customerName}>
-                          {rc.customerName}
-                        </span>
-                        <span className="text-[10px] font-mono text-slate-500 block">
-                          {rc.customerPhone}
-                        </span>
-                      </td>
-
-                      {/* Replacement Item */}
-                      <td className="py-2 px-1.5 border-r border-slate-200 text-slate-700">
-                        <span className="font-medium text-slate-900 block text-[11px] leading-tight" title={rep.replacementItem || rep.returnedItem}>
-                          {rep.replacementItem || rep.returnedItem}
-                        </span>
-                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
-                          <span>Size: <strong>{rep.size}</strong></span>
-                          <span>•</span>
-                          <span>Color: <strong>{rep.color || "Standard"}</strong></span>
-                          <span>•</span>
-                          <span>Qty: <strong>{rep.quantity} pcs</strong></span>
-                        </div>
-                      </td>
-
-                      {/* Dispatch Info */}
-                      <td className="py-2 px-1.5 border-r border-slate-200 font-mono text-[11px]">
-                        {rep.dispatchId ? (
-                          <>
-                            <span className="font-bold text-purple-950 block">{rep.dispatchId}</span>
-                            <span className="text-[10px] text-slate-500 block truncate">{rep.courier} {rep.llr ? `· ${rep.llr}` : ""}</span>
-                          </>
-                        ) : (
-                          <span className="text-slate-400 font-normal italic text-[10px]">Awaiting Dispatch</span>
-                        )}
-                      </td>
-
-                      {/* Task Status */}
-                      <td className="py-2 px-1 text-center border-r border-slate-200">
-                        <span className={cn(
-                          "px-2 py-0.5 rounded text-[10px] font-bold inline-block border",
-                          rep.status === "Waiting for Packing" && "bg-amber-50 text-amber-800 border-amber-200",
-                          rep.status === "Packing" && "bg-blue-50 text-blue-800 border-blue-200",
-                          rep.status === "Packed" && "bg-purple-50 text-purple-800 border-purple-200",
-                          rep.status === "Dispatched" && "bg-emerald-50 text-emerald-800 border-emerald-200"
-                        )}>
-                          {rep.status}
-                        </span>
-                      </td>
-
-                      {/* Fulfillment Action */}
-                      <td className="py-2 px-1 text-center bg-purple-50/20">
-                        <div className="flex items-center justify-center gap-1">
-                          {rep.status === "Waiting for Packing" && (
-                            <button
-                              onClick={() => {
-                                updateReplacementDispatch(rc.returnId, { status: "Packing" });
-                                triggerToast(`Replacement ${rep.replacementId} status changed to Packaging`);
-                              }}
-                              className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] shadow-2xs transition-colors cursor-pointer"
-                            >
-                              Pack
-                            </button>
-                          )}
-                          {rep.status === "Packing" && (
-                            <button
-                              onClick={() => {
-                                updateReplacementDispatch(rc.returnId, { status: "Packed" });
-                                triggerToast(`Replacement ${rep.replacementId} marked as Packed`);
-                              }}
-                              className="px-2 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] shadow-2xs transition-colors cursor-pointer"
-                            >
-                              Mark Packed
-                            </button>
-                          )}
-                          {rep.status === "Packed" && (
-                            <button
-                              onClick={() => {
-                                setDispatchModalReplacement({ returnCase: rc, replacement: rep });
-                                setSelectedCourierPartner("ST_COURIER");
-                                setReplacementLlr("");
-                              }}
-                              className="px-2 py-1 rounded bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1"
-                            >
-                              <Truck className="w-3 h-3" />
-                              <span>Dispatch</span>
-                            </button>
-                          )}
-                          {rep.status === "Dispatched" && (
-                            <span className="text-[10px] text-emerald-700 font-bold">✓ Dispatched</span>
-                          )}
-
-                          <button
-                            onClick={() => setInspectReturn(rc)}
-                            className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 border border-slate-200 transition-colors"
-                            title="View Return Case"
-                          >
-                            <Eye className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        /* EXCEL SPREADSHEET TABLE VIEW */
-        <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
+      {/* EXCEL SPREADSHEET TABLE VIEW */}
+      <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
           <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300">
             <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight">
               <tr>
@@ -922,7 +728,7 @@ export default function PackingPage() {
                 <th className="py-2 px-1 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Size</th>
                 <th className="py-2 px-1 w-[3.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Qty</th>
                 <th className="py-2 px-1.5 w-[13%] border-r border-b-2 border-slate-300 bg-slate-100">Dispatch No</th>
-                <th className="py-2 px-1 w-[14.5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">Update Status</th>
+                <th className="py-2 px-1 w-[14.5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -939,6 +745,9 @@ export default function PackingPage() {
                   const primaryItem = order.items[0];
                   const allSizes = Array.from(new Set(order.items.map((it) => it.size))).join(", ");
                   const totalQuantity = order.items.reduce((sum, it) => sum + it.quantity, 0);
+                  const isExpanded = expandedOrderIds.includes(order.id);
+                  const hasMultipleItems = order.items.length > 1;
+                  const visibleItems = isExpanded ? order.items : (order.items.length > 0 ? [order.items[0]] : []);
 
                   return (
                     <tr
@@ -951,7 +760,7 @@ export default function PackingPage() {
                     >
                       {/* Checkbox */}
                       <td
-                        className="py-2 px-1 text-center bg-slate-50/70 border-r border-b border-slate-300"
+                        className="py-2 px-1 text-center bg-slate-50/70 border-r border-b border-slate-300 align-top"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <input
@@ -963,27 +772,27 @@ export default function PackingPage() {
                       </td>
 
                       {/* 1. S.No (Spreadsheet row index) */}
-                      <td className="py-2 px-1 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-b border-slate-300">
+                      <td className="py-2 px-1 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-b border-slate-300 align-top">
                         {index + 1}
                       </td>
 
                       {/* 2. Date */}
-                      <td className="py-2 px-1.5 whitespace-nowrap text-slate-600 border-r border-b border-slate-300 font-medium text-[11px] truncate">
+                      <td className="py-2 px-1.5 whitespace-nowrap text-slate-600 border-r border-b border-slate-300 font-medium text-[11px] truncate align-top">
                         {formatDate(order.createdAt)}
                       </td>
 
                       {/* 3. Order ID */}
-                      <td className="py-2 px-1.5 whitespace-nowrap font-mono font-semibold text-slate-900 border-r border-b border-slate-300 text-[11px]">
+                      <td className="py-2 px-1.5 whitespace-nowrap font-mono font-semibold text-slate-900 border-r border-b border-slate-300 text-[11px] align-top">
                         {order.orderNumber}
                       </td>
 
                       {/* 4. Phone Number */}
-                      <td className="py-2 px-1.5 whitespace-nowrap font-mono text-slate-700 border-r border-b border-slate-300 text-[11px] truncate">
+                      <td className="py-2 px-1.5 whitespace-nowrap font-mono text-slate-700 border-r border-b border-slate-300 text-[11px] truncate align-top">
                         {order.customer.mobile}
                       </td>
 
                       {/* 5. Name */}
-                      <td className="py-2 px-1.5 border-r border-b border-slate-300 truncate">
+                      <td className="py-2 px-1.5 border-r border-b border-slate-300 truncate align-top">
                         <span className="font-semibold text-slate-800 truncate block leading-tight" title={order.customer.name}>
                           {order.customer.name}
                         </span>
@@ -994,82 +803,173 @@ export default function PackingPage() {
                         )}
                       </td>
 
-                      {/* 6. Items */}
-                      <td className="py-2 px-1.5 border-r border-slate-300 text-slate-700 truncate">
-                        <span className="font-medium truncate block leading-tight" title={primaryItem?.productName}>
-                          {primaryItem?.productName}
-                        </span>
-                        {order.items.length > 1 && (
-                          <span className="text-[10px] text-orange-700 font-semibold block">
-                            +{order.items.length - 1} item
-                          </span>
-                        )}
+                      {/* 6. Items (Clean Itemized Rows with Spreadsheet Border, SKU hidden) */}
+                      <td className="py-2 px-2 border-r border-b border-slate-300 text-slate-700 align-top">
+                        <div className="space-y-1">
+                          {visibleItems.map((it, i) => (
+                            <div
+                              key={it.id || i}
+                              className={cn(
+                                "text-[11px] leading-tight",
+                                i > 0 && "pt-1 border-t border-slate-200/80"
+                              )}
+                            >
+                              <span className="font-semibold text-slate-800 block truncate" title={it.productName}>
+                                {it.productName}
+                              </span>
+                            </div>
+                          ))}
+                          {hasMultipleItems && (
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => toggleExpandOrder(order.id, e)}
+                                className={cn(
+                                  "inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border transition-colors cursor-pointer",
+                                  isExpanded
+                                    ? "text-slate-600 bg-slate-100 border-slate-300 hover:bg-slate-200"
+                                    : "text-orange-600 bg-orange-50 border-orange-200 hover:bg-orange-100"
+                                )}
+                              >
+                                {isExpanded ? "Show less ▴" : `+${order.items.length - 1} more items ▾`}
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
-                      {/* 7. Size */}
-                      <td className="py-2 px-1 text-center whitespace-nowrap border-r border-b border-slate-300 font-mono font-semibold text-[11px] text-slate-700 truncate">
-                        {allSizes}
+                      {/* 7. Size (Itemized & Aligned with Items) */}
+                      <td className="py-2 px-1 text-center border-r border-b border-slate-300 font-mono font-semibold text-[11px] text-slate-700 align-top">
+                        <div className="space-y-1">
+                          {visibleItems.map((it, i) => (
+                            <div
+                              key={it.id || i}
+                              className={cn(
+                                "leading-tight truncate",
+                                i > 0 && "pt-1 border-t border-slate-200/80"
+                              )}
+                            >
+                              {it.size || "-"}
+                            </div>
+                          ))}
+                          {hasMultipleItems && (
+                            <div className="pt-1">
+                              <div className="h-[21px] opacity-0 select-none pointer-events-none text-[10px]">-</div>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
-                      {/* 8. Qty */}
-                      <td className="py-2 px-1 text-center font-mono font-bold text-slate-800 border-r border-b border-slate-300">
-                        {totalQuantity}
+                      {/* 8. Qty (Itemized & Aligned with Items) */}
+                      <td className="py-2 px-1 text-center font-mono font-bold text-slate-800 border-r border-b border-slate-300 align-top">
+                        <div className="space-y-1">
+                          {visibleItems.map((it, i) => (
+                            <div
+                              key={it.id || i}
+                              className={cn(
+                                "leading-tight",
+                                i > 0 && "pt-1 border-t border-slate-200/80"
+                              )}
+                            >
+                              {it.quantity}
+                            </div>
+                          ))}
+                          {hasMultipleItems && (
+                            <div className="pt-1">
+                              <div className="h-[21px] opacity-0 select-none pointer-events-none text-[10px]">-</div>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* 11. Dispatch No (Manually Editable) */}
-                      <td className="py-1 px-1.5 whitespace-nowrap border-r border-b border-slate-300">
+                      <td className="py-1 px-1.5 whitespace-nowrap border-r border-b border-slate-300 align-top">
                         <InlineDispatchInput
                           orderId={order.id}
                           orderNumber={order.orderNumber}
-                          initialValue={order.dispatch.llrNumber}
+                          initialValue={order.dispatch.dispatchId || ""}
                           onSave={handleDispatchNoChange}
                         />
                       </td>
 
-                      {/* 12. Direct Order Status Updater */}
-                      <td className="py-1 px-1 text-center whitespace-nowrap border-b border-slate-300 bg-slate-50/50" onClick={(e) => e.stopPropagation()}>
-                        <select
-                          value={order.orderStatus}
-                          onChange={(e) => handleInlineStatusChange(order, e.target.value as OrderStatus)}
-                          className={cn(
-                            "w-full text-[11px] font-semibold py-0.5 px-1 rounded border shadow-xs outline-none cursor-pointer transition-all truncate",
-                            order.orderStatus === "NEW" && "text-slate-700 bg-white border-slate-200",
-                            order.orderStatus === "CONFIRMED" && "text-blue-600 bg-white border-slate-200",
-                            order.orderStatus === "PACKING" && "text-orange-600 bg-white border-slate-200",
-                            order.orderStatus === "PACKED" && "text-purple-600 bg-white border-slate-200",
-                            order.orderStatus === "DISPATCHED" && "text-emerald-600 bg-white border-slate-200",
-                            order.orderStatus === "COMPLETED" && "text-emerald-600 bg-white border-slate-200",
-                            order.orderStatus === "RETURN" && "text-rose-700 bg-rose-50 border-rose-300 font-bold"
-                          )}
-                        >
-                          <option value="NEW">Pending</option>
-                          <option value="CONFIRMED">Processing</option>
-                          <option value="PACKING">Packaging</option>
-                          <option value="PACKED">Packed</option>
-                          <option value="DISPATCHED">Dispatched</option>
-                          <option value="COMPLETED">Completed</option>
-                          <option value="RETURN">↩ Return</option>
-                        </select>
+                      {/* 12. Order Status Badge */}
+                      <td className="py-1 px-1.5 text-center whitespace-normal border-b border-slate-300 bg-slate-50/40 align-top" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col items-center gap-1">
+                          {(() => {
+                            const linkedRtn = returns.find((r) => (r.orderId === order.id || r.orderNumber === order.orderNumber) && r.status !== "Rejected" && r.status !== "Cancelled");
+                            const isReturn = order.orderStatus === "RETURN" || Boolean(linkedRtn);
 
-                        {/* If Return Case exists, display linked Return ID (clickable to open Return Details) */}
-                        {(() => {
-                          const linkedRtn = returns.find((r) => r.orderId === order.id || r.orderNumber === order.orderNumber);
-                          if (!linkedRtn) return null;
-                          return (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setInspectReturn(linkedRtn);
-                              }}
-                              className="mt-1 flex items-center justify-center gap-1 text-[10px] font-mono font-bold text-rose-700 hover:text-rose-900 bg-rose-100/70 hover:bg-rose-100 border border-rose-200 rounded px-1.5 py-0.5 transition-colors cursor-pointer w-full truncate shadow-2xs"
-                              title={`Click to view Return Case ${linkedRtn.returnId}`}
-                            >
-                              <RotateCcw className="w-2.5 h-2.5 text-rose-600 shrink-0" />
-                              <span className="truncate">{linkedRtn.returnId}</span>
-                            </button>
-                          );
-                        })()}
+                            if (isReturn) {
+                              return (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-300 shadow-2xs select-none"
+                                >
+                                  <RotateCcw className="w-3 h-3 text-rose-600 shrink-0" />
+                                  <span>Return</span>
+                                </span>
+                              );
+                            }
+
+                            if (order.orderStatus === "CONFIRMED") {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                                  Processing
+                                </span>
+                              );
+                            }
+
+                            if (order.orderStatus === "COMPLETED") {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-800 border border-blue-300 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                                  Completed (Ready)
+                                </span>
+                              );
+                            }
+
+                            if (order.orderStatus === "DISPATCHED") {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  Dispatched
+                                </span>
+                              );
+                            }
+
+                            if (order.orderStatus === "PACKING") {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200 shadow-2xs">
+                                  Packaging
+                                </span>
+                              );
+                            }
+
+                            if (order.orderStatus === "PACKED") {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs">
+                                  Packed
+                                </span>
+                              );
+                            }
+
+                            if (order.orderStatus === "NEW") {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleOpenPendingModal(order, e)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 hover:border-amber-400 transition-all shadow-2xs cursor-pointer group"
+                                  title={order.pendingReason ? `Pending Reason: ${order.pendingReason} (Click to view/edit)` : "Click to view pending reason & details"}
+                                >
+                                  <Clock className="w-3 h-3 text-amber-600 group-hover:rotate-12 transition-transform" />
+                                  <span>Pending</span>
+                                </button>
+                              );
+                            }
+
+                            return null;
+                          })()}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1078,184 +978,6 @@ export default function PackingPage() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {/* Dispatch Order Modal (Requirement 18) */}
-      {dispatchModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden animate-in zoom-in-95">
-            <div className="px-5 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Truck className="w-5 h-5 text-orange-100" />
-                <h3 className="font-bold text-sm">Dispatch to Courier Hub</h3>
-              </div>
-              <button
-                onClick={() => setDispatchModalOrder(null)}
-                className="text-white/80 hover:text-white text-sm cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4 text-xs text-slate-600">
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-slate-900 text-sm">
-                    {dispatchModalOrder.orderNumber}
-                  </span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800">
-                    Ready to Dispatch
-                  </span>
-                </div>
-                <div className="text-slate-600">
-                  Customer: <strong className="text-slate-800">{dispatchModalOrder.customer.name}</strong>
-                  {dispatchModalOrder.customer.city && ` · ${dispatchModalOrder.customer.city}`}
-                </div>
-                <div className="text-slate-500 text-[11px]">
-                  Items: {dispatchModalOrder.items.length} · Total: {formatINR(dispatchModalOrder.totalAmount)}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  Select Courier Partner:
-                </label>
-                <select
-                  value={selectedCourierPartner}
-                  onChange={(e) => setSelectedCourierPartner(e.target.value)}
-                  className="w-full text-xs font-semibold py-2 px-3 rounded-lg border border-slate-300 bg-white text-slate-800 shadow-xs focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 outline-none cursor-pointer"
-                >
-                  {courierPartners
-                    .filter((c) => c.active)
-                    .map((c) => (
-                      <option key={c.id} value={c.code}>
-                        {c.name} {c.isStCourier ? "(Primary)" : ""}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
-                ℹ A unique <strong>Dispatch ID</strong> will be automatically generated. The order will be immediately transferred to the <strong>{courierPartners.find((c) => c.code === selectedCourierPartner)?.name || "selected courier"}</strong> page in Courier Hub with status <em>"Waiting for Pickup"</em>.
-              </div>
-            </div>
-
-            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => setDispatchModalOrder(null)}
-                className="px-3.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-medium cursor-pointer transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDispatch}
-                className="px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <Truck className="w-3.5 h-3.5" />
-                <span>Confirm Dispatch</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Dispatch Replacement Modal (Requirement 10) */}
-      {dispatchModalReplacement && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden animate-in zoom-in-95">
-            <div className="px-5 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Truck className="w-5 h-5 text-purple-100" />
-                <h3 className="font-bold text-sm">Dispatch Replacement Item</h3>
-              </div>
-              <button
-                onClick={() => setDispatchModalReplacement(null)}
-                className="text-white/80 hover:text-white text-sm cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4 text-xs text-slate-600">
-              <div className="p-3 bg-purple-50/60 rounded-lg border border-purple-200 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-purple-950 text-sm">
-                    {dispatchModalReplacement.replacement.replacementId}
-                  </span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                    Replacement Task
-                  </span>
-                </div>
-                <div className="text-slate-700">
-                  Customer: <strong className="text-slate-900">{dispatchModalReplacement.returnCase.customerName}</strong> ({dispatchModalReplacement.returnCase.customerPhone})
-                </div>
-                <div className="text-slate-600 text-[11px]">
-                  Item: <strong>{dispatchModalReplacement.replacement.replacementItem || dispatchModalReplacement.replacement.returnedItem}</strong> (Qty: {dispatchModalReplacement.replacement.quantity})
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  Return ID: <span className="font-mono">{dispatchModalReplacement.returnCase.returnId}</span> · Order: <span className="font-mono">{dispatchModalReplacement.returnCase.orderNumber}</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  Select Courier Partner:
-                </label>
-                <select
-                  value={selectedCourierPartner}
-                  onChange={(e) => setSelectedCourierPartner(e.target.value)}
-                  className="w-full text-xs font-semibold py-2 px-3 rounded-lg border border-slate-300 bg-white text-slate-800 shadow-xs focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20 outline-none cursor-pointer"
-                >
-                  {courierPartners
-                    .filter((c) => c.active)
-                    .map((c) => (
-                      <option key={c.id} value={c.code}>
-                        {c.name} {c.isStCourier ? "(Primary)" : ""}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  Courier Tracking / LLR Number (Optional):
-                </label>
-                <input
-                  type="text"
-                  value={replacementLlr}
-                  onChange={(e) => setReplacementLlr(e.target.value)}
-                  placeholder="e.g. ST-LLR-99214 or DTDC AWBs"
-                  className="w-full text-xs font-mono py-2 px-3 rounded-lg border border-slate-300 bg-white text-slate-800 shadow-xs focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20 outline-none"
-                />
-              </div>
-
-              <div className="p-2.5 bg-indigo-50 rounded-lg border border-indigo-200 text-indigo-950 text-[11px] leading-relaxed">
-                ℹ A new <strong>Dispatch ID (DSP-YYMMDD-xxx)</strong> will be generated. The replacement status will become <em>Dispatched</em>, the return case status will update to <em>Replacement Dispatched</em>, and timeline events will be automatically logged.
-              </div>
-            </div>
-
-            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => setDispatchModalReplacement(null)}
-                className="px-3.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-medium cursor-pointer transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmReplacementDispatch}
-                className="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <Truck className="w-3.5 h-3.5" />
-                <span>Confirm & Dispatch</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Inspect Order Drawer */}
       <OrderDetailsDrawer
@@ -1267,14 +989,7 @@ export default function PackingPage() {
         userRole={user.role}
       />
 
-      {/* Inspect Return Drawer */}
-      <ReturnDetailsDrawer
-        returnCase={inspectReturn}
-        isOpen={Boolean(inspectReturn)}
-        onClose={() => setInspectReturn(null)}
-      />
-
-      {/* Create Return Modal (Packing -> Update Status -> Return -> Create Return) */}
+      {/* Create Return Modal (Packing -> Return -> Create Return) */}
       {returnModalOrder && (
         <CreateReturnModal
           isOpen={Boolean(returnModalOrder)}
@@ -1286,6 +1001,130 @@ export default function PackingPage() {
             setReturnModalOrder(null);
           }}
         />
+      )}
+
+      {/* Mark As Return Modal (From Selection Toolbar) */}
+      <MarkAsReturnModal
+        isOpen={isMarkAsReturnOpen}
+        onClose={() => setIsMarkAsReturnOpen(false)}
+        selectedOrders={orders.filter((o) => selectedIds.includes(o.id))}
+        onSuccess={handleReturnSuccess}
+      />
+
+      {/* Pending Reason & Note Modal */}
+      {pendingModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in">
+          <div 
+            className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-5 py-3.5 border-b border-slate-200 bg-amber-50/60 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-bold text-slate-800">
+                  {pendingModalOrder.orderStatus === "NEW"
+                    ? `Pending Details — Order ${pendingModalOrder.orderNumber}`
+                    : selectedIds.length > 1 && selectedIds.includes(pendingModalOrder.id)
+                    ? `Mark ${selectedIds.length} Orders as Pending`
+                    : `Mark Order ${pendingModalOrder.orderNumber} as Pending`}
+                </h3>
+              </div>
+              <button
+                onClick={() => setPendingModalOrder(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-md cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Pending Reason <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={pendingReason}
+                  onChange={(e) => setPendingReason(e.target.value)}
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-slate-800 outline-none focus:border-amber-500 focus:bg-white cursor-pointer"
+                >
+                  <option value="Product unavailable">Product unavailable</option>
+                  <option value="Waiting for stock">Waiting for stock</option>
+                  <option value="Damaged / Defect item">Damaged / Defect item</option>
+                  <option value="Customer request">Customer request</option>
+                  <option value="Address verification needed">Address verification needed</option>
+                  <option value="Other">Other (Custom reason)</option>
+                </select>
+              </div>
+
+              {pendingReason === "Other" && (
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Custom Reason
+                  </label>
+                  <input
+                    type="text"
+                    value={pendingCustomReason}
+                    onChange={(e) => setPendingCustomReason(e.target.value)}
+                    placeholder="Enter custom pending reason..."
+                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 outline-none focus:border-amber-500 focus:bg-white"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Pending Note <span className="text-slate-400 font-normal">(Optional context)</span>
+                </label>
+                <textarea
+                  value={pendingNote}
+                  onChange={(e) => setPendingNote(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. Waiting for stock from vendor / ETA tomorrow..."
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 outline-none focus:border-amber-500 focus:bg-white resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+              {pendingModalOrder.orderStatus === "NEW" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    resolveOrderPending(pendingModalOrder.id);
+                    triggerToast(`Order ${pendingModalOrder.orderNumber} resolved and resumed!`);
+                    setPendingModalOrder(null);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                  title="Resolve pending status and resume order back to active workflow"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Resume Order</span>
+                </button>
+              ) : (
+                <div />
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPendingModalOrder(null)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-semibold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSavePending}
+                  className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                >
+                  {pendingModalOrder.orderStatus === "NEW" ? "Update Details" : "Save as Pending"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -90,6 +90,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const pageInfo = getPageInfo();
 
+  // Verified / Picked-Up Courier Hub orders count
+  const courierCount = React.useMemo(() => {
+    return orders.filter((o) => {
+      const cStatus = o.dispatch?.courierStatus;
+      const isPickedUp =
+        cStatus === "PICKED_UP" ||
+        cStatus === "DELIVERED" ||
+        cStatus === "SHIPPED" ||
+        Boolean(o.dispatch?.pickedUpAt);
+
+      if (!isPickedUp) return false;
+      if (!o.dispatch?.courierPartnerId) return false;
+      if (o.orderStatus !== "DISPATCHED" && !Boolean(o.dispatch?.pickedUpAt)) return false;
+
+      if (user.role === "COURIER") {
+        return o.dispatch?.courierPartnerId === user.courierPartnerId;
+      }
+      return true;
+    }).length;
+  }, [orders, user]);
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#f8fafc]">
       {/* Collapsible Sidebar */}
@@ -100,6 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         badgeCounts={{
           packingCount: metrics.confirmedOrders,
           dispatchCount: metrics.packedOrders,
+          courierCount,
           stMissingLlr: metrics.stCourierMissingLlr,
           smsFailed: metrics.smsFailed,
           returnsCount: activeReturnsCount,

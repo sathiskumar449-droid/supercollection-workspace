@@ -50,18 +50,17 @@ export default function DashboardPage() {
     };
   }, [packingEligibleOrders]);
 
-  // 3. Courier Hub Counts (matches Courier Hub's exact criteria: dispatched or courier-shipped orders)
+  // 3. Courier Hub Counts (matches Courier Hub's exact criteria: verified picked-up orders)
   const courierOrders = useMemo(() => {
     return orders.filter((o) => {
       if (!matchesDateFilter(o.createdAt, dateFilter, customDate)) return false;
-      if (o.orderStatus === "DISPATCHED") return true;
-      if (
-        (o.dispatch.courierStatus === "SHIPPED" || (o.dispatch.courierStatus as string) === "DELIVERED") &&
-        (Boolean(o.dispatchedAt) || Boolean(o.dispatch.dispatchedAt))
-      ) {
-        return true;
-      }
-      return false;
+      const cStatus = o.dispatch?.courierStatus;
+      const isPickedUp =
+        cStatus === "PICKED_UP" ||
+        cStatus === "DELIVERED" ||
+        cStatus === "SHIPPED" ||
+        Boolean(o.dispatch?.pickedUpAt);
+      return isPickedUp && Boolean(o.dispatch?.courierPartnerId);
     });
   }, [orders, dateFilter, customDate]);
 
@@ -112,11 +111,9 @@ export default function DashboardPage() {
   const returnMetrics = useMemo(() => {
     const filteredReturns = returns.filter((r) => matchesDateFilter(r.createdAt, dateFilter, customDate));
     return {
-      returnRequested: filteredReturns.filter((r) => r.status === "Return Requested").length,
-      awaitingReturn: filteredReturns.filter((r) => r.status === "Awaiting Return" || r.status === "Return Approved").length,
-      receivedQcPending: filteredReturns.filter((r) => r.status === "Return Received" || r.status === "QC Pending").length,
-      refundPending: filteredReturns.filter((r) => r.status === "Refund Pending").length,
-      replacementPending: filteredReturns.filter((r) => r.status === "Replacement Pending" || (r.replacement && r.replacement.status === "Waiting for Packing")).length,
+      returnRequested: filteredReturns.filter((r) => r.status === "Return Requested" || r.status === "Return Approved").length,
+      refundPending: filteredReturns.filter((r) => r.returnType === "Refund" && r.status !== "Completed" && r.status !== "Rejected").length,
+      replacementPending: filteredReturns.filter((r) => (r.returnType === "Replacement" || r.returnType === "Exchange") && r.status !== "Completed" && r.status !== "Rejected").length,
     };
   }, [returns, dateFilter, customDate]);
 
@@ -140,25 +137,14 @@ export default function DashboardPage() {
       });
     }
 
-    // Returns awaiting physical receipt
-    if (returnMetrics.awaitingReturn > 0) {
+    // New return requests
+    if (returnMetrics.returnRequested > 0) {
       items.push({
-        id: "returns-awaiting-receipt",
-        text: `⚠️ ${returnMetrics.awaitingReturn} ${
-          returnMetrics.awaitingReturn === 1 ? "return" : "returns"
-        } awaiting physical receipt`,
-        href: "/returns?status=Awaiting Return",
-      });
-    }
-
-    // Returns pending QC inspection
-    if (returnMetrics.receivedQcPending > 0) {
-      items.push({
-        id: "returns-qc-pending",
-        text: `⚠️ ${returnMetrics.receivedQcPending} ${
-          returnMetrics.receivedQcPending === 1 ? "return" : "returns"
-        } pending QC inspection`,
-        href: "/returns?status=QC Pending",
+        id: "returns-requested",
+        text: `⚠️ ${returnMetrics.returnRequested} ${
+          returnMetrics.returnRequested === 1 ? "return" : "returns"
+        } requested`,
+        href: "/returns?status=Return Requested",
       });
     }
 
@@ -169,7 +155,7 @@ export default function DashboardPage() {
         text: `⚠️ ${returnMetrics.refundPending} ${
           returnMetrics.refundPending === 1 ? "refund" : "refunds"
         } pending processing`,
-        href: "/returns?status=Refund Pending",
+        href: "/returns?status=Refund",
         urgent: true,
       });
     }
@@ -179,9 +165,9 @@ export default function DashboardPage() {
       items.push({
         id: "returns-replacement-pending",
         text: `⚠️ ${returnMetrics.replacementPending} ${
-          returnMetrics.replacementPending === 1 ? "replacement" : "replacements"
-        } waiting for packing`,
-        href: "/fulfillment/packing",
+          returnMetrics.replacementPending === 1 ? "exchange" : "exchanges"
+        } pending`,
+        href: "/returns?status=Exchange",
       });
     }
 

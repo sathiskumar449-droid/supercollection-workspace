@@ -4,8 +4,8 @@ import React, { useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { useOrderFlow } from "@/lib/hooks";
-import { ReturnCase, ReturnStatus, ReturnType, ReturnReason, RefundStatus } from "@/types/orderflow";
-import { ReturnStatusBadge, RefundStatusBadge } from "@/components/returns/return-status-badge";
+import { ReturnCase, ReturnStatus, ReturnType, ReturnReason } from "@/types/orderflow";
+import { ReturnStatusBadge } from "@/components/returns/return-status-badge";
 import { ReturnDetailsDrawer } from "@/components/returns/return-details-drawer";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { formatINR, formatDate, cn, matchesDateFilter } from "@/lib/utils";
@@ -42,8 +42,12 @@ function ReturnsContent() {
     customDate, 
     user,
     updateOrderStatus,
-    updateCourierDetails
+    updateCourierDetails,
+    setDispatchNumber
   } = useOrderFlow();
+
+  // Dispatch number inline inputs state
+  const [dispatchInputs, setDispatchInputs] = useState<Record<string, string>>({});
 
   // Modals & Drawers
   const [selectedReturn, setSelectedReturn] = useState<ReturnCase | null>(null);
@@ -54,7 +58,6 @@ function ReturnsContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [reasonFilter, setReasonFilter] = useState<string>("ALL");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
-  const [refundStatusFilter, setRefundStatusFilter] = useState<string>("ALL");
   const [replacementStatusFilter, setReplacementStatusFilter] = useState<string>("ALL");
   const [courierFilter, setCourierFilter] = useState<string>("ALL");
 
@@ -76,26 +79,23 @@ function ReturnsContent() {
   const summaryCards = useMemo(() => {
     let total = dateFilteredReturns.length;
     let requested = 0;
-    let awaiting = 0;
-    let receivedQc = 0;
-    let refundPending = 0;
-    let replacementPending = 0;
+    let refunds = 0;
+    let exchanges = 0;
+    let completed = 0;
 
     dateFilteredReturns.forEach((r) => {
-      if (r.status === "Return Requested") requested++;
-      if (r.status === "Awaiting Return" || r.status === "Return Approved") awaiting++;
-      if (r.status === "Return Received" || r.status === "QC Pending") receivedQc++;
-      if (r.status === "Refund Pending") refundPending++;
-      if (r.status === "Replacement Pending") replacementPending++;
+      if (r.status === "Return Requested" || r.status === "Return Approved") requested++;
+      if (r.returnType === "Refund") refunds++;
+      if (r.returnType === "Replacement" || r.returnType === "Exchange") exchanges++;
+      if (r.status === "Completed") completed++;
     });
 
     return {
       total,
       requested,
-      awaiting,
-      receivedQc,
-      refundPending,
-      replacementPending,
+      refunds,
+      exchanges,
+      completed,
     };
   }, [dateFilteredReturns]);
 
@@ -104,24 +104,16 @@ function ReturnsContent() {
     const counts: Record<string, number> = {
       ALL: dateFilteredReturns.length,
       "Return Requested": 0,
-      Approved: 0,
-      "Awaiting Return": 0,
-      Received: 0,
-      "QC Pending": 0,
-      "Refund Pending": 0,
-      Replacement: 0,
+      Refund: 0,
+      Exchange: 0,
       Completed: 0,
       Rejected: 0,
     };
 
     dateFilteredReturns.forEach((r) => {
-      if (r.status === "Return Requested") counts["Return Requested"]++;
-      if (r.status === "Return Approved") counts["Approved"]++;
-      if (r.status === "Awaiting Return") counts["Awaiting Return"]++;
-      if (r.status === "Return Received") counts["Received"]++;
-      if (r.status === "QC Pending") counts["QC Pending"]++;
-      if (r.status === "Refund Pending") counts["Refund Pending"]++;
-      if (r.status === "Replacement Pending" || r.status === "Replacement Dispatched") counts["Replacement"]++;
+      if (r.status === "Return Requested" || r.status === "Return Approved") counts["Return Requested"]++;
+      if (r.returnType === "Refund") counts["Refund"]++;
+      if (r.returnType === "Replacement" || r.returnType === "Exchange") counts["Exchange"]++;
       if (r.status === "Completed") counts["Completed"]++;
       if (r.status === "Rejected" || r.status === "Cancelled") counts["Rejected"]++;
     });
@@ -129,12 +121,8 @@ function ReturnsContent() {
     return [
       { id: "ALL", label: "All Returns", count: counts.ALL },
       { id: "Return Requested", label: "Return Requested", count: counts["Return Requested"] },
-      { id: "Approved", label: "Approved", count: counts["Approved"] },
-      { id: "Awaiting Return", label: "Awaiting Return", count: counts["Awaiting Return"] },
-      { id: "Received", label: "Received", count: counts["Received"] },
-      { id: "QC Pending", label: "QC Pending", count: counts["QC Pending"] },
-      { id: "Refund Pending", label: "Refund Pending", count: counts["Refund Pending"] },
-      { id: "Replacement", label: "Replacement", count: counts["Replacement"] },
+      { id: "Refund", label: "Refunds", count: counts["Refund"] },
+      { id: "Exchange", label: "Exchanges", count: counts["Exchange"] },
       { id: "Completed", label: "Completed", count: counts["Completed"] },
       { id: "Rejected", label: "Rejected", count: counts["Rejected"] },
     ];
@@ -145,11 +133,17 @@ function ReturnsContent() {
     return dateFilteredReturns.filter((r) => {
       // Tab filter
       if (activeTab !== "ALL") {
-        if (activeTab === "Approved" && r.status !== "Return Approved") return false;
-        else if (activeTab === "Received" && r.status !== "Return Received") return false;
-        else if (activeTab === "Replacement" && !(r.status === "Replacement Pending" || r.status === "Replacement Dispatched")) return false;
-        else if (activeTab === "Rejected" && !(r.status === "Rejected" || r.status === "Cancelled")) return false;
-        else if (!["Approved", "Received", "Replacement", "Rejected"].includes(activeTab) && r.status !== activeTab) {
+        if (activeTab === "Return Requested") {
+          if (r.status !== "Return Requested" && r.status !== "Return Approved") return false;
+        } else if (activeTab === "Refund") {
+          if (r.returnType !== "Refund") return false;
+        } else if (activeTab === "Exchange") {
+          if (r.returnType !== "Replacement" && r.returnType !== "Exchange") return false;
+        } else if (activeTab === "Completed") {
+          if (r.status !== "Completed") return false;
+        } else if (activeTab === "Rejected") {
+          if (r.status !== "Rejected" && r.status !== "Cancelled") return false;
+        } else if (r.status !== activeTab) {
           return false;
         }
       }
@@ -173,12 +167,6 @@ function ReturnsContent() {
       // Type filter
       if (typeFilter !== "ALL" && r.returnType !== typeFilter) return false;
 
-      // Refund Status filter
-      if (refundStatusFilter !== "ALL") {
-        const refStatus = r.refund?.refundStatus || "Pending";
-        if (refStatus !== refundStatusFilter) return false;
-      }
-
       // Replacement Status filter
       if (replacementStatusFilter !== "ALL") {
         const repStatus = r.replacement?.status || "None";
@@ -197,7 +185,7 @@ function ReturnsContent() {
       }
       return sortAsc ? comp : -comp;
     });
-  }, [dateFilteredReturns, activeTab, searchQuery, reasonFilter, typeFilter, refundStatusFilter, replacementStatusFilter, sortField, sortAsc]);
+  }, [dateFilteredReturns, activeTab, searchQuery, reasonFilter, typeFilter, replacementStatusFilter, sortField, sortAsc]);
 
   // 5. Pagination
   const totalPages = Math.ceil(filteredReturns.length / pageSize) || 1;
@@ -232,16 +220,25 @@ function ReturnsContent() {
 
   const activeFilterCount = (reasonFilter !== "ALL" ? 1 : 0) +
     (typeFilter !== "ALL" ? 1 : 0) +
-    (refundStatusFilter !== "ALL" ? 1 : 0) +
     (replacementStatusFilter !== "ALL" ? 1 : 0);
 
   const handleResetFilters = () => {
     setReasonFilter("ALL");
     setTypeFilter("ALL");
-    setRefundStatusFilter("ALL");
     setReplacementStatusFilter("ALL");
     setSearchQuery("");
     setPage(1);
+  };
+
+  const handleDispatchSubmit = (returnId: string) => {
+    const num = dispatchInputs[returnId]?.trim();
+    if (!num) return;
+    setDispatchNumber(returnId, num);
+    setDispatchInputs((prev) => {
+      const next = { ...prev };
+      delete next[returnId];
+      return next;
+    });
   };
 
   // Export handlers
@@ -258,8 +255,7 @@ function ReturnsContent() {
       "Qty",
       "Expected Amount",
       "Return Status",
-      "Refund Status",
-      "Type",
+      "Dispatch No.",
     ];
 
     const rows = filteredReturns.map((rtn, idx) => [
@@ -274,8 +270,7 @@ function ReturnsContent() {
       rtn.requestedQuantity,
       rtn.expectedAmount,
       rtn.status,
-      rtn.refund?.refundStatus || "Pending",
-      rtn.returnType,
+      rtn.dispatchNumber || "-",
     ]);
 
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -321,7 +316,7 @@ function ReturnsContent() {
   return (
     <div className="space-y-3.5 max-w-full mx-auto select-none">
       {/* KPI STATUS FILTER BUTTONS ROW (Compact with matching colored borders like other pages) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         {/* 1. ALL RETURNS */}
         <button
           onClick={() => { setActiveTab("ALL"); setPage(1); }}
@@ -350,60 +345,46 @@ function ReturnsContent() {
           <span className="text-base font-bold text-amber-800 font-mono mt-0.5 block">{summaryCards.requested}</span>
         </button>
 
-        {/* 3. AWAITING RETURN */}
+        {/* 3. REFUNDS */}
         <button
-          onClick={() => { setActiveTab("Awaiting Return"); setPage(1); }}
+          onClick={() => { setActiveTab("Refund"); setPage(1); }}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "Awaiting Return" 
-              ? "border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/10" 
-              : "border-indigo-300 hover:border-indigo-400"
-          )}
-        >
-          <span className="text-[11px] text-indigo-700 font-medium block">Awaiting Return</span>
-          <span className="text-base font-bold text-indigo-800 font-mono mt-0.5 block">{summaryCards.awaiting}</span>
-        </button>
-
-        {/* 4. RECEIVED / QC */}
-        <button
-          onClick={() => { setActiveTab("QC Pending"); setPage(1); }}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "QC Pending" 
-              ? "border-orange-600 ring-2 ring-orange-500/20 bg-orange-50/10" 
-              : "border-orange-300 hover:border-orange-400"
-          )}
-        >
-          <span className="text-[11px] text-orange-700 font-medium block">Received / QC</span>
-          <span className="text-base font-bold text-orange-600 font-mono mt-0.5 block">{summaryCards.receivedQc}</span>
-        </button>
-
-        {/* 5. REFUND PENDING */}
-        <button
-          onClick={() => { setActiveTab("Refund Pending"); setPage(1); }}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "Refund Pending" 
+            activeTab === "Refund" 
               ? "border-rose-600 ring-2 ring-rose-500/20 bg-rose-50/10" 
               : "border-rose-300 hover:border-rose-400"
           )}
         >
-          <span className="text-[11px] text-rose-700 font-medium block">Refund Pending</span>
-          <span className="text-base font-bold text-rose-800 font-mono mt-0.5 block">{summaryCards.refundPending}</span>
+          <span className="text-[11px] text-rose-700 font-medium block">Refunds</span>
+          <span className="text-base font-bold text-rose-800 font-mono mt-0.5 block">{summaryCards.refunds}</span>
         </button>
 
-        {/* 6. REPLACEMENT */}
+        {/* 4. EXCHANGES */}
         <button
-          onClick={() => { setActiveTab("Replacement"); setPage(1); }}
+          onClick={() => { setActiveTab("Exchange"); setPage(1); }}
           className={cn(
             "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            activeTab === "Replacement" 
+            activeTab === "Exchange" 
               ? "border-purple-600 ring-2 ring-purple-500/20 bg-purple-50/10" 
               : "border-purple-300 hover:border-purple-400"
           )}
         >
-          <span className="text-[11px] text-purple-700 font-medium block">Replacement</span>
-          <span className="text-base font-bold text-purple-800 font-mono mt-0.5 block">{summaryCards.replacementPending}</span>
+          <span className="text-[11px] text-purple-700 font-medium block">Exchanges</span>
+          <span className="text-base font-bold text-purple-800 font-mono mt-0.5 block">{summaryCards.exchanges}</span>
+        </button>
+
+        {/* 5. COMPLETED */}
+        <button
+          onClick={() => { setActiveTab("Completed"); setPage(1); }}
+          className={cn(
+            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
+            activeTab === "Completed" 
+              ? "border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/10" 
+              : "border-emerald-300 hover:border-emerald-400"
+          )}
+        >
+          <span className="text-[11px] text-emerald-700 font-medium block">Completed</span>
+          <span className="text-base font-bold text-emerald-800 font-mono mt-0.5 block">{summaryCards.completed}</span>
         </button>
       </div>
 
@@ -501,21 +482,6 @@ function ReturnsContent() {
             <option value="Exchange">Exchange</option>
           </select>
 
-          <select
-            value={refundStatusFilter}
-            onChange={(e) => {
-              setRefundStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="text-xs px-2 py-1 bg-slate-50 border border-slate-200 rounded outline-none focus:border-orange-500 text-slate-700 font-medium cursor-pointer"
-          >
-            <option value="ALL">All Refund Statuses</option>
-            <option value="Pending">Refund Pending</option>
-            <option value="Processing">Refund Processing</option>
-            <option value="Refunded">Refunded</option>
-            <option value="Failed">Refund Failed</option>
-          </select>
-
           {activeFilterCount > 0 && (
             <button
               onClick={handleResetFilters}
@@ -603,9 +569,8 @@ function ReturnsContent() {
                   <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                 </div>
               </th>
-              <th className="py-2 px-1 w-[9.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">RETURN STATUS</th>
-              <th className="py-2 px-1 w-[8.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">REFUND STATUS</th>
-              <th className="py-2 px-1 w-[5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">TYPE</th>
+              <th className="py-2 px-1 w-[10%] text-center border-r border-b-2 border-slate-300 bg-slate-100">RETURN STATUS</th>
+              <th className="py-2 px-1 w-[12%] text-center border-r border-b-2 border-slate-300 bg-slate-100">DISPATCH NO.</th>
               <th className="py-2 px-1 w-[6.5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">ACTION</th>
             </tr>
           </thead>
@@ -613,7 +578,7 @@ function ReturnsContent() {
           <tbody>
             {paginatedReturns.length === 0 ? (
               <tr>
-                <td colSpan={14} className="py-14 text-center text-slate-400 border-b border-slate-300">
+                <td colSpan={12} className="py-14 text-center text-slate-400 border-b border-slate-300">
                   <RotateCcw className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                   <p className="font-semibold text-slate-600 text-xs">No return cases found</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
@@ -722,21 +687,35 @@ function ReturnsContent() {
                       <ReturnStatusBadge status={rtn.status} className="text-[10px] py-0.5 px-1 justify-center truncate w-full" />
                     </td>
 
-                    {/* REFUND STATUS */}
-                    <td className="py-1 px-1 text-center border-r border-b border-slate-300 truncate">
-                      <RefundStatusBadge status={rtn.refund?.refundStatus} className="text-[10px] py-0.5 px-1 justify-center truncate w-full" />
-                    </td>
-
-                    {/* TYPE */}
-                    <td className="py-1 px-0.5 text-center border-r border-b border-slate-300 truncate">
-                      <span className={cn(
-                        "px-1 py-0.2 rounded text-[9.5px] font-bold border inline-block",
-                        rtn.returnType === "Replacement"
-                          ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      )}>
-                        {rtn.returnType === "Replacement" ? "Rep" : "Ref"}
-                      </span>
+                    {/* DISPATCH NO. */}
+                    <td className="py-1 px-1 text-center border-r border-b border-slate-300" onClick={(e) => e.stopPropagation()}>
+                      {rtn.dispatchNumber ? (
+                        <span className="font-mono font-bold text-teal-700 text-[10.5px]">{rtn.dispatchNumber}</span>
+                      ) : rtn.status === "Dispatched" ? (
+                        <span className="text-slate-400 text-[10px] italic">—</span>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={dispatchInputs[rtn.id] || ""}
+                            onChange={(e) => setDispatchInputs((prev) => ({ ...prev, [rtn.id]: e.target.value }))}
+                            placeholder="Enter no."
+                            className="w-full text-[10px] px-1.5 py-0.5 border border-slate-300 rounded outline-none focus:border-teal-500 font-mono text-slate-800 bg-slate-50"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleDispatchSubmit(rtn.id);
+                            }}
+                          />
+                          {dispatchInputs[rtn.id]?.trim() && (
+                            <button
+                              type="button"
+                              onClick={() => handleDispatchSubmit(rtn.id)}
+                              className="px-1.5 py-0.5 bg-teal-600 hover:bg-teal-700 text-white rounded text-[9px] font-bold whitespace-nowrap cursor-pointer transition-colors"
+                            >
+                              ✓
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     {/* ACTION */}

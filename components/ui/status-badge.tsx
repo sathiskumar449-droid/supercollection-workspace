@@ -129,7 +129,7 @@ export function SmsStatusBadge({ status, className }: { status: SmsStatus; class
       icon: <Send className="w-3 h-3 text-emerald-600" />,
     },
     PENDING: {
-      label: "Pending",
+      label: "Waiting for SMS",
       text: "text-amber-600",
       icon: <Clock className="w-3 h-3 text-amber-600" />,
     },

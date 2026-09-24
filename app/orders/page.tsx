@@ -237,12 +237,6 @@ function OrdersContent() {
 
     validOrders.forEach((order) => {
       updateOrderStatus(order.id, targetStatus, `Bulk status updated to ${targetLabel}`);
-      if (targetStatus === "DISPATCHED") {
-        updateCourierDetails(order.id, {
-          courierStatus: "PENDING",
-          courierName: order.dispatch.courierName || "ST Courier",
-        });
-      }
     });
 
     setIsBulkUpdating(false);

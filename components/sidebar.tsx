@@ -24,6 +24,7 @@ interface SidebarProps {
     packingCount?: number;
     dispatchCount?: number;
     stMissingLlr?: number;
+    courierCount?: number;
     smsFailed?: number;
     returnsCount?: number;
   };
@@ -117,7 +118,12 @@ export function Sidebar({
       href: "/couriers",
       exact: false,
       icon: Truck,
-      badge: user.role !== "COURIER" && badgeCounts.stMissingLlr && badgeCounts.stMissingLlr > 0 ? badgeCounts.stMissingLlr : undefined,
+      badge:
+        badgeCounts.courierCount !== undefined
+          ? (badgeCounts.courierCount > 0 ? badgeCounts.courierCount : undefined)
+          : (user.role !== "COURIER" && badgeCounts.stMissingLlr && badgeCounts.stMissingLlr > 0
+              ? badgeCounts.stMissingLlr
+              : undefined),
       badgeType: "warning",
     },
     {
