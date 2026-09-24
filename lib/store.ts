@@ -38,7 +38,7 @@ import {
   subscribeToSupabaseRealtime 
 } from "./supabase";
 
-const STORAGE_KEY_ORDERS = "orderflow_orders_v2";
+const STORAGE_KEY_ORDERS = "orderflow_orders_v3";
 const STORAGE_KEY_USER = "orderflow_current_user_v1";
 const STORAGE_KEY_COURIERS = "orderflow_courier_partners_v1";
 const STORAGE_KEY_RETURNS = "orderflow_returns_v2";
@@ -298,12 +298,12 @@ export function normalizeOrderTimeline(ord: Order): ActivityLog[] {
   }
 
   // Stage 4: Courier Picked Up & Waiting for Shipment
-  const isPickedUpOrBeyond =
-    ord.dispatch?.courierStatus === "PICKED_UP" ||
-    ord.dispatch?.courierStatus === "SHIPPED" ||
-    Boolean(pickedUpTime) ||
-    Boolean(shippedTime) ||
-    eventsMap.has("courier picked up");
+  // ONLY if verified by customer mobile number or has valid LLR
+  const hasVerifiedCustomerPhone = Boolean(
+    (ord.dispatch?.verifiedCustomerPhone && ord.dispatch.verifiedCustomerPhone.trim()) ||
+    (ord.notes && ord.notes.includes("verified_phone:"))
+  );
+  const isPickedUpOrBeyond = Boolean(hasLlr || hasVerifiedCustomerPhone);
 
   if (isPickedUpOrBeyond) {
     const courierName = ord.dispatch?.courierName || "Courier Partner";
@@ -502,18 +502,12 @@ export function sanitizeOrders(orders: Order[]): Order[] {
         llrNumber = undefined;
       }
 
-      const hasCourierPickedUpTimeline = ord.timeline?.some(
-        (t) => t.action === "Courier Picked Up" || t.action === "Courier picked up"
+      const hasVerifiedPhone = Boolean(
+        (ord.dispatch?.verifiedCustomerPhone && ord.dispatch.verifiedCustomerPhone.trim()) ||
+        (ord.notes && ord.notes.includes("verified_phone:"))
       );
-      const isActuallyPickedUp =
-        hasCourierPickedUpTimeline ||
-        Boolean(ord.dispatch?.pickedUpAt) ||
-        ord.dispatch?.courierStatus === "PICKED_UP" ||
-        ord.dispatch?.courierStatus === "SHIPPED" ||
-        Boolean(ord.dispatch?.courierPartnerId);
-
-      // CRITICAL: An order is ONLY Shipped if it has a real valid LLR number entered!
       const isShipped = Boolean(llrNumber && hasValidLlrNumber(llrNumber, dispatchId));
+      const isActuallyPickedUp = isShipped || hasVerifiedPhone;
 
       let partnerCode: string | undefined = undefined;
       let resolvedCourierName: string | undefined = undefined;
@@ -524,19 +518,19 @@ export function sanitizeOrders(orders: Order[]): Order[] {
       if (isActuallyPickedUp) {
         partnerCode = ord.dispatch?.courierPartnerId || undefined;
         resolvedCourierName = ord.dispatch?.courierName || undefined;
-        pickedUpAt = ord.dispatch?.pickedUpAt || ord.pickedUpAt || ord.dispatchedAt || new Date().toISOString();
+        pickedUpAt = ord.dispatch?.pickedUpAt || ord.pickedUpAt || new Date().toISOString();
         if (isShipped) {
           courierStatus = "SHIPPED";
           shippedAt = ord.dispatch?.shippedAt || ord.shippedAt || new Date().toISOString();
         } else {
-          // If NO valid LLR number is entered, courier status is strictly PICKED_UP!
+          // If customer mobile verified, courier status is PICKED_UP
           courierStatus = "PICKED_UP";
           shippedAt = undefined;
         }
       } else {
         partnerCode = undefined;
         resolvedCourierName = undefined;
-        courierStatus = undefined;
+        courierStatus = "PENDING";
         pickedUpAt = undefined;
         shippedAt = undefined;
       }
@@ -738,19 +732,39 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
     if (finalLlr && (finalLlr === finalDispatchId || finalLlr.toLowerCase().startsWith("dsp"))) {
       finalLlr = undefined;
     }
-    const finalCourierStatus: CourierStatus | undefined = (localDisp.courierStatus === "SHIPPED" || remoteDisp.courierStatus === "SHIPPED" || Boolean(finalLlr))
-      ? "SHIPPED"
-      : (localDisp.courierStatus === "PICKED_UP" || remoteDisp.courierStatus === "PICKED_UP"
-        ? "PICKED_UP"
-        : (remoteDisp.courierStatus || localDisp.courierStatus));
+    const hasValidLlr = Boolean(finalLlr);
+    const hasVerifiedPhone = Boolean(
+      (remoteDisp.verifiedCustomerPhone && remoteDisp.verifiedCustomerPhone.trim()) ||
+      (localDisp.verifiedCustomerPhone && localDisp.verifiedCustomerPhone.trim()) ||
+      (remote.notes && remote.notes.includes("verified_phone:")) ||
+      (local.notes && local.notes.includes("verified_phone:"))
+    );
 
-    const finalCourierPartnerId = remoteDisp.courierPartnerId || localDisp.courierPartnerId || "ST_COURIER";
-    const finalCourierName = remoteDisp.courierName || localDisp.courierName || "ST Courier";
-    const finalCourierId = remoteDisp.courierId || localDisp.courierId;
-    const finalPickupPhone = remoteDisp.pickupPhone || localDisp.pickupPhone;
-    const finalPickedUpAt = localDisp.pickedUpAt || remoteDisp.pickedUpAt;
-    const finalShippedAt = (finalCourierStatus === "SHIPPED" || Boolean(finalLlr))
-      ? (remoteDisp.shippedAt || localDisp.shippedAt || remote.shippedAt || local.shippedAt || new Date().toISOString())
+    let finalCourierStatus: CourierStatus = "PENDING";
+    if (hasValidLlr || remoteDisp.courierStatus === "SHIPPED" || localDisp.courierStatus === "SHIPPED") {
+      finalCourierStatus = "SHIPPED";
+    } else if (hasVerifiedPhone) {
+      finalCourierStatus = "PICKED_UP";
+    }
+
+    // DO NOT DEFAULT TO ST_COURIER! Courier partner is ONLY assigned when customer mobile is entered!
+    const finalCourierPartnerId = (hasVerifiedPhone || hasValidLlr)
+      ? (remoteDisp.courierPartnerId || localDisp.courierPartnerId || undefined)
+      : undefined;
+    const finalCourierName = (hasVerifiedPhone || hasValidLlr)
+      ? (remoteDisp.courierName || localDisp.courierName || undefined)
+      : undefined;
+    const finalCourierId = (hasVerifiedPhone || hasValidLlr)
+      ? (remoteDisp.courierId || localDisp.courierId || undefined)
+      : undefined;
+    const finalPickupPhone = (hasVerifiedPhone || hasValidLlr)
+      ? (remoteDisp.pickupPhone || localDisp.pickupPhone)
+      : undefined;
+    const finalPickedUpAt = (hasVerifiedPhone || hasValidLlr)
+      ? (localDisp.pickedUpAt || remoteDisp.pickedUpAt)
+      : undefined;
+    const finalShippedAt = (finalCourierStatus === "SHIPPED" || hasValidLlr)
+      ? (remoteDisp.shippedAt || localDisp.shippedAt || remote.shippedAt || local.shippedAt)
       : undefined;
 
     const isDispatched = local.orderStatus === "DISPATCHED" || remote.orderStatus === "DISPATCHED" || finalCourierStatus === "SHIPPED" || finalCourierStatus === "PICKED_UP";

@@ -250,8 +250,11 @@ function CourierHubContent() {
         return false;
       }
 
-      // Must have an assigned courier partner (default to ST_COURIER)
-      const partnerCode = o.dispatch?.courierPartnerId || "ST_COURIER";
+      // Must have an assigned courier partner (DO NOT default to ST_COURIER)
+      const partnerCode = o.dispatch?.courierPartnerId;
+      if (!partnerCode) {
+        return false;
+      }
 
       // Strict courier partner isolation for courier user
       if (isCourierUser) {
@@ -272,13 +275,9 @@ function CourierHubContent() {
     });
 
     verifiedOrders.forEach((o) => {
-      const code = o.dispatch?.courierPartnerId || "ST_COURIER";
-      if (code) {
-        if (counts[code] !== undefined) {
-          counts[code]++;
-        } else {
-          counts[code] = 1;
-        }
+      const code = o.dispatch?.courierPartnerId;
+      if (code && counts[code] !== undefined) {
+        counts[code]++;
       }
     });
 
@@ -288,10 +287,7 @@ function CourierHubContent() {
   // Orders belonging specifically to the active partner - strictly isolated, no cross-tab duplicates
   const currentPartnerOrders = useMemo(() => {
     return verifiedOrders
-      .filter((o) => {
-        const code = o.dispatch?.courierPartnerId || "ST_COURIER";
-        return code === activePartnerCode;
-      })
+      .filter((o) => o.dispatch?.courierPartnerId === activePartnerCode)
       .sort((a, b) => {
         const timeA = new Date(a.dispatch?.pickedUpAt || a.updatedAt).getTime();
         const timeB = new Date(b.dispatch?.pickedUpAt || b.updatedAt).getTime();
