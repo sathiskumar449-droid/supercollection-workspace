@@ -667,13 +667,13 @@ export function initStore(): Order[] {
         });
       });
 
-      // Background live sync from WooCommerce website every 30 seconds
+      // Background live sync from WooCommerce website every 20 seconds
       if (typeof window !== "undefined") {
         setInterval(() => {
           fetch("/api/sync/woocommerce", { method: "POST" })
             .then((res) => res.json())
             .then((data) => {
-              if (data?.syncedCount) {
+              if (data?.success) {
                 fetchSupabaseOrders().then((remoteOrders) => {
                   if (remoteOrders !== null) {
                     const merged = mergeRemoteWithLocalOrders(remoteOrders, globalOrders);
@@ -683,7 +683,7 @@ export function initStore(): Order[] {
               }
             })
             .catch(() => {});
-        }, 30000);
+        }, 20000);
       }
     }
     // Purge legacy v1 return caches
