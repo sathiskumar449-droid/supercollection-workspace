@@ -263,6 +263,11 @@ export default function PackingPage() {
     { value: "DISPATCHED", label: "Dispatched" },
   ];
 
+  // Helper to determine if an order is in Return state
+  const isOrderReturn = (o: Order) =>
+    o.orderStatus === "RETURN" ||
+    returns.some((r) => (r.orderId === o.id || r.orderNumber === o.orderNumber) && r.status !== "Rejected" && r.status !== "Cancelled");
+
   // Orders eligible for Packing Station (active fulfillment: Processing, Packaging, Packed, Dispatched, Completed)
   // Strictly excludes cancelled, pending, failed, and return orders
   const packingEligibleOrders = useMemo(() => {
@@ -274,11 +279,6 @@ export default function PackingPage() {
       return true;
     });
   }, [orders, dateFilter, customDate, returns]);
-
-  // Helper to determine if an order is in Return state
-  const isOrderReturn = (o: Order) =>
-    o.orderStatus === "RETURN" ||
-    returns.some((r) => (r.orderId === o.id || r.orderNumber === o.orderNumber) && r.status !== "Rejected" && r.status !== "Cancelled");
 
   // Filtered orders list
   const filteredOrders = useMemo(() => {
