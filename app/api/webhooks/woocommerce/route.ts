@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 import { detectWooCommerceSource, parseWooCommerceDate } from "@/lib/woocommerce-source";
+import { OrderStatus } from "@/types/orderflow";
 
 export async function GET() {
   return NextResponse.json({ status: "active", message: "SuperCollection WooCommerce Webhook Endpoint is live" }, { status: 200 });
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
     const pincode = body.shipping?.postcode || body.billing?.postcode || "600001";
     const totalAmount = parseFloat(body.total || "0") || 0;
 
-    let orderStatus: "NEW" | "CONFIRMED" | "COMPLETED" | "RETURN" = "NEW";
+    let orderStatus: OrderStatus = "NEW";
     if (body.status === "completed") orderStatus = "COMPLETED";
     else if (body.status === "processing") orderStatus = "CONFIRMED";
     else if (body.status === "cancelled" || body.status === "refunded" || body.status === "failed") orderStatus = "RETURN";
@@ -137,7 +138,7 @@ export async function POST(req: NextRequest) {
         .eq("external_order_id", wcId)
         .maybeSingle();
 
-      let effectiveStatus = orderStatus;
+      let effectiveStatus: OrderStatus = orderStatus;
       if (existingOrder?.status === "DISPATCHED") {
         effectiveStatus = "DISPATCHED";
       }

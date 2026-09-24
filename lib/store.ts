@@ -347,7 +347,7 @@ export function initStore(): Order[] {
 
 function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[]): Order[] {
   const localMap = new Map(localOrders.map((o) => [o.id, o]));
-  const merged = remoteOrders.map((remote) => {
+  const merged: Order[] = remoteOrders.map((remote): Order => {
     const local = localMap.get(remote.id);
     if (!local) return remote;
 
@@ -360,9 +360,9 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
     if (finalLlr && (finalLlr === finalDispatchId || finalLlr.toLowerCase().startsWith("dsp"))) {
       finalLlr = undefined;
     }
-    const finalCourierStatus = (localDisp.courierStatus === "DELIVERED" || remoteDisp.courierStatus === "DELIVERED")
+    const finalCourierStatus: CourierStatus | undefined = (localDisp.courierStatus === "DELIVERED" || remoteDisp.courierStatus === "DELIVERED")
       ? "DELIVERED"
-      : ((localDisp.courierStatus === "PICKED_UP" && remoteDisp.courierStatus !== "DELIVERED")
+      : (localDisp.courierStatus === "PICKED_UP"
         ? "PICKED_UP"
         : (remoteDisp.courierStatus || localDisp.courierStatus));
 

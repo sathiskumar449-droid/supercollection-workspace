@@ -25,7 +25,7 @@ import { useOrderFlow } from "@/lib/hooks";
 import { SourceBadge, OrderStatusBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { formatINR, formatTimeAgo, formatDate, cn, matchesDateFilter } from "@/lib/utils";
-import { Order, OrderStatus, ReturnCase } from "@/types/orderflow";
+import { Order, OrderStatus, ReturnCase, ReturnType } from "@/types/orderflow";
 import { CreateReturnModal } from "@/components/returns/create-return-modal";
 import { MarkAsReturnModal } from "@/components/returns/mark-as-return-modal";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
@@ -235,7 +235,7 @@ export default function PackingPage() {
     } else {
       // Revert status to WooCommerce status (COMPLETED if previously completed, or CONFIRMED if processing)
       const order = orders.find((o) => o.id === orderId);
-      const fallbackStatus: OrderStatus = order?.completedAt ? "COMPLETED" : "CONFIRMED";
+      const fallbackStatus: OrderStatus = order?.packedAt ? "PACKED" : (order?.completedAt ? "COMPLETED" : "CONFIRMED");
       updateOrderStatus(
         orderId, 
         fallbackStatus, 

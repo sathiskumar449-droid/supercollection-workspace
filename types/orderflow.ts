@@ -95,6 +95,7 @@ export interface Order {
   packingStartedAt?: string;
   packedAt?: string;
   dispatchedAt?: string;
+  completedAt?: string;
   packingStaff?: string;
   orderTakenBy?: string;
   returnStatus?: string;
