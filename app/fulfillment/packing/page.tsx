@@ -19,6 +19,7 @@ import {
   CheckCheck,
   FileSpreadsheet,
   FileText,
+  Plus,
   X
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
@@ -26,8 +27,7 @@ import { SourceBadge, OrderStatusBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { formatINR, formatTimeAgo, formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { Order, OrderStatus, ReturnCase, ReturnType } from "@/types/orderflow";
-import { CreateReturnModal } from "@/components/returns/create-return-modal";
-import { MarkAsReturnModal } from "@/components/returns/mark-as-return-modal";
+import { ManualReturnModal } from "@/components/returns/manual-return-modal";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
@@ -199,11 +199,15 @@ export default function PackingPage() {
     setPendingModalOrder(null);
   };
 
-  const handleReturnSuccess = (orderId: string, returnId: string, returnType: ReturnType, amount: number) => {
-    const ord = orders.find((o) => o.id === orderId);
-    updateOrderStatus(orderId, "RETURN", `Return case ${returnId} initiated from Packing Station (Type: ${returnType}, Amount: ${formatINR(amount)})`);
-    triggerToast(`Order ${ord ? ord.orderNumber : orderId} marked as Return (${returnType} - ${formatINR(amount)})`);
-    setSelectedIds((prev) => prev.filter((id) => id !== orderId));
+  const handleReturnSuccess = (returnId: string, orderId?: string) => {
+    const targetOrderId = orderId || returnModalOrder?.id || (selectedIds.length > 0 ? selectedIds[0] : null);
+    const ord = targetOrderId ? orders.find((o) => o.id === targetOrderId) : null;
+    triggerToast(`Return case ${returnId} created successfully ${ord ? `for Order ${ord.orderNumber}` : ""}`);
+    if (targetOrderId) {
+      setSelectedIds((prev) => prev.filter((id) => id !== targetOrderId));
+    }
+    setReturnModalOrder(null);
+    setIsMarkAsReturnOpen(false);
   };
 
   const handleResolvePending = (order: Order, e?: React.MouseEvent) => {
@@ -596,8 +600,19 @@ export default function PackingPage() {
             </button>
           )}
 
-          {/* Export Actions (Excel & PDF) - Placed at the end */}
+          {/* Export Actions (Excel & PDF) & Add Manual Return */}
           <div className="flex items-center gap-2 pl-1 border-l border-slate-200">
+            <button
+              onClick={() => {
+                setReturnModalOrder(null);
+                setIsMarkAsReturnOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs transition-colors shadow-2xs cursor-pointer shrink-0"
+              title="Add Manual Return"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Manual Return</span>
+            </button>
             <button
               onClick={handleExportExcel}
               title="Export Excel"
@@ -954,24 +969,14 @@ export default function PackingPage() {
         userRole={user.role}
       />
 
-      {/* Create Return Modal (Packing -> Return -> Create Return) */}
-      {returnModalOrder && (
-        <CreateReturnModal
-          isOpen={Boolean(returnModalOrder)}
-          onClose={() => setReturnModalOrder(null)}
-          preselectedOrderId={returnModalOrder.id}
-          onSuccess={(returnId) => {
-            updateOrderStatus(returnModalOrder.id, "RETURN", `Return case ${returnId} initiated from Packing Station`);
-            triggerToast(`Return case ${returnId} created for Order ${returnModalOrder.orderNumber}`);
-            setReturnModalOrder(null);
-          }}
-        />
-      )}
-
-      {/* Mark As Return Modal (From Selection Toolbar) */}
-      <MarkAsReturnModal
-        isOpen={isMarkAsReturnOpen}
-        onClose={() => setIsMarkAsReturnOpen(false)}
+      {/* Return Modal (Shared with Returns page ManualReturnModal) */}
+      <ManualReturnModal
+        isOpen={isMarkAsReturnOpen || Boolean(returnModalOrder)}
+        onClose={() => {
+          setIsMarkAsReturnOpen(false);
+          setReturnModalOrder(null);
+        }}
+        preselectedOrder={returnModalOrder}
         selectedOrders={orders.filter((o) => selectedIds.includes(o.id))}
         onSuccess={handleReturnSuccess}
       />

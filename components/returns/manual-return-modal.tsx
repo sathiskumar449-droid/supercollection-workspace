@@ -23,13 +23,16 @@ import {
   Trash2,
   Edit3,
   Check,
-  Sparkles
+  Sparkles,
+  Layers
 } from "lucide-react";
 
 interface ManualReturnModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: (returnId: string) => void;
+  selectedOrders?: Order[];
+  preselectedOrder?: Order | null;
+  onSuccess?: (returnId: string, orderId?: string) => void;
 }
 
 interface ManualProductItem {
@@ -69,6 +72,8 @@ const SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "Free Size"];
 export function ManualReturnModal({
   isOpen,
   onClose,
+  selectedOrders,
+  preselectedOrder,
   onSuccess,
 }: ManualReturnModalProps) {
   const { orders, returns, createReturnCase } = useOrderFlow();
@@ -167,9 +172,10 @@ export function ManualReturnModal({
     setSearchQuery("");
     setErrorMsg(null);
     setOrderMode("SEARCH");
+    setRefundAmountOverride("");
 
     const initialQuantities: Record<string, number> = {};
-    order.items.forEach((it, idx) => {
+    order.items.forEach((it) => {
       const existing = returns.filter(
         (r) => (r.orderId === order.id || r.orderNumber === order.orderNumber) &&
           r.status !== "Rejected" && r.status !== "Cancelled"
@@ -183,7 +189,7 @@ export function ManualReturnModal({
         });
       });
       const available = Math.max(0, it.quantity - alreadyReturned);
-      initialQuantities[it.id] = idx === 0 && available > 0 ? 1 : 0;
+      initialQuantities[it.id] = available > 0 ? available : 0;
     });
 
     setExistingItemQuantities(initialQuantities);
@@ -197,6 +203,29 @@ export function ManualReturnModal({
       setRepQty(1);
     }
   };
+
+  // Sync selected order when opened with preselectedOrder or selectedOrders
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedOrder(null);
+      setSearchQuery("");
+      setOrderMode("SEARCH");
+      setErrorMsg(null);
+      return;
+    }
+
+    if (preselectedOrder) {
+      handleSelectOrder(preselectedOrder);
+    } else if (selectedOrders && selectedOrders.length > 0) {
+      setSelectedOrder((current) => {
+        if (current && selectedOrders.some((o) => o.id === current.id)) {
+          return current;
+        }
+        handleSelectOrder(selectedOrders[0]);
+        return selectedOrders[0];
+      });
+    }
+  }, [isOpen, preselectedOrder, selectedOrders]);
 
   // Switch to manual mode with optional prefilled ID
   const handleSwitchToManual = (prefilledId?: string) => {
@@ -445,7 +474,7 @@ export function ManualReturnModal({
     setIsSubmitting(false);
 
     if (result.success && result.returnCase) {
-      onSuccess?.(result.returnCase.returnId);
+      onSuccess?.(result.returnCase.returnId, selectedOrder ? selectedOrder.id : manualOrderId.trim());
       onClose();
     } else {
       setErrorMsg(result.error || "Failed to create manual return. Please review the inputs.");
@@ -473,12 +502,24 @@ export function ManualReturnModal({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-slate-900 tracking-tight">Add Manual Return</h2>
-                <span className="text-[10px] uppercase font-bold bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded border border-orange-200">
-                  Staff Entry
-                </span>
+                <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                  {selectedOrder ? "Mark as Return" : "Add Manual Return"}
+                </h2>
+                {selectedOrder ? (
+                  <span className="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 border border-orange-200">
+                    {selectedOrder.orderNumber}
+                  </span>
+                ) : (
+                  <span className="text-[10px] uppercase font-bold bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded border border-orange-200">
+                    Staff Entry
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-slate-500">Record customer walk-in, phone, or direct return entry</p>
+              <p className="text-xs text-slate-500">
+                {selectedOrder 
+                  ? `${selectedOrder.customer.name} • ${selectedOrder.customer.mobile}` 
+                  : "Record customer walk-in, phone, or direct return entry"}
+              </p>
             </div>
           </div>
 
@@ -514,6 +555,30 @@ export function ManualReturnModal({
                 {orderMode === "SEARCH" ? "Select order from system database" : "Enter custom Order ID & details directly"}
               </span>
             </div>
+
+            {/* If multiple orders selected, show order switcher dropdown */}
+            {selectedOrders && selectedOrders.length > 1 && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-orange-50/90 border border-orange-200 rounded-xl text-xs shadow-2xs">
+                <div className="flex items-center gap-2 text-orange-950 font-bold">
+                  <Layers className="w-4 h-4 text-orange-600 shrink-0" />
+                  <span>Select order ({selectedOrders.length} selected):</span>
+                </div>
+                <select
+                  value={selectedOrder?.id || ""}
+                  onChange={(e) => {
+                    const ord = selectedOrders.find((o) => o.id === e.target.value);
+                    if (ord) handleSelectOrder(ord);
+                  }}
+                  className="bg-white border border-orange-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 cursor-pointer shadow-2xs max-w-full sm:max-w-md truncate"
+                >
+                  {selectedOrders.map((ord, idx) => (
+                    <option key={ord.id} value={ord.id}>
+                      #{idx + 1}: {ord.orderNumber} - {ord.customer.name} ({formatINR(ord.totalAmount)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Prominent High-Visibility Tabs */}
             <div className="grid grid-cols-2 p-1 bg-slate-200/70 rounded-xl border border-slate-300/80 gap-1">
@@ -1507,7 +1572,13 @@ export function ManualReturnModal({
             className="px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-lg transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>{isSubmitting ? "Creating Return..." : "Create Manual Return"}</span>
+            <span>
+              {isSubmitting 
+                ? "Creating Return..." 
+                : selectedOrder 
+                ? `Confirm Return (${formatINR(activeTotalReturnedValue)})` 
+                : "Create Manual Return"}
+            </span>
           </button>
         </div>
 
