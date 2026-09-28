@@ -67,8 +67,6 @@ const REPLACEMENT_STATUSES: ReplacementStatus[] = [
   "Shipped",
 ];
 
-const SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "Free Size"];
-
 export function ManualReturnModal({
   isOpen,
   onClose,
@@ -103,7 +101,7 @@ export function ManualReturnModal({
 
   // For Manual mode: list of manually entered items
   const [manualProducts, setManualProducts] = useState<ManualProductItem[]>([
-    { id: "item-1", productName: "", size: "L", quantity: 1, unitPrice: 0 }
+    { id: "item-1", productName: "", size: "", quantity: 1, unitPrice: 0 }
   ]);
 
   // 3. Return Type
@@ -122,7 +120,7 @@ export function ManualReturnModal({
 
   // 5. Exchange fields
   const [repProductName, setRepProductName] = useState("");
-  const [repSize, setRepSize] = useState("L");
+  const [repSize, setRepSize] = useState("");
   const [repQty, setRepQty] = useState(1);
   const [repUnitPrice, setRepUnitPrice] = useState<number>(0);
   const [extraPaymentStatus, setExtraPaymentStatus] = useState("Pending");
@@ -1028,15 +1026,13 @@ export function ManualReturnModal({
                               />
                             </td>
                             <td className="py-2 px-2">
-                              <select
-                                value={p.size}
+                              <input
+                                type="text"
+                                value={p.size || ""}
                                 onChange={(e) => handleUpdateManualProduct(p.id, "size", e.target.value)}
-                                className="w-full py-1 px-1.5 border border-slate-300 rounded font-bold text-xs text-slate-800 outline-none"
-                              >
-                                {SIZES.map((sz) => (
-                                  <option key={sz} value={sz}>{sz}</option>
-                                ))}
-                              </select>
+                                placeholder="e.g. M, 32, XL"
+                                className="w-full py-1 px-2 border border-slate-300 rounded font-semibold text-xs text-slate-800 outline-none focus:border-orange-500 focus:bg-white"
+                              />
                             </td>
                             <td className="py-2 px-2 text-center">
                               <input
@@ -1329,15 +1325,13 @@ export function ManualReturnModal({
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="block text-[10.5px] font-semibold text-slate-700 mb-0.5">Size:</label>
-                      <select
-                        value={repSize}
+                      <input
+                        type="text"
+                        value={repSize || ""}
                         onChange={(e) => setRepSize(e.target.value)}
-                        className="w-full py-1.5 px-1.5 bg-slate-50 border border-slate-300 rounded font-bold text-xs text-slate-900 outline-none"
-                      >
-                        {SIZES.map((sz) => (
-                          <option key={sz} value={sz}>{sz}</option>
-                        ))}
-                      </select>
+                        placeholder="e.g. M, 34, XL"
+                        className="w-full py-1.5 px-2 bg-slate-50 border border-slate-300 rounded font-semibold text-xs text-slate-900 outline-none focus:border-purple-500 focus:bg-white"
+                      />
                     </div>
                     <div>
                       <label className="block text-[10.5px] font-semibold text-slate-700 mb-0.5">Qty:</label>

@@ -637,76 +637,82 @@ export default function PackingPage() {
             </div>
           )}
 
-          {selectedIds.length > 0 ? (
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Selected Badge with Clear */}
-              <div className="flex items-center gap-1.5 font-bold text-orange-900 bg-orange-100/90 px-2.5 py-1.5 rounded-lg border border-orange-200">
-                <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
-                <span>{selectedIds.length} selected</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedIds([])}
-                  className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
-                  title="Clear Selection"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-
-              {/* Generate Dispatch No */}
+          {/* Showing Count */}
+          <div className="flex items-center gap-1.5 text-slate-500 font-medium whitespace-nowrap">
+            <span>Showing <strong className="text-slate-800">{filteredOrders.length}</strong> orders</span>
+            {searchQuery && (
               <button
                 type="button"
-                onClick={handleBulkGenerateDispatchNo}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98 transition-all"
-                title="Auto-generate and enter dispatch numbers for all selected orders"
+                onClick={() => setSearchQuery("")}
+                className="text-xs text-red-600 hover:text-red-700 font-medium px-1 cursor-pointer"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Generate Dispatch No ({selectedIds.length})</span>
+                Clear
               </button>
+            )}
+          </div>
 
-              {/* Mark as Pending */}
+          {/* Selected Badge with Clear (shown when items are selected) */}
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-1.5 font-bold text-orange-900 bg-orange-100/90 px-2 py-1 rounded-lg border border-orange-200 animate-in fade-in">
+              <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
+              <span>{selectedIds.length} selected</span>
               <button
                 type="button"
-                onClick={() => {
-                  if (selectedIds.length === 0) return;
-                  const firstOrder = orders.find((o) => selectedIds.includes(o.id));
-                  if (firstOrder) handleOpenPendingModal(firstOrder);
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98 transition-colors"
+                onClick={() => setSelectedIds([])}
+                className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
+                title="Clear Selection"
               >
-                <Clock className="w-3.5 h-3.5" />
-                <span>Mark as Pending ({selectedIds.length})</span>
+                <X className="w-3 h-3" />
               </button>
-
-              {/* Mark as Return */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedIds.length === 0) return;
-                  setIsMarkAsReturnOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98 transition-colors"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Mark as Return ({selectedIds.length})</span>
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 font-medium whitespace-nowrap">
-                Showing <strong>{filteredOrders.length}</strong> orders
-              </span>
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="text-xs text-red-600 hover:text-red-700 font-medium px-1 cursor-pointer"
-                >
-                  Clear
-                </button>
-              )}
             </div>
           )}
+
+          {/* Action Buttons - Always Visible */}
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedIds.length === 0) {
+                triggerToast("Please select orders using checkboxes first to generate dispatch numbers");
+                return;
+              }
+              handleBulkGenerateDispatchNo();
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98 transition-all shrink-0"
+            title="Auto-generate and enter dispatch numbers for orders"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Generate Dispatch No{selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedIds.length === 0) {
+                triggerToast("Please select an order first using checkbox to mark as Pending");
+                return;
+              }
+              const firstOrder = orders.find((o) => selectedIds.includes(o.id));
+              if (firstOrder) handleOpenPendingModal(firstOrder);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98 transition-colors shrink-0"
+            title="Mark order as Pending"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Mark as Pending{selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setReturnModalOrder(null);
+              setIsMarkAsReturnOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98 transition-colors shrink-0"
+            title="Mark order as Return"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Mark as Return{selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}</span>
+          </button>
 
           {/* Export Actions (Excel & PDF) & Add Return */}
           <div className="flex items-center gap-2 pl-1 border-l border-slate-200">

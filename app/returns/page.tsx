@@ -34,7 +34,8 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
-  Plus
+  Plus,
+  CheckSquare
 } from "lucide-react";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 
@@ -454,6 +455,20 @@ function ReturnsContent() {
 
         {/* Right: Export & + Add Manual Return Action */}
         <div className="flex items-center gap-2 shrink-0">
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-1.5 font-bold text-orange-900 bg-orange-100/90 px-2 py-1 rounded-lg border border-orange-200 animate-in fade-in">
+              <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
+              <span>{selectedIds.length} selected</span>
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
+                title="Clear selection"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
           <button
             onClick={() => setIsManualReturnOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs transition-colors shadow-2xs cursor-pointer shrink-0"
