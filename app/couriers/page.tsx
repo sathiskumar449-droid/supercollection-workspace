@@ -159,12 +159,17 @@ function CourierHubContent() {
     courierPartners,
   } = useOrderFlow();
 
-  const isCourierUser = user.role === "COURIER";
-  const userCourierPartnerId = user.courierPartnerId;
+  const activeCourierPartners = useMemo(() => {
+    return courierPartners.filter(
+      (cp) => cp.code !== "PROFESSIONAL" && !cp.name.toLowerCase().includes("professional")
+    );
+  }, [courierPartners]);
 
   // Active courier partner selection (Admin can toggle between partners; default to ST_COURIER or URL param)
   const initialPartnerParam = searchParams.get("partner");
-  const [adminPartnerFilter, setAdminPartnerFilter] = useState<string>(initialPartnerParam || "ST_COURIER");
+  const [adminPartnerFilter, setAdminPartnerFilter] = useState<string>(
+    initialPartnerParam === "PROFESSIONAL" ? "ST_COURIER" : (initialPartnerParam || "ST_COURIER")
+  );
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusTab);
   const [searchQuery, setSearchQuery] = useState("");
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
@@ -172,29 +177,30 @@ function CourierHubContent() {
   // Sync if URL query param or courierPartners load
   React.useEffect(() => {
     const p = searchParams.get("partner");
-    if (p) {
+    if (p && p !== "PROFESSIONAL") {
       setAdminPartnerFilter(p);
-    } else if (!adminPartnerFilter && courierPartners.length > 0) {
-      setAdminPartnerFilter(courierPartners[0].code);
+    } else if ((!adminPartnerFilter || adminPartnerFilter === "PROFESSIONAL") && activeCourierPartners.length > 0) {
+      setAdminPartnerFilter(activeCourierPartners[0].code);
     }
-  }, [searchParams, courierPartners, adminPartnerFilter]);
+  }, [searchParams, activeCourierPartners, adminPartnerFilter]);
 
   // Active courier partner code
   const activePartnerCode = useMemo(() => {
-    if (isCourierUser && userCourierPartnerId) return userCourierPartnerId;
-    return adminPartnerFilter || courierPartners[0]?.code || "ST_COURIER";
-  }, [isCourierUser, userCourierPartnerId, adminPartnerFilter, courierPartners]);
+    if (isCourierUser && userCourierPartnerId && userCourierPartnerId !== "PROFESSIONAL") return userCourierPartnerId;
+    const target = adminPartnerFilter === "PROFESSIONAL" ? "ST_COURIER" : adminPartnerFilter;
+    return target || activeCourierPartners[0]?.code || "ST_COURIER";
+  }, [isCourierUser, userCourierPartnerId, adminPartnerFilter, activeCourierPartners]);
 
   // Current Partner Object
   const currentPartner = useMemo(() => {
     return (
-      courierPartners.find((c) => c.code === activePartnerCode) || {
+      activeCourierPartners.find((c) => c.code === activePartnerCode) || {
         id: "cour-1",
-        name: activePartnerCode === "PROFESSIONAL" ? "Professional Courier" : activePartnerCode === "DTDC" ? "DTDC" : activePartnerCode === "INDIA_POST" ? "India Post" : "ST Courier",
+        name: activePartnerCode === "DTDC" ? "DTDC" : activePartnerCode === "INDIA_POST" ? "India Post" : "ST Courier",
         code: activePartnerCode,
       }
     );
-  }, [courierPartners, activePartnerCode]);
+  }, [activeCourierPartners, activePartnerCode]);
 
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -270,7 +276,7 @@ function CourierHubContent() {
     if (isCourierUser && userCourierPartnerId) return {};
 
     const counts: Record<string, number> = {};
-    courierPartners.forEach((cp) => {
+    activeCourierPartners.forEach((cp) => {
       counts[cp.code] = 0;
     });
 
@@ -282,7 +288,7 @@ function CourierHubContent() {
     });
 
     return counts;
-  }, [verifiedOrders, courierPartners, isCourierUser]);
+  }, [verifiedOrders, activeCourierPartners, isCourierUser]);
 
   // Orders belonging specifically to the active partner - strictly isolated, no cross-tab duplicates
   const currentPartnerOrders = useMemo(() => {
@@ -609,7 +615,7 @@ function CourierHubContent() {
               Courier Partner:
             </span>
 
-            {courierPartners.map((cp) => {
+            {activeCourierPartners.map((cp) => {
               const isSelected = activePartnerCode === cp.code;
               const count = partnerCounts[cp.code] || 0;
               return (
@@ -824,8 +830,8 @@ function CourierHubContent() {
                       <td className="py-2.5 px-3 whitespace-nowrap border-r border-slate-200">
                         <span className={cn(
                           "px-2 py-0.5 rounded text-[11px] font-bold border",
-                          order.dispatch?.courierPartnerId === "PROFESSIONAL"
-                            ? "bg-purple-50 text-purple-700 border-purple-200"
+                          order.dispatch?.courierPartnerId === "INDIA_POST"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
                             : order.dispatch?.courierPartnerId === "DTDC"
                             ? "bg-cyan-50 text-cyan-700 border-cyan-200"
                             : order.dispatch?.courierPartnerId === "ST_COURIER"

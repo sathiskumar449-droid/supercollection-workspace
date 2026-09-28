@@ -908,13 +908,23 @@ export const orderflowStore = {
   },
 
   getCourierPartners(): Courier[] {
+    let list = globalCouriers;
     if (typeof window !== "undefined") {
       try {
         const cached = localStorage.getItem(STORAGE_KEY_COURIERS);
         if (cached) {
-          globalCouriers = JSON.parse(cached);
-          return globalCouriers;
+          list = JSON.parse(cached);
         }
+      } catch {}
+    }
+    // Filter out Professional Courier
+    list = list.filter(
+      (c) => c.code !== "PROFESSIONAL" && !c.name.toLowerCase().includes("professional")
+    );
+    globalCouriers = list;
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(STORAGE_KEY_COURIERS, JSON.stringify(list));
       } catch {}
     }
     return globalCouriers;

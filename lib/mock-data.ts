@@ -2,7 +2,6 @@ import { Customer, Order, OrderItem, Courier, UserSession, ActivityLog, ReturnCa
 
 export const INITIAL_COURIERS: Courier[] = [
   { id: "cour-1", name: "ST Courier", code: "ST_COURIER", isStCourier: true, trackingUrlPattern: "https://stcourier.com/track?llr={llr}", active: true },
-  { id: "cour-2", name: "Professional Courier", code: "PROFESSIONAL", isStCourier: false, trackingUrlPattern: "https://www.tpcindia.com/track.aspx?doc_no={llr}", active: true },
   { id: "cour-3", name: "DTDC", code: "DTDC", isStCourier: false, trackingUrlPattern: "https://www.dtdc.in/tracking/tracking_results.asp?trkid={llr}", active: true },
   { id: "cour-4", name: "India Post", code: "INDIA_POST", isStCourier: false, trackingUrlPattern: "https://www.indiapost.gov.in/VAS/Pages/trackconsignment.aspx?id={llr}", active: true },
 ];
@@ -23,7 +22,6 @@ export const STAFF_USERS: UserSession[] = [
   { id: "usr-4", name: "Muthu Kumar", email: "muthu.pack@orderflow.internal", role: "PACKING_STAFF", online: true },
   { id: "usr-5", name: "Saravanan P", email: "saravanan.disp@orderflow.internal", role: "DISPATCH_STAFF", online: true },
   { id: "usr-st", name: "ST Courier Portal", email: "portal@stcourier.in", role: "COURIER", courierPartnerId: "ST_COURIER", online: true },
-  { id: "usr-prof", name: "Professional Courier Portal", email: "portal@tpcindia.com", role: "COURIER", courierPartnerId: "PROFESSIONAL", online: true },
   { id: "usr-dtdc", name: "DTDC Hub Portal", email: "portal@dtdc.com", role: "COURIER", courierPartnerId: "DTDC", online: true },
 ];
 
@@ -200,12 +198,12 @@ export function generateMockOrders(): Order[] {
       packingStaff = "Muthu Kumar";
       updatedAt = dispatchedAt;
 
-      // Courier Partner assignment: ST Courier (majority), Professional Courier, DTDC, or Unassigned
+      // Courier Partner assignment: ST Courier (majority), DTDC, India Post, or Unassigned
       let courierPartnerId: string | undefined = "ST_COURIER";
       if (i % 7 === 0) {
-        courierId = "cour-2";
-        courierName = "Professional Courier";
-        courierPartnerId = "PROFESSIONAL";
+        courierId = "cour-4";
+        courierName = "India Post";
+        courierPartnerId = "INDIA_POST";
         isSt = false;
       } else if (i % 5 === 0) {
         courierId = "cour-3";
@@ -236,17 +234,17 @@ export function generateMockOrders(): Order[] {
         pickupPhone = undefined;
       } else if (i % 4 === 0) {
         // Delivered
-        llrNumber = isSt ? `ST${100000 + i}` : courierPartnerId === "PROFESSIONAL" ? `TPC${200000 + i}` : `DTDC${300000 + i}`;
+        llrNumber = isSt ? `ST${100000 + i}` : courierPartnerId === "INDIA_POST" ? `IP${400000 + i}` : `DTDC${300000 + i}`;
         courierStatus = "DELIVERED";
         pickupPhone = "+91 98410 23456";
       } else if (i % 2 === 0) {
         // Picked Up
-        llrNumber = isSt ? `ST${100000 + i}` : courierPartnerId === "PROFESSIONAL" ? `TPC${200000 + i}` : `DTDC${300000 + i}`;
+        llrNumber = isSt ? `ST${100000 + i}` : courierPartnerId === "INDIA_POST" ? `IP${400000 + i}` : `DTDC${300000 + i}`;
         courierStatus = "PICKED_UP";
         pickupPhone = "+91 91234 56789";
       } else {
         // Waiting for Pickup with LLR pre-printed
-        llrNumber = isSt ? `ST${100000 + i}` : courierPartnerId === "PROFESSIONAL" ? `TPC${200000 + i}` : `DTDC${300000 + i}`;
+        llrNumber = isSt ? `ST${100000 + i}` : courierPartnerId === "INDIA_POST" ? `IP${400000 + i}` : `DTDC${300000 + i}`;
         courierStatus = "WAITING_FOR_PICKUP";
         pickupPhone = undefined;
       }
@@ -374,7 +372,7 @@ export function generateMockOrders(): Order[] {
     const dispSeq = String(Math.max(1, i - 31)).padStart(3, "0");
     const dispatchId = orderStatus === "DISPATCHED" ? `DSP-260922-${dispSeq}` : undefined;
     const courierPartnerId = 
-      courierName === "Professional Courier" ? "PROFESSIONAL" :
+      courierName === "India Post" ? "INDIA_POST" :
       courierName === "DTDC" ? "DTDC" :
       courierName === "Unassigned" ? undefined : "ST_COURIER";
 

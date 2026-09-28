@@ -21,7 +21,8 @@ import {
   FileText,
   Plus,
   Sparkles,
-  X
+  X,
+  CheckSquare
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
 import { SourceBadge, OrderStatusBadge } from "@/components/ui/status-badge";
@@ -30,7 +31,6 @@ import { formatINR, formatTimeAgo, formatDate, cn, matchesDateFilter, formatDisp
 import { Order, OrderStatus, ReturnCase, ReturnType } from "@/types/orderflow";
 import { ManualReturnModal } from "@/components/returns/manual-return-modal";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
-import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
 
 // Status definitions mapping to workflow requirements:
@@ -636,19 +636,78 @@ export default function PackingPage() {
             </div>
           )}
 
-          <span className="text-slate-500 font-medium whitespace-nowrap">
-            Showing <strong>{filteredOrders.length}</strong> orders
-          </span>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="text-xs text-red-600 hover:text-red-700 font-medium px-1"
-            >
-              Clear
-            </button>
+          {selectedIds.length > 0 ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Selected Badge with Clear */}
+              <div className="flex items-center gap-1.5 font-bold text-orange-900 bg-orange-100/90 px-2.5 py-1.5 rounded-lg border border-orange-200">
+                <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
+                <span>{selectedIds.length} selected</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds([])}
+                  className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
+                  title="Clear Selection"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+
+              {/* Generate Dispatch No */}
+              <button
+                type="button"
+                onClick={handleBulkGenerateDispatchNo}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98 transition-all"
+                title="Auto-generate and enter dispatch numbers for all selected orders"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Generate Dispatch No ({selectedIds.length})</span>
+              </button>
+
+              {/* Mark as Pending */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedIds.length === 0) return;
+                  const firstOrder = orders.find((o) => selectedIds.includes(o.id));
+                  if (firstOrder) handleOpenPendingModal(firstOrder);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98 transition-colors"
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Mark as Pending ({selectedIds.length})</span>
+              </button>
+
+              {/* Mark as Return */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedIds.length === 0) return;
+                  setIsMarkAsReturnOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Mark as Return ({selectedIds.length})</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 font-medium whitespace-nowrap">
+                Showing <strong>{filteredOrders.length}</strong> orders
+              </span>
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="text-xs text-red-600 hover:text-red-700 font-medium px-1 cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           )}
 
-          {/* Export Actions (Excel & PDF) & Add Return & Generate Dispatch No */}
+          {/* Export Actions (Excel & PDF) & Add Return */}
           <div className="flex items-center gap-2 pl-1 border-l border-slate-200">
             <button
               onClick={() => {
@@ -660,19 +719,6 @@ export default function PackingPage() {
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Return</span>
-            </button>
-            <button
-              onClick={handleBulkGenerateDispatchNo}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all shadow-2xs cursor-pointer shrink-0",
-                selectedIds.length > 0
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs active:scale-98"
-                  : "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100"
-              )}
-              title={selectedIds.length > 0 ? `Generate dispatch numbers for ${selectedIds.length} selected orders` : "Select orders using checkboxes to generate dispatch numbers"}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Generate Dispatch No{selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}</span>
             </button>
             <button
               onClick={handleExportExcel}
@@ -691,50 +737,6 @@ export default function PackingPage() {
           </div>
         </div>
       </div>
-
-      {/* Bulk Action Toolbar */}
-      <BulkToolbar
-        selectedCount={selectedIds.length}
-        onClearSelection={() => setSelectedIds([])}
-        customAction={
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleBulkGenerateDispatchNo}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs cursor-pointer active:scale-98 transition-all"
-              title="Auto-generate and enter dispatch numbers for all selected orders"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Generate Dispatch No ({selectedIds.length})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (selectedIds.length === 0) return;
-                const firstOrder = orders.find((o) => selectedIds.includes(o.id));
-                if (firstOrder) handleOpenPendingModal(firstOrder);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-xs cursor-pointer active:scale-98 transition-colors"
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Mark as Pending ({selectedIds.length})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (selectedIds.length === 0) return;
-                setIsMarkAsReturnOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs cursor-pointer active:scale-98 transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Mark as Return ({selectedIds.length})</span>
-            </button>
-          </div>
-        }
-      />
 
       {/* Bulk Confirmation Modal */}
       <BulkConfirmDialog

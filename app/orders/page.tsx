@@ -20,7 +20,8 @@ import {
   FileSpreadsheet,
   FileText,
   Globe,
-  MessageSquare
+  MessageSquare,
+  CheckSquare
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
 import { Order, OrderStatus, CourierStatus, SmsStatus, OrderSource, ReturnCase } from "@/types/orderflow";
@@ -32,7 +33,6 @@ import { SyncWooCommerceDialog } from "@/components/sync-woocommerce-dialog";
 import { SyncWhatsAppDialog } from "@/components/sync-whatsapp-dialog";
 import { formatINR, formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
-import { BulkToolbar, StatusOption } from "@/components/bulk-actions/bulk-toolbar";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
 
 function OrdersContent() {
@@ -359,17 +359,6 @@ function OrdersContent() {
         </div>
       )}
 
-      {/* Bulk Actions Toolbar */}
-      <BulkToolbar
-        selectedCount={selectedIds.length}
-        onClearSelection={() => setSelectedIds([])}
-        statusOptions={BULK_STATUS_OPTIONS}
-        selectedStatus={bulkStatus}
-        onStatusChange={setBulkStatus}
-        onApplyAction={() => setIsConfirmDialogOpen(true)}
-        isActionDisabled={!bulkStatus || validOrders.length === 0}
-        isLoading={isBulkUpdating}
-      />
 
       {/* Select All Across Pages Banner */}
       {selectedIds.length > 0 && isAllPageSelected && filteredOrders.length > paginatedOrders.length && selectedIds.length < filteredOrders.length && (
@@ -469,7 +458,6 @@ function OrdersContent() {
           >
             <option value="ALL">All Couriers</option>
             <option value="ST Courier">ST Courier</option>
-            <option value="Professional Courier">Professional Courier</option>
             <option value="DTDC">DTDC</option>
             <option value="India Post">India Post</option>
             <option value="Delhivery">Delhivery</option>
@@ -518,6 +506,53 @@ function OrdersContent() {
 
           {/* Spacer */}
           <div className="flex-1" />
+
+          {/* Bulk Selection Actions (Fixed in Top Toolbar) */}
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-2 shrink-0 bg-orange-50/95 border border-orange-200 px-2.5 py-1.5 rounded-lg animate-in fade-in">
+              <div className="flex items-center gap-1.5 font-bold text-orange-900 text-xs">
+                <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
+                <span>{selectedIds.length} selected</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds([])}
+                  className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
+                  title="Clear selection"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+
+              <div className="h-4 w-px bg-orange-200 mx-0.5" />
+
+              <select
+                value={bulkStatus}
+                onChange={(e) => setBulkStatus(e.target.value)}
+                className="text-xs px-2.5 py-1 bg-white border border-orange-300 hover:border-orange-400 rounded-md font-semibold text-slate-800 outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
+              >
+                <option value="" disabled>Change Status ▾</option>
+                {BULK_STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={() => setIsConfirmDialogOpen(true)}
+                disabled={!bulkStatus || validOrders.length === 0 || isBulkUpdating}
+                className={cn(
+                  "px-3 py-1 rounded-md font-bold text-xs transition-all shadow-2xs cursor-pointer",
+                  !bulkStatus || validOrders.length === 0 || isBulkUpdating
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    : "bg-orange-600 hover:bg-orange-700 text-white active:scale-98"
+                )}
+              >
+                {isBulkUpdating ? "Applying..." : "Apply"}
+              </button>
+            </div>
+          )}
 
           {/* Export Actions (inline, rightmost) */}
           <button

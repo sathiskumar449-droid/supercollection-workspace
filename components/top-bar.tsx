@@ -52,7 +52,6 @@ const ROLES_LIST: RoleOption[] = [
   { role: "PACKING_STAFF", label: "Packing Station", desc: "Dedicated Packing & Packed" },
   { role: "DISPATCH_STAFF", label: "Dispatch & Logistics", desc: "Dispatch, ST Courier, LLR, SMS" },
   { role: "COURIER", courierPartnerId: "ST_COURIER", label: "ST Courier Portal", desc: "Strict Privacy: ST Orders Only" },
-  { role: "COURIER", courierPartnerId: "PROFESSIONAL_COURIER", label: "Professional Courier Portal", desc: "Strict Privacy: Professional Orders Only" },
   { role: "COURIER", courierPartnerId: "DTDC", label: "DTDC Hub Portal", desc: "Strict Privacy: DTDC Orders Only" },
 ];
 
