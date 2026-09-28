@@ -19,7 +19,8 @@ import {
   Layers,
   Check,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Truck
 } from "lucide-react";
 
 interface ReturnDetailsDrawerProps {
@@ -444,18 +445,17 @@ export function ReturnDetailsDrawer({
               )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div>
                 <span className="text-slate-400 block text-[10.5px]">Customer Name</span>
-                <span className="font-semibold text-slate-900 block truncate">{returnCase.customerName}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10.5px]">Phone Number</span>
-                <span className="font-mono text-slate-800">{returnCase.customerPhone}</span>
+                <span className="font-semibold text-slate-900 block truncate" title={returnCase.customerName}>
+                  {returnCase.customerName}
+                </span>
+                <span className="font-mono text-slate-500 text-[10px]">{returnCase.customerPhone}</span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10.5px]">Original Order ID</span>
-                <span className="font-mono font-bold text-orange-700 text-sm">
+                <span className="font-mono font-bold text-orange-700 text-xs">
                   {originalOrder?.orderNumber || returnCase.orderNumber}
                 </span>
                 {originalOrder?.externalOrderId && (
@@ -465,10 +465,24 @@ export function ReturnDetailsDrawer({
                 )}
               </div>
               <div>
-                <span className="text-slate-400 block text-[10.5px]">Total Items Ordered</span>
-                <span className="font-bold text-slate-800">
-                  {totalOrderedItemsCount} {totalOrderedItemsCount === 1 ? "item" : "items"}
-                  {originalOrder && ` (${formatINR(originalOrder.totalAmount)})`}
+                <span className="text-slate-400 block text-[10.5px]">Original Order Date</span>
+                <span className="font-medium text-slate-800 text-[11px]">
+                  {formatDate(originalOrder?.createdAt || returnCase.originalOrderDate || returnCase.createdAt)}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10.5px]">Original Order Total</span>
+                <span className="font-mono font-bold text-slate-900 text-xs">
+                  {formatINR(originalOrder?.totalAmount ?? returnCase.originalOrderTotal ?? 0)}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10.5px]">Amount Already Paid</span>
+                <span className="font-mono font-bold text-emerald-700 text-xs">
+                  {formatINR(returnCase.originalAmountPaid ?? (originalOrder?.paymentStatus === "PAID" ? originalOrder.totalAmount : 0))}
+                </span>
+                <span className="text-[9.5px] text-emerald-800 bg-emerald-100 font-bold px-1.5 py-0.2 rounded inline-block mt-0.5">
+                  {originalOrder?.paymentStatus || "PAID"}
                 </span>
               </div>
             </div>
@@ -481,27 +495,34 @@ export function ReturnDetailsDrawer({
                 <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
                 <span>Return Request Summary</span>
               </span>
-              <span className={cn(
-                "px-2 py-0.5 rounded font-bold text-xs flex items-center gap-1",
-                returnCase.returnType === "Refund" 
-                  ? "bg-rose-100 text-rose-800 border border-rose-200" 
-                  : "bg-blue-100 text-blue-800 border border-blue-200"
-              )}>
-                {returnCase.returnType === "Refund" ? (
-                  <>
-                    <IndianRupee className="w-3 h-3" />
-                    <span>Refund Request</span>
-                  </>
-                ) : (
-                  <>
-                    <ArrowRightLeft className="w-3 h-3" />
-                    <span>Exchange Request</span>
-                  </>
+              <div className="flex items-center gap-2">
+                {returnCase.isManual && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                    Manual Entry
+                  </span>
                 )}
-              </span>
+                <span className={cn(
+                  "px-2 py-0.5 rounded font-bold text-xs flex items-center gap-1",
+                  returnCase.returnType === "Refund" 
+                    ? "bg-rose-100 text-rose-800 border border-rose-200" 
+                    : "bg-purple-100 text-purple-800 border border-purple-200"
+                )}>
+                  {returnCase.returnType === "Refund" ? (
+                    <>
+                      <IndianRupee className="w-3 h-3" />
+                      <span>Refund</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRightLeft className="w-3 h-3" />
+                      <span>Exchange</span>
+                    </>
+                  )}
+                </span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div>
                 <span className="text-slate-400 block text-[10.5px]">Return Type</span>
                 <span className="font-bold text-slate-900 text-xs">{returnCase.returnType}</span>
@@ -517,18 +538,22 @@ export function ReturnDetailsDrawer({
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[10.5px]">
-                  {returnCase.returnType === "Refund" ? "Refund Amount" : "Exchange Value"}
-                </span>
+                <span className="text-slate-400 block text-[10.5px]">Returned Value</span>
                 <span className="font-mono font-bold text-rose-700 text-sm">
-                  {formatINR(returnCase.refundAmount || returnCase.expectedAmount)}
+                  {formatINR(returnCase.returnedProductValue || returnCase.expectedAmount)}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10.5px]">Created Date/Time</span>
+                <span className="font-medium text-slate-800 text-[10.5px]">
+                  {formatDate(returnCase.createdAt)}
                 </span>
               </div>
             </div>
 
             {returnCase.customerNote && (
               <div className="pt-2 border-t border-slate-100">
-                <span className="text-slate-400 block text-[10.5px] mb-0.5">Customer Note / Details:</span>
+                <span className="text-slate-400 block text-[10.5px] mb-0.5">Notes / Remarks:</span>
                 <p className="text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200 leading-relaxed font-medium">
                   "{returnCase.customerNote}"
                 </p>
@@ -644,7 +669,7 @@ export function ReturnDetailsDrawer({
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                   <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Refund Execution Details</span>
+                  <span>Refund Execution & Payment Details</span>
                 </span>
                 <RefundStatusBadge status={returnCase.refund?.refundStatus || "Pending"} />
               </div>
@@ -657,18 +682,18 @@ export function ReturnDetailsDrawer({
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10.5px]">Refund Method</span>
+                  <span className="text-slate-400 block text-[10.5px]">Refund Mode / Method</span>
                   <span className="font-semibold text-slate-800">{returnCase.refund?.refundMethod || "Pending (UPI/Bank)"}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10.5px]">UTR / Reference</span>
+                  <span className="text-slate-400 block text-[10.5px]">UTR / Reference Number</span>
                   <span className="font-mono text-slate-800">
                     {returnCase.refund?.utrReference || <span className="text-slate-400 italic">None yet</span>}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10.5px]">Processed Date</span>
-                  <span className="text-slate-700">
+                  <span className="text-slate-400 block text-[10.5px]">Refund Date & Time</span>
+                  <span className="text-slate-700 font-medium">
                     {returnCase.refund?.refundDate ? formatDate(returnCase.refund.refundDate) : "Pending"}
                   </span>
                 </div>
@@ -684,11 +709,11 @@ export function ReturnDetailsDrawer({
           )}
 
           {(returnCase.returnType === "Replacement" || returnCase.returnType === "Exchange") && (
-            <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-3 text-xs shadow-2xs">
+            <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-4 text-xs shadow-2xs">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                   <ArrowRightLeft className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Exchange / Replacement Details</span>
+                  <span>Exchange & Replacement Product Details</span>
                 </span>
                 {returnCase.replacement ? (
                   <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
@@ -700,24 +725,127 @@ export function ReturnDetailsDrawer({
               </div>
 
               {returnCase.replacement ? (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div>
-                    <span className="text-slate-400 block text-[10.5px]">Replacement ID</span>
-                    <span className="font-mono font-bold text-purple-700">{returnCase.replacement.replacementId}</span>
+                <>
+                  {/* Replacement Product info */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-purple-50/40 p-3 rounded-lg border border-purple-100">
+                    <div>
+                      <span className="text-slate-400 block text-[10.5px]">Replacement ID</span>
+                      <span className="font-mono font-bold text-purple-700">{returnCase.replacement.replacementId}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10.5px]">Replacement Item</span>
+                      <span className="font-semibold text-slate-800">{returnCase.replacement.replacementItem}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10.5px]">Size & Quantity</span>
+                      <span className="font-bold text-slate-900">{returnCase.replacement.size} · {returnCase.replacement.quantity} pc</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10.5px]">Replacement Value</span>
+                      <span className="font-mono font-bold text-purple-700">
+                        {formatINR(returnCase.replacementProductValue || returnCase.replacement.totalPrice || returnCase.expectedAmount)}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10.5px]">Item</span>
-                    <span className="font-semibold text-slate-800">{returnCase.replacement.replacementItem}</span>
+
+                  {/* Financial Difference & Extra Paid / Refund Difference */}
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between border-b border-slate-200/70 pb-1.5">
+                      <span className="font-bold text-slate-800 text-[11px] uppercase tracking-wide">
+                        Financial Difference Calculation
+                      </span>
+                      {(() => {
+                        const diff = returnCase.exchangeDifference !== undefined
+                          ? returnCase.exchangeDifference
+                          : (returnCase.replacement.differenceAmount !== undefined ? returnCase.replacement.differenceAmount : 0);
+                        const diffType = returnCase.exchangeDifferenceType || returnCase.replacement.differenceType || (diff > 0 ? "CUSTOMER_PAYS" : diff < 0 ? "SHOP_REFUNDS" : "NO_DIFFERENCE");
+
+                        if (diffType === "CUSTOMER_PAYS" || diff > 0) {
+                          return (
+                            <span className="px-2 py-0.5 rounded font-bold text-xs bg-amber-100 text-amber-900 border border-amber-300">
+                              Customer Pays Extra {formatINR(Math.abs(diff))}
+                            </span>
+                          );
+                        } else if (diffType === "SHOP_REFUNDS" || diff < 0) {
+                          return (
+                            <span className="px-2 py-0.5 rounded font-bold text-xs bg-emerald-100 text-emerald-900 border border-emerald-300">
+                              Shop Refunds Difference {formatINR(Math.abs(diff))}
+                            </span>
+                          );
+                        } else {
+                          return (
+                            <span className="px-2 py-0.5 rounded font-semibold text-xs bg-slate-200 text-slate-700">
+                              No Difference (₹0)
+                            </span>
+                          );
+                        }
+                      })()}
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                      <div>
+                        <span className="text-slate-400 block text-[10.5px]">Returned Value</span>
+                        <span className="font-mono font-semibold text-slate-800">
+                          {formatINR(returnCase.returnedProductValue || returnCase.expectedAmount)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10.5px]">Replacement Value</span>
+                        <span className="font-mono font-semibold text-slate-800">
+                          {formatINR(returnCase.replacementProductValue || returnCase.replacement.totalPrice || returnCase.expectedAmount)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10.5px]">Payment Status</span>
+                        <span className="font-bold text-slate-800">
+                          {returnCase.exchangePaymentStatus || returnCase.replacement.paymentStatus || "Settled"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10.5px]">Payment Mode & Ref</span>
+                        <span className="font-mono text-slate-800">
+                          {returnCase.exchangePaymentMode || returnCase.replacement.paymentMode || "UPI"}
+                          {(returnCase.exchangeReferenceNumber || returnCase.replacement.referenceNumber) && ` (${returnCase.exchangeReferenceNumber || returnCase.replacement.referenceNumber})`}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10.5px]">Size</span>
-                    <span className="font-semibold text-slate-800">{returnCase.replacement.size}</span>
+
+                  {/* Replacement Fulfillment Details */}
+                  <div className="p-3 bg-teal-50/50 rounded-lg border border-teal-200 space-y-2">
+                    <span className="font-bold text-teal-950 text-[11px] uppercase tracking-wide flex items-center gap-1">
+                      <Truck className="w-3.5 h-3.5 text-teal-600" />
+                      <span>Replacement Fulfillment & Dispatch Details</span>
+                    </span>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                      <div>
+                        <span className="text-slate-400 block text-[10.5px]">Replacement Dispatch No.</span>
+                        <span className="font-mono font-bold text-teal-800 text-xs">
+                          {returnCase.replacementDispatchNumber || returnCase.replacement.dispatchId || returnCase.dispatchNumber || "Not Assigned"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10.5px]">Replacement Status</span>
+                        <span className="font-bold text-teal-800">
+                          {returnCase.replacementStatus || returnCase.replacement.status || "Not Dispatched"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10.5px]">Courier Partner</span>
+                        <span className="font-semibold text-slate-800">
+                          {returnCase.replacement.courier || "ST Courier"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10.5px]">LLR / Tracking No.</span>
+                        <span className="font-mono text-slate-800">
+                          {returnCase.replacement.llr || returnCase.replacement.tracking || "—"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10.5px]">Quantity</span>
-                    <span className="font-bold text-slate-900">{returnCase.replacement.quantity} pc</span>
-                  </div>
-                </div>
+                </>
               ) : (
                 <p className="text-slate-400 text-xs py-1">
                   Exchange item task can be initiated using the "Create Exchange Task" button above.
@@ -731,7 +859,7 @@ export function ReturnDetailsDrawer({
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-slate-500" />
-                <span>Return History & Notes</span>
+                <span>Return History & Exact Date/Time Events</span>
               </span>
               <span className="text-[11px] text-slate-400 font-mono">
                 {returnCase.timeline?.length || 0} events
@@ -741,13 +869,24 @@ export function ReturnDetailsDrawer({
             <div className="space-y-2.5">
               {(returnCase.timeline || []).map((item, idx) => (
                 <div key={item.id || idx} className="flex items-start gap-2.5">
-                  <div className="w-2 h-2 rounded-full bg-rose-500 mt-1 shrink-0" />
+                  <div className="w-2 h-2 rounded-full bg-orange-500 mt-1 shrink-0" />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-slate-800">{item.action}</span>
                       <span className="text-slate-400 text-[10.5px]">•</span>
-                      <span className="text-slate-400 font-mono text-[10px]">{formatDate(item.timestamp)}</span>
+                      <span className="text-slate-500 font-mono text-[10.5px] font-semibold">{formatDate(item.timestamp)}</span>
+                      {item.user && (
+                        <>
+                          <span className="text-slate-400 text-[10.5px]">•</span>
+                          <span className="text-slate-500 text-[10px]">by {item.user} ({item.role})</span>
+                        </>
+                      )}
                     </div>
+                    {item.notes && (
+                      <p className="text-slate-600 text-[11px] mt-0.5 leading-relaxed bg-slate-50/70 p-1.5 rounded border border-slate-100">
+                        {item.notes}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}

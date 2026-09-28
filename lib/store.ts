@@ -25,7 +25,8 @@ import {
   ReturnReplacement,
   ReturnTimelineEvent,
   ReturnQc,
-  ReturnRefund
+  ReturnRefund,
+  ReplacementStatus
 } from "@/types/orderflow";
 import { generateMockOrders, generateMockReturns, CURRENT_USER, INITIAL_COURIERS, STAFF_USERS } from "./mock-data";
 import { matchesDateFilter, normalizePhoneDigits } from "./utils";
@@ -2303,10 +2304,94 @@ export const orderflowStore = {
     shippingAdjustment?: number;
     customAmountOverride?: number;
     returnDate?: string;
+    // Manual Return Extended Fields
+    isManual?: boolean;
+    originalOrderDate?: string;
+    originalOrderTotal?: number;
+    originalAmountPaid?: number;
+    refundAmount?: number;
+    refundMode?: RefundMethod;
+    refundStatus?: RefundStatus;
+    refundDateTime?: string;
+    refundReferenceNumber?: string;
+    replacementProduct?: {
+      productName: string;
+      size: string;
+      quantity: number;
+      unitPrice: number;
+      total: number;
+    };
+    exchangeDifference?: number;
+    exchangeDifferenceType?: "CUSTOMER_PAYS" | "SHOP_REFUNDS" | "NO_DIFFERENCE";
+    exchangePaymentStatus?: string;
+    exchangePaymentMode?: string;
+    exchangeReferenceNumber?: string;
+    replacementDispatchNumber?: string;
+    replacementStatus?: ReplacementStatus;
+    customerName?: string;
+    customerPhone?: string;
   }): { success: boolean; returnCase?: ReturnCase; error?: string } {
-    const order = this.getOrderById(params.orderId);
+    let order = this.getOrderById(params.orderId) || globalOrders.find(
+      (o) => o.orderNumber === params.orderId || o.externalOrderId === params.orderId
+    );
+
     if (!order) {
-      return { success: false, error: "Order not found" };
+      if (params.isManual) {
+        // Create manual order record so it's registered in the system
+        const newOrderId = `ord-manual-${Date.now()}`;
+        const now = new Date().toISOString();
+        const orderNumber = params.orderId.trim() || `ORD-${Date.now()}`;
+        order = {
+          id: newOrderId,
+          orderNumber,
+          externalOrderId: params.orderId.trim(),
+          source: "DIRECT",
+          customer: {
+            id: `cust-${Date.now()}`,
+            name: params.customerName || "Customer",
+            mobile: params.customerPhone || "0000000000",
+            address: "Direct Manual Entry",
+            city: "Direct",
+            state: "Direct",
+            pincode: "000000",
+            totalOrders: 1,
+          },
+          items: params.items.map((it, idx) => ({
+            id: it.orderItemId || `it-man-${idx}-${Date.now()}`,
+            productId: `prod-man-${idx}`,
+            productName: it.productName,
+            sku: it.sku || `SKU-${idx + 1}`,
+            size: (it.size as any) || "M",
+            quantity: it.purchasedQuantity || it.returnQuantity,
+            unitPrice: it.unitPrice,
+            subtotal: (it.purchasedQuantity || it.returnQuantity) * it.unitPrice,
+          })),
+          totalAmount: params.originalOrderTotal !== undefined 
+            ? params.originalOrderTotal 
+            : params.items.reduce((s, it) => s + (it.purchasedQuantity || it.returnQuantity) * it.unitPrice, 0),
+          paymentStatus: (params.originalAmountPaid && params.originalAmountPaid > 0) ? "PAID" : "PENDING",
+          orderStatus: "RETURN",
+          dispatch: { courierStatus: "DELIVERED" },
+          sms: { status: "SENT", provider: "Manual" },
+          createdAt: params.originalOrderDate || now,
+          updatedAt: now,
+          timeline: [
+            {
+              id: `tl-${Date.now()}-ord-create`,
+              orderId: newOrderId,
+              timestamp: params.originalOrderDate || now,
+              user: globalUser.name,
+              role: globalUser.role,
+              action: "Order Created (Manual Entry)",
+              details: `Order created manually for return processing (${orderNumber})`,
+            }
+          ],
+        };
+        globalOrders.unshift(order);
+        persistOrders(globalOrders);
+      } else {
+        return { success: false, error: "Order not found" };
+      }
     }
 
     // Existing returns for this order
@@ -2372,9 +2457,72 @@ export const orderflowStore = {
     const expectedAmount = params.customAmountOverride !== undefined ? params.customAmountOverride : calculatedExpectedAmount;
 
     const returnId = generateReturnId();
-    const now = params.returnDate
+    // Rule 8: If manual return, do NOT allow staff to backdate; record exact creation time
+    const now = params.isManual
+      ? new Date().toISOString()
+      : params.returnDate
       ? (params.returnDate.includes("T") ? params.returnDate : new Date(params.returnDate).toISOString())
       : new Date().toISOString();
+
+    let initialStatus: ReturnStatus = "Return Requested";
+    let refundRecord: ReturnRefund | undefined = undefined;
+    let replacementRecord: ReturnReplacement | undefined = undefined;
+    const finalRefundAmount = params.refundAmount !== undefined ? params.refundAmount : (params.returnType === "Refund" ? expectedAmount : 0);
+
+    if (params.isManual) {
+      if (params.returnType === "Refund") {
+        initialStatus = params.refundStatus === "Refunded" ? "Refunded" : "Refund Pending";
+        refundRecord = {
+          id: `ref-${Date.now()}`,
+          refundStatus: params.refundStatus || "Pending",
+          refundAmount: finalRefundAmount,
+          refundMethod: params.refundMode || "UPI",
+          utrReference: params.refundReferenceNumber,
+          refundNotes: params.customerNote,
+          processedBy: globalUser.name,
+          refundDate: params.refundDateTime || now,
+        };
+      } else if (params.returnType === "Exchange" || params.returnType === "Replacement") {
+        if (params.replacementStatus === "Dispatched" || params.replacementStatus === "Shipped") {
+          initialStatus = "Dispatched";
+        } else if (params.replacementStatus === "Packed") {
+          initialStatus = "Replacement Pending";
+        } else {
+          initialStatus = "Exchanged";
+        }
+
+        const repItem = params.replacementProduct;
+        replacementRecord = {
+          id: `rep-${Date.now()}`,
+          replacementId: generateReplacementId(),
+          originalOrderId: order.id,
+          originalOrderNumber: order.orderNumber,
+          originalItemName: repItem?.productName || returnItems[0]?.productName || "Item",
+          returnedItem: `${returnItems[0]?.productName || "Item"} - ${returnItems[0]?.size || "M"}`,
+          replacementItem: repItem ? `${repItem.productName} - ${repItem.size}` : `${returnItems[0]?.productName || "Item"} - ${returnItems[0]?.size || "M"}`,
+          color: "Standard",
+          size: repItem?.size || returnItems[0]?.size || "M",
+          quantity: repItem?.quantity || 1,
+          unitPrice: repItem?.unitPrice,
+          totalPrice: repItem?.total,
+          status: params.replacementStatus || "Not Dispatched",
+          dispatchId: params.replacementDispatchNumber || undefined,
+          differenceAmount: params.exchangeDifference,
+          differenceType: params.exchangeDifferenceType,
+          paymentStatus: params.exchangePaymentStatus as any,
+          paymentMode: params.exchangePaymentMode as any,
+          referenceNumber: params.exchangeReferenceNumber,
+        };
+      }
+    }
+
+    const timelineNotes = params.isManual
+      ? `Manual ${params.returnType} created for ${totalRequestedQty} item(s). Reason: ${params.reason}. ${
+          params.returnType === "Refund"
+            ? `Refund: ₹${finalRefundAmount} (${params.refundStatus || "Pending"}).`
+            : `Exchange: Diff: ₹${params.exchangeDifference ?? 0} (${params.exchangeDifferenceType || "NO_DIFFERENCE"}).`
+        }`
+      : `Return case created for ${totalRequestedQty} item(s). Reason: ${params.reason}. Type: ${params.returnType}`;
 
     const newReturnCase: ReturnCase = {
       id: `rtn-case-${Date.now()}`,
@@ -2387,30 +2535,47 @@ export const orderflowStore = {
       returnType: params.returnType,
       reason: params.reason,
       customerNote: params.customerNote,
-      status: "Return Requested",
+      status: initialStatus,
       requestedQuantity: totalRequestedQty,
       receivedQuantity: 0,
       approvedQuantity: 0,
       expectedAmount,
-      refundAmount: params.returnType === "Refund" ? expectedAmount : 0,
+      refundAmount: finalRefundAmount,
       discountAdjustment,
       shippingAdjustment,
       items: returnItems,
-      returnDate: params.returnDate,
+      refund: refundRecord,
+      replacement: replacementRecord,
+      returnDate: params.isManual ? now : params.returnDate,
       timeline: [
         {
           id: `tl-${Date.now()}`,
           returnId,
-          action: "Return Requested",
+          action: params.isManual ? "Manual Return Created" : "Return Requested",
           user: globalUser.name,
           role: globalUser.role,
-          notes: `Return case created for ${totalRequestedQty} item(s). Reason: ${params.reason}. Type: ${params.returnType}`,
+          notes: timelineNotes,
           timestamp: now,
         },
       ],
+      dispatchNumber: params.replacementDispatchNumber || undefined,
       createdAt: now,
       updatedAt: now,
       createdBy: globalUser.name,
+      // Manual Return Details
+      isManual: params.isManual || false,
+      originalOrderDate: params.originalOrderDate || order.createdAt,
+      originalOrderTotal: params.originalOrderTotal !== undefined ? params.originalOrderTotal : order.totalAmount,
+      originalAmountPaid: params.originalAmountPaid !== undefined ? params.originalAmountPaid : (order.paymentStatus === "PAID" ? order.totalAmount : 0),
+      returnedProductValue: itemsAmount,
+      replacementProductValue: params.replacementProduct?.total,
+      exchangeDifference: params.exchangeDifference,
+      exchangeDifferenceType: params.exchangeDifferenceType,
+      exchangePaymentStatus: params.exchangePaymentStatus,
+      exchangePaymentMode: params.exchangePaymentMode,
+      exchangeReferenceNumber: params.exchangeReferenceNumber,
+      replacementDispatchNumber: params.replacementDispatchNumber,
+      replacementStatus: params.replacementStatus,
     };
 
     const updated = [newReturnCase, ...globalReturns];
@@ -2423,8 +2588,8 @@ export const orderflowStore = {
       timestamp: now,
       user: globalUser.name,
       role: globalUser.role,
-      action: "Return Requested",
-      details: `Return case ${returnId} initiated from Packing Station (Type: ${params.returnType}, Reason: ${params.reason}, Qty: ${totalRequestedQty})`,
+      action: params.isManual ? "Manual Return Created" : "Return Requested",
+      details: `Return case ${returnId} created (Type: ${params.returnType}, Reason: ${params.reason}, Qty: ${totalRequestedQty})`,
       eventType: "RETURN",
     }, {
       linkedReturnId: returnId,

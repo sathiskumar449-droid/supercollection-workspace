@@ -5,9 +5,15 @@ import { useSearchParams } from "next/navigation";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { useOrderFlow } from "@/lib/hooks";
 import { ReturnCase, ReturnStatus, ReturnType, ReturnReason } from "@/types/orderflow";
-import { ReturnStatusBadge } from "@/components/returns/return-status-badge";
+import { 
+  ReturnStatusBadge, 
+  ReplacementStatusBadge, 
+  ReturnTypeBadge, 
+  DifferenceBadge 
+} from "@/components/returns/return-status-badge";
 import { ReturnDetailsDrawer } from "@/components/returns/return-details-drawer";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
+import { ManualReturnModal } from "@/components/returns/manual-return-modal";
 import { formatINR, formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { 
   RotateCcw, 
@@ -27,7 +33,8 @@ import {
   Clock,
   ArrowUpDown,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Plus
 } from "lucide-react";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 
@@ -52,6 +59,7 @@ function ReturnsContent() {
   // Modals & Drawers
   const [selectedReturn, setSelectedReturn] = useState<ReturnCase | null>(null);
   const [inspectedOrder, setInspectedOrder] = useState<any | null>(null);
+  const [isManualReturnOpen, setIsManualReturnOpen] = useState(false);
 
   // Tab & Filter states
   const [activeTab, setActiveTab] = useState<string>(initialStatusParam);
@@ -226,28 +234,52 @@ function ReturnsContent() {
       "Date",
       "Customer Name",
       "Customer Phone",
-      "Items",
-      "Reason",
+      "Returned Product",
+      "Return Type",
       "Qty",
-      "Expected Amount",
+      "Return Amount",
+      "Refund / Exchange Amount",
+      "Extra Paid / Difference",
       "Return Status",
+      "Replacement Status",
       "Dispatch No.",
     ];
 
-    const rows = filteredReturns.map((rtn, idx) => [
-      idx + 1,
-      rtn.returnId,
-      rtn.orderNumber,
-      formatDate(rtn.createdAt),
-      rtn.customerName,
-      rtn.customerPhone,
-      rtn.items.map((i) => `${i.productName} (${i.size}) x${i.requestedQuantity}`).join("; "),
-      rtn.reason,
-      rtn.requestedQuantity,
-      rtn.expectedAmount,
-      rtn.status,
-      rtn.dispatchNumber || "-",
-    ]);
+    const rows = filteredReturns.map((rtn, idx) => {
+      const isRefund = rtn.returnType === "Refund";
+      const refundExchAmount = isRefund 
+        ? (rtn.refundAmount || rtn.refund?.refundAmount || rtn.expectedAmount)
+        : (rtn.replacementProductValue || rtn.replacement?.totalPrice || rtn.expectedAmount);
+      
+      const diff = rtn.exchangeDifference ?? rtn.replacement?.differenceAmount;
+      const diffStr = isRefund 
+        ? "-" 
+        : diff === undefined 
+        ? "0" 
+        : diff > 0 
+        ? `+₹${diff} (Customer Pays)` 
+        : diff < 0 
+        ? `-₹${Math.abs(diff)} (Shop Refunds)` 
+        : "₹0 (No Diff)";
+
+      return [
+        idx + 1,
+        rtn.returnId,
+        rtn.orderNumber,
+        formatDate(rtn.createdAt),
+        rtn.customerName,
+        rtn.customerPhone,
+        rtn.items.map((i) => `${i.productName} (${i.size}) x${i.requestedQuantity}`).join("; "),
+        rtn.returnType,
+        rtn.requestedQuantity,
+        rtn.returnedProductValue || rtn.expectedAmount,
+        refundExchAmount,
+        diffStr,
+        rtn.status,
+        !isRefund ? (rtn.replacementStatus || rtn.replacement?.status || "Not Dispatched") : "-",
+        rtn.replacementDispatchNumber || rtn.dispatchNumber || "-",
+      ];
+    });
 
     const dateStr = new Date().toISOString().slice(0, 10);
     exportToExcel(`Returns_Report_${dateStr}`, headers, rows);
@@ -259,24 +291,48 @@ function ReturnsContent() {
       "Return ID",
       "Order ID",
       "Customer",
-      "Items",
-      "Reason",
+      "Returned Product",
+      "Type",
       "Qty",
-      "Amount",
-      "Status",
+      "Return Amt",
+      "Refund/Exch Amt",
+      "Diff / Extra",
+      "Return Status",
+      "Rep. Status",
     ];
 
-    const rows = filteredReturns.map((rtn, idx) => [
-      idx + 1,
-      rtn.returnId,
-      rtn.orderNumber,
-      rtn.customerName,
-      rtn.items[0]?.productName || "Item",
-      rtn.reason,
-      rtn.requestedQuantity,
-      formatINR(rtn.expectedAmount),
-      rtn.status,
-    ]);
+    const rows = filteredReturns.map((rtn, idx) => {
+      const isRefund = rtn.returnType === "Refund";
+      const refundExchAmount = isRefund 
+        ? (rtn.refundAmount || rtn.refund?.refundAmount || rtn.expectedAmount)
+        : (rtn.replacementProductValue || rtn.replacement?.totalPrice || rtn.expectedAmount);
+      
+      const diff = rtn.exchangeDifference ?? rtn.replacement?.differenceAmount;
+      const diffStr = isRefund 
+        ? "-" 
+        : diff === undefined 
+        ? "0" 
+        : diff > 0 
+        ? `+₹${diff}` 
+        : diff < 0 
+        ? `-₹${Math.abs(diff)}` 
+        : "₹0";
+
+      return [
+        idx + 1,
+        rtn.returnId,
+        rtn.orderNumber,
+        rtn.customerName,
+        rtn.items[0]?.productName || "Item",
+        rtn.returnType,
+        rtn.requestedQuantity,
+        formatINR(rtn.returnedProductValue || rtn.expectedAmount),
+        formatINR(refundExchAmount),
+        diffStr,
+        rtn.status,
+        !isRefund ? (rtn.replacementStatus || rtn.replacement?.status || "Not Disp.") : "-",
+      ];
+    });
 
     const dateStr = new Date().toISOString().slice(0, 10);
     exportToPdf({
@@ -396,8 +452,15 @@ function ReturnsContent() {
           )}
         </div>
 
-        {/* Right: Export & + Create Return Action */}
+        {/* Right: Export & + Add Manual Return Action */}
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setIsManualReturnOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs transition-colors shadow-2xs cursor-pointer shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Manual Return</span>
+          </button>
           <button
             onClick={handleExportExcel}
             title="Export Excel"
@@ -415,12 +478,12 @@ function ReturnsContent() {
         </div>
       </div>
 
-      {/* EXCEL SPREADSHEET TABLE VIEW (Fits in full view without horizontal scroll) */}
-      <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
-        <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300">
+      {/* SPREADSHEET TABLE VIEW */}
+      <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-x-auto w-full">
+        <table className="w-full min-w-[1380px] text-left text-xs border-collapse border border-slate-300">
           <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight">
             <tr>
-              <th className="py-2 px-1 w-[2.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
+              <th className="py-2 px-1 w-[32px] text-center border-r border-b-2 border-slate-300 bg-slate-100">
                 <input
                   type="checkbox"
                   checked={isAllPageSelected}
@@ -428,9 +491,9 @@ function ReturnsContent() {
                   className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
                 />
               </th>
-              <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
+              <th className="py-2 px-1 w-[38px] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
               <th 
-                className="py-2 px-1 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
+                className="py-2 px-1.5 w-[110px] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
                 onClick={() => {
                   setSortField("returnId");
                   setSortAsc(!sortAsc);
@@ -441,9 +504,9 @@ function ReturnsContent() {
                   <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                 </div>
               </th>
-              <th className="py-2 px-1 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100 truncate">ORDER ID</th>
+              <th className="py-2 px-1.5 w-[100px] border-r border-b-2 border-slate-300 bg-slate-100 truncate">ORDER ID</th>
               <th 
-                className="py-2 px-1 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
+                className="py-2 px-1 w-[85px] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
                 onClick={() => {
                   setSortField("createdAt");
                   setSortAsc(!sortAsc);
@@ -454,32 +517,35 @@ function ReturnsContent() {
                   <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                 </div>
               </th>
-              <th className="py-2 px-1.5 w-[12%] border-r border-b-2 border-slate-300 bg-slate-100 truncate">CUSTOMER</th>
-              <th className="py-2 px-1.5 w-[16%] border-r border-b-2 border-slate-300 bg-slate-100 truncate">ITEMS</th>
-              <th className="py-2 px-1 w-[9%] border-r border-b-2 border-slate-300 bg-slate-100 truncate">RETURN REASON</th>
-              <th className="py-2 px-1 w-[4%] text-center border-r border-b-2 border-slate-300 bg-slate-100">QTY</th>
+              <th className="py-2 px-1.5 w-[130px] border-r border-b-2 border-slate-300 bg-slate-100 truncate">CUSTOMER</th>
+              <th className="py-2 px-1.5 w-[150px] border-r border-b-2 border-slate-300 bg-slate-100 truncate">RETURNED PRODUCT</th>
+              <th className="py-2 px-1 w-[90px] border-r border-b-2 border-slate-300 bg-slate-100 text-center">RETURN TYPE</th>
+              <th className="py-2 px-1 w-[45px] text-center border-r border-b-2 border-slate-300 bg-slate-100">QTY</th>
               <th 
-                className="py-2 px-1 w-[6%] text-right border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
+                className="py-2 px-1.5 w-[95px] text-right border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
                 onClick={() => {
                   setSortField("expectedAmount");
                   setSortAsc(!sortAsc);
                 }}
               >
                 <div className="flex items-center justify-end gap-0.5 truncate">
-                  <span>AMOUNT</span>
+                  <span>RETURN AMOUNT</span>
                   <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                 </div>
               </th>
-              <th className="py-2 px-1 w-[10%] text-center border-r border-b-2 border-slate-300 bg-slate-100">RETURN STATUS</th>
-              <th className="py-2 px-1 w-[8.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">DISPATCH NO.</th>
-              <th className="py-2 px-1 w-[6%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">ACTION</th>
+              <th className="py-2 px-1.5 w-[115px] text-right border-r border-b-2 border-slate-300 bg-slate-100">REFUND / EXCH. AMT</th>
+              <th className="py-2 px-1 w-[145px] text-center border-r border-b-2 border-slate-300 bg-slate-100">EXTRA PAID / REFUND DIFF.</th>
+              <th className="py-2 px-1 w-[125px] text-center border-r border-b-2 border-slate-300 bg-slate-100">RETURN STATUS</th>
+              <th className="py-2 px-1 w-[120px] text-center border-r border-b-2 border-slate-300 bg-slate-100">REPLACEMENT STATUS</th>
+              <th className="py-2 px-1 w-[105px] text-center border-r border-b-2 border-slate-300 bg-slate-100">DISPATCH NO.</th>
+              <th className="py-2 px-1 w-[70px] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">ACTION</th>
             </tr>
           </thead>
 
           <tbody>
             {paginatedReturns.length === 0 ? (
               <tr>
-                <td colSpan={12} className="py-14 text-center text-slate-400 border-b border-slate-300">
+                <td colSpan={16} className="py-14 text-center text-slate-400 border-b border-slate-300">
                   <RotateCcw className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                   <p className="font-semibold text-slate-600 text-xs">No return cases found</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
@@ -492,6 +558,12 @@ function ReturnsContent() {
                 const sNo = (page - 1) * pageSize + index + 1;
                 const isChecked = selectedIds.includes(rtn.id);
                 const firstItem = rtn.items[0];
+                const isRefund = rtn.returnType === "Refund";
+                const isExchange = rtn.returnType === "Exchange" || rtn.returnType === "Replacement";
+                const refundExchAmount = isRefund
+                  ? (rtn.refundAmount || rtn.refund?.refundAmount || rtn.expectedAmount)
+                  : (rtn.replacementProductValue || rtn.replacement?.totalPrice || rtn.expectedAmount);
+                const dispatchNo = rtn.replacementDispatchNumber || rtn.replacement?.dispatchId || rtn.dispatchNumber;
 
                 return (
                   <tr
@@ -521,12 +593,12 @@ function ReturnsContent() {
                     </td>
 
                     {/* RETURN ID */}
-                    <td className="py-1.5 px-1 font-mono font-bold text-orange-700 border-r border-b border-slate-300 text-[10.5px] truncate" title={rtn.returnId}>
+                    <td className="py-1.5 px-1.5 font-mono font-bold text-orange-700 border-r border-b border-slate-300 text-[10.5px] truncate" title={rtn.returnId}>
                       {rtn.returnId}
                     </td>
 
                     {/* ORDER ID */}
-                    <td className="py-1.5 px-1 border-r border-b border-slate-300 font-mono text-[10.5px] truncate">
+                    <td className="py-1.5 px-1.5 border-r border-b border-slate-300 font-mono text-[10.5px] truncate">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -555,7 +627,7 @@ function ReturnsContent() {
                       </span>
                     </td>
 
-                    {/* ITEMS */}
+                    {/* RETURNED PRODUCT */}
                     <td className="py-1.5 px-1.5 border-r border-b border-slate-300 text-slate-700 truncate">
                       <span className="font-medium truncate block leading-tight text-[10.5px]" title={firstItem?.productName}>
                         {firstItem?.productName || "Item"}
@@ -563,14 +635,14 @@ function ReturnsContent() {
                       </span>
                       {rtn.items.length > 1 && (
                         <span className="text-[9.5px] text-orange-700 font-semibold block truncate">
-                          +{rtn.items.length - 1} item
+                          +{rtn.items.length - 1} item{rtn.items.length - 1 > 1 ? "s" : ""}
                         </span>
                       )}
                     </td>
 
-                    {/* RETURN REASON */}
-                    <td className="py-1.5 px-1 border-r border-b border-slate-300 text-slate-700 truncate text-[10.5px]">
-                      <span className="truncate block" title={rtn.reason}>{rtn.reason}</span>
+                    {/* RETURN TYPE */}
+                    <td className="py-1.5 px-1 text-center border-r border-b border-slate-300">
+                      <ReturnTypeBadge returnType={rtn.returnType} />
                     </td>
 
                     {/* QTY */}
@@ -579,8 +651,27 @@ function ReturnsContent() {
                     </td>
 
                     {/* RETURN AMOUNT */}
-                    <td className="py-1.5 px-1 text-right font-mono font-bold text-slate-900 border-r border-b border-slate-300 text-[10.5px] whitespace-nowrap">
-                      {formatINR(rtn.expectedAmount)}
+                    <td className="py-1.5 px-1.5 text-right font-mono font-bold text-slate-900 border-r border-b border-slate-300 text-[10.5px] whitespace-nowrap">
+                      {formatINR(rtn.returnedProductValue || rtn.expectedAmount)}
+                    </td>
+
+                    {/* REFUND / EXCH. AMOUNT */}
+                    <td className="py-1.5 px-1.5 text-right font-mono font-bold border-r border-b border-slate-300 text-[10.5px] whitespace-nowrap">
+                      <span className={isRefund ? "text-rose-700" : "text-purple-700"}>
+                        {formatINR(refundExchAmount)}
+                      </span>
+                    </td>
+
+                    {/* EXTRA PAID / REFUND DIFFERENCE */}
+                    <td className="py-1.5 px-1 text-center border-r border-b border-slate-300">
+                      {isExchange ? (
+                        <DifferenceBadge
+                          difference={rtn.exchangeDifference ?? rtn.replacement?.differenceAmount}
+                          differenceType={rtn.exchangeDifferenceType ?? rtn.replacement?.differenceType}
+                        />
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
                     </td>
 
                     {/* RETURN STATUS */}
@@ -588,10 +679,22 @@ function ReturnsContent() {
                       <ReturnStatusBadge status={rtn.status} className="text-[10px] py-0.5 px-1 justify-center truncate w-full" />
                     </td>
 
+                    {/* REPLACEMENT STATUS */}
+                    <td className="py-1 px-1 text-center border-r border-b border-slate-300 truncate">
+                      {isExchange ? (
+                        <ReplacementStatusBadge
+                          status={rtn.replacementStatus || rtn.replacement?.status || "Not Dispatched"}
+                          className="text-[10px] py-0.5 px-1 justify-center truncate w-full"
+                        />
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
+                    </td>
+
                     {/* DISPATCH NO. */}
                     <td className="py-1 px-1 text-center border-r border-b border-slate-300" onClick={(e) => e.stopPropagation()}>
-                      {rtn.dispatchNumber ? (
-                        <span className="font-mono font-bold text-teal-700 text-[10.5px]">{rtn.dispatchNumber}</span>
+                      {dispatchNo ? (
+                        <span className="font-mono font-bold text-teal-700 text-[10.5px]">{dispatchNo}</span>
                       ) : rtn.status === "Dispatched" ? (
                         <span className="text-slate-400 text-[10px] italic">—</span>
                       ) : (
@@ -680,6 +783,18 @@ function ReturnsContent() {
           </div>
         )}
       </div>
+
+      {/* MANUAL RETURN MODAL */}
+      <ManualReturnModal
+        isOpen={isManualReturnOpen}
+        onClose={() => setIsManualReturnOpen(false)}
+        onSuccess={(returnId) => {
+          const created = returns.find((r) => r.returnId === returnId);
+          if (created) {
+            setSelectedReturn(created);
+          }
+        }}
+      />
 
       {/* RETURN DETAILS DRAWER */}
       <ReturnDetailsDrawer

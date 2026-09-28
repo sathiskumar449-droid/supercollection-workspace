@@ -247,3 +247,157 @@ export function ReturnCompactIndicator({
     </button>
   );
 }
+
+export function ReplacementStatusBadge({ status, className }: { status?: string; className?: string }) {
+  if (!status) return <span className="text-slate-400 text-xs">—</span>;
+
+  const configs: Record<string, { label: string; textClass: string; bgClass: string; borderClass: string; icon?: React.ReactNode }> = {
+    "Not Dispatched": {
+      label: "Not Dispatched",
+      textClass: "text-slate-700",
+      bgClass: "bg-slate-100",
+      borderClass: "border-slate-300",
+      icon: <Clock className="w-3 h-3 text-slate-500" />,
+    },
+    "Packed": {
+      label: "Packed",
+      textClass: "text-amber-800",
+      bgClass: "bg-amber-50",
+      borderClass: "border-amber-200",
+      icon: <Package className="w-3 h-3 text-amber-600" />,
+    },
+    "Dispatched": {
+      label: "Dispatched",
+      textClass: "text-teal-800",
+      bgClass: "bg-teal-50",
+      borderClass: "border-teal-200",
+      icon: <Truck className="w-3 h-3 text-teal-600" />,
+    },
+    "Picked Up": {
+      label: "Picked Up",
+      textClass: "text-indigo-800",
+      bgClass: "bg-indigo-50",
+      borderClass: "border-indigo-200",
+      icon: <Truck className="w-3 h-3 text-indigo-600" />,
+    },
+    "Shipped": {
+      label: "Shipped",
+      textClass: "text-blue-800",
+      bgClass: "bg-blue-50",
+      borderClass: "border-blue-200",
+      icon: <Truck className="w-3 h-3 text-blue-600" />,
+    },
+    "Delivered": {
+      label: "Delivered",
+      textClass: "text-emerald-800",
+      bgClass: "bg-emerald-50",
+      borderClass: "border-emerald-200",
+      icon: <CheckCheck className="w-3 h-3 text-emerald-600" />,
+    },
+  };
+
+  const c = configs[status] || {
+    label: status,
+    textClass: "text-slate-700",
+    bgClass: "bg-slate-50",
+    borderClass: "border-slate-200",
+    icon: <Truck className="w-3 h-3 text-slate-400" />,
+  };
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border select-none whitespace-nowrap shadow-2xs",
+        c.textClass,
+        c.bgClass,
+        c.borderClass,
+        className
+      )}
+    >
+      {c.icon}
+      <span>{c.label}</span>
+    </span>
+  );
+}
+
+export function ReturnTypeBadge({ returnType, className }: { returnType: string; className?: string }) {
+  const isRefund = returnType === "Refund";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-bold border select-none whitespace-nowrap shadow-2xs",
+        isRefund
+          ? "bg-rose-50 text-rose-700 border-rose-200"
+          : "bg-purple-50 text-purple-700 border-purple-200",
+        className
+      )}
+    >
+      {isRefund ? (
+        <>
+          <RotateCcw className="w-3 h-3 text-rose-600 shrink-0" />
+          <span>Refund</span>
+        </>
+      ) : (
+        <>
+          <ArrowRightLeft className="w-3 h-3 text-purple-600 shrink-0" />
+          <span>Exchange</span>
+        </>
+      )}
+    </span>
+  );
+}
+
+export function DifferenceBadge({
+  difference,
+  differenceType,
+  className,
+}: {
+  difference?: number;
+  differenceType?: "CUSTOMER_PAYS" | "SHOP_REFUNDS" | "NO_DIFFERENCE";
+  className?: string;
+}) {
+  if (difference === undefined && !differenceType) {
+    return <span className="text-slate-400 text-xs">—</span>;
+  }
+
+  const diff = difference || 0;
+  const isCustomerPays = differenceType === "CUSTOMER_PAYS" || diff > 0;
+  const isShopRefunds = differenceType === "SHOP_REFUNDS" || diff < 0;
+
+  if (isCustomerPays) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 select-none whitespace-nowrap shadow-2xs",
+          className
+        )}
+      >
+        +₹{Math.abs(diff)} (Customer Pays)
+      </span>
+    );
+  }
+
+  if (isShopRefunds) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 select-none whitespace-nowrap shadow-2xs",
+          className
+        )}
+      >
+        -₹{Math.abs(diff)} (Shop Refunds)
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 select-none whitespace-nowrap",
+        className
+      )}
+    >
+      ₹0 (No Diff)
+    </span>
+  );
+}

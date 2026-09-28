@@ -204,6 +204,7 @@ export type ReturnType = "Refund" | "Replacement" | "Exchange";
 export type ReturnReason =
   | "Size Issue"
   | "Color Issue"
+  | "Defective/Damaged"
   | "Wrong Product"
   | "Damaged Product"
   | "Quality Issue"
@@ -241,6 +242,7 @@ export type RefundStatus =
 export type RefundMethod =
   | "UPI"
   | "Bank Transfer"
+  | "Bank"
   | "Cash"
   | "Original Payment Method"
   | "Other";
@@ -285,6 +287,16 @@ export interface ReturnRefund {
   refundDate?: string;
 }
 
+export type ReplacementStatus =
+  | "Not Dispatched"
+  | "Packed"
+  | "Dispatched"
+  | "Picked Up"
+  | "Shipped"
+  | "Waiting for Packing"
+  | "Packing"
+  | "Delivered";
+
 export interface ReturnReplacement {
   id: string;
   replacementId: string; // e.g. REP-260923-001
@@ -296,12 +308,20 @@ export interface ReturnReplacement {
   color?: string;
   size: string;
   quantity: number;
-  status: "Waiting for Packing" | "Packing" | "Packed" | "Dispatched" | "Delivered";
+  unitPrice?: number;
+  totalPrice?: number;
+  status: ReplacementStatus;
   dispatchId?: string; // e.g. DSP-260923-021
   courier?: string;
   llr?: string;
   tracking?: string;
   dispatchedAt?: string;
+  // Exchange financial calculations & payment details
+  differenceAmount?: number; // Replacement Total - Returned Value
+  differenceType?: "CUSTOMER_PAYS" | "SHOP_REFUNDS" | "NO_DIFFERENCE";
+  paymentStatus?: "Pending" | "Paid" | "Refunded" | "Settled" | "Completed" | string;
+  paymentMode?: "Cash" | "UPI" | "Bank" | "Original Payment Method" | "Other" | string;
+  referenceNumber?: string;
 }
 
 export interface ReturnTimelineEvent {
@@ -346,4 +366,18 @@ export interface ReturnCase {
   createdAt: string;
   updatedAt: string;
   createdBy: string;
+  // Manual return & extended fields
+  isManual?: boolean;
+  originalOrderDate?: string;
+  originalOrderTotal?: number;
+  originalAmountPaid?: number;
+  returnedProductValue?: number;
+  replacementProductValue?: number;
+  exchangeDifference?: number;
+  exchangeDifferenceType?: "CUSTOMER_PAYS" | "SHOP_REFUNDS" | "NO_DIFFERENCE";
+  exchangePaymentStatus?: string;
+  exchangePaymentMode?: string;
+  exchangeReferenceNumber?: string;
+  replacementDispatchNumber?: string;
+  replacementStatus?: ReplacementStatus;
 }
