@@ -159,6 +159,9 @@ function CourierHubContent() {
     courierPartners,
   } = useOrderFlow();
 
+  const isCourierUser = user.role === "COURIER";
+  const userCourierPartnerId = user.courierPartnerId;
+
   const activeCourierPartners = useMemo(() => {
     return courierPartners.filter(
       (cp) => cp.code !== "PROFESSIONAL" && !cp.name.toLowerCase().includes("professional")
