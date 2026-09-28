@@ -459,7 +459,7 @@ function ReturnsContent() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs transition-colors shadow-2xs cursor-pointer shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Manual Return</span>
+            <span>Add Return</span>
           </button>
           <button
             onClick={handleExportExcel}

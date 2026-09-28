@@ -16,16 +16,16 @@ import {
   RotateCcw, 
   AlertCircle, 
   Eye, 
-  CheckCheck,
   FileSpreadsheet,
   FileText,
   Plus,
+  Sparkles,
   X
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
 import { SourceBadge, OrderStatusBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
-import { formatINR, formatTimeAgo, formatDate, cn, matchesDateFilter } from "@/lib/utils";
+import { formatINR, formatTimeAgo, formatDate, cn, matchesDateFilter, formatDispatchNumber } from "@/lib/utils";
 import { Order, OrderStatus, ReturnCase, ReturnType } from "@/types/orderflow";
 import { ManualReturnModal } from "@/components/returns/manual-return-modal";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
@@ -74,6 +74,15 @@ function InlineDispatchInput({
     }
   };
 
+  const handleQuickGenerate = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const generated = formatDispatchNumber(orderNumber);
+    setVal(generated);
+    onSave(orderId, orderNumber, generated);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 2000);
+  };
+
   return (
     <div 
       className="relative flex items-center w-full"
@@ -91,16 +100,25 @@ function InlineDispatchInput({
         onBlur={commitSave}
         placeholder="Enter LLR / No..."
         className={cn(
-          "w-full text-[10px] font-mono py-1 px-1.5 rounded border transition-all outline-none",
+          "w-full text-[10px] font-mono py-1 pl-1.5 pr-6 rounded border transition-all outline-none",
           savedSuccess
             ? "bg-emerald-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-300 font-semibold"
             : "bg-white text-slate-800 border-slate-200 hover:border-slate-300 focus:bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20",
           !val && "placeholder:text-slate-300 text-slate-500"
         )}
-        title={val ? `Dispatch No: ${val} (Press Enter or click away to save)` : "Enter Dispatch / LLR Number manually"}
+        title={val ? `Dispatch No: ${val} (Press Enter or click away to save)` : "Enter Dispatch / LLR Number manually or click sparkle to auto-generate"}
       />
-      {savedSuccess && (
+      {savedSuccess ? (
         <Check className="w-3 h-3 text-emerald-600 absolute right-1.5 pointer-events-none" />
+      ) : (
+        <button
+          type="button"
+          onClick={handleQuickGenerate}
+          title={`Generate Dispatch No (${formatDispatchNumber(orderNumber)})`}
+          className="absolute right-1 text-slate-400 hover:text-emerald-600 p-0.5 rounded hover:bg-slate-100 transition-colors cursor-pointer"
+        >
+          <Sparkles className="w-3 h-3" />
+        </button>
       )}
     </div>
   );
@@ -392,6 +410,35 @@ export default function PackingPage() {
     triggerToast(`${validOrders.length} ${validOrders.length === 1 ? "order" : "orders"} updated to ${targetLabel} successfully.`);
   };
 
+  // Auto-generate & assign dispatch numbers for selected orders
+  const handleBulkGenerateDispatchNo = () => {
+    if (selectedIds.length === 0) {
+      triggerToast("Please select orders with checkboxes first to generate dispatch numbers!");
+      return;
+    }
+
+    const targetOrders = orders.filter((o) => selectedIds.includes(o.id));
+    if (targetOrders.length === 0) return;
+
+    let generatedCount = 0;
+    let sampleNumber = "";
+
+    targetOrders.forEach((ord) => {
+      const dispatchNo = formatDispatchNumber(ord.orderNumber);
+      if (!sampleNumber) sampleNumber = dispatchNo;
+      updateOrderStatus(
+        ord.id,
+        "DISPATCHED",
+        `Status updated to Dispatched (Dispatch No: ${dispatchNo})`,
+        { dispatchId: dispatchNo }
+      );
+      generatedCount++;
+    });
+
+    triggerToast(`Generated & entered dispatch numbers for ${generatedCount} orders! (e.g. ${sampleNumber})`);
+    setSelectedIds([]);
+  };
+
   // Stage counts for KPI pills (Packing Station)
   const processingCount = packingEligibleOrders.filter((o) => o.orderStatus === "CONFIRMED").length;
   const packagingCount = packingEligibleOrders.filter((o) => o.orderStatus === "PACKING").length;
@@ -600,7 +647,7 @@ export default function PackingPage() {
             </button>
           )}
 
-          {/* Export Actions (Excel & PDF) & Add Manual Return */}
+          {/* Export Actions (Excel & PDF) & Add Return & Generate Dispatch No */}
           <div className="flex items-center gap-2 pl-1 border-l border-slate-200">
             <button
               onClick={() => {
@@ -608,10 +655,23 @@ export default function PackingPage() {
                 setIsMarkAsReturnOpen(true);
               }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs transition-colors shadow-2xs cursor-pointer shrink-0"
-              title="Add Manual Return"
+              title="Add Return"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Add Manual Return</span>
+              <span>Add Return</span>
+            </button>
+            <button
+              onClick={handleBulkGenerateDispatchNo}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all shadow-2xs cursor-pointer shrink-0",
+                selectedIds.length > 0
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs active:scale-98"
+                  : "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100"
+              )}
+              title={selectedIds.length > 0 ? `Generate dispatch numbers for ${selectedIds.length} selected orders` : "Select orders using checkboxes to generate dispatch numbers"}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Generate Dispatch No{selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}</span>
             </button>
             <button
               onClick={handleExportExcel}
@@ -637,6 +697,16 @@ export default function PackingPage() {
         onClearSelection={() => setSelectedIds([])}
         customAction={
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBulkGenerateDispatchNo}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs cursor-pointer active:scale-98 transition-all"
+              title="Auto-generate and enter dispatch numbers for all selected orders"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Generate Dispatch No ({selectedIds.length})</span>
+            </button>
+
             <button
               type="button"
               onClick={() => {

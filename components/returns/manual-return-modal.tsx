@@ -503,7 +503,7 @@ export function ManualReturnModal({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                  {selectedOrder ? "Mark as Return" : "Add Manual Return"}
+                  {selectedOrder ? "Mark as Return" : "Add Return"}
                 </h2>
                 {selectedOrder ? (
                   <span className="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 border border-orange-200">
@@ -1577,7 +1577,7 @@ export function ManualReturnModal({
                 ? "Creating Return..." 
                 : selectedOrder 
                 ? `Confirm Return (${formatINR(activeTotalReturnedValue)})` 
-                : "Create Manual Return"}
+                : "Add Return"}
             </span>
           </button>
         </div>

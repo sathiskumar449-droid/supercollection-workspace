@@ -161,3 +161,26 @@ export function formatStageDuration(startIso?: string, endIso?: string): string 
     return null;
   }
 }
+
+/**
+ * Formats a Dispatch Number following the convention:
+ * DTP + [Order Number] + [Date (DD)] + [Month (MM)]
+ * Example: Order "01" on 23rd Sept -> "DTP012309"
+ * Order "SC-WC-18066" on 28th Sept -> "DTP180662809"
+ */
+export function formatDispatchNumber(orderNumber: string, dateInput: Date | string = new Date()): string {
+  let clean = orderNumber.replace(/^(SC-WC-|WA-|OF-|ORD-)/i, "").trim();
+  clean = clean.replace(/[^a-zA-Z0-9]/g, "");
+  if (!clean) clean = orderNumber.replace(/[^a-zA-Z0-9]/g, "") || "1";
+  if (/^\d+$/.test(clean) && clean.length === 1) {
+    clean = clean.padStart(2, "0");
+  }
+
+  const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+
+  const dd = String(validDate.getDate()).padStart(2, "0");
+  const mm = String(validDate.getMonth() + 1).padStart(2, "0");
+
+  return `DTP${clean}${dd}${mm}`;
+}
