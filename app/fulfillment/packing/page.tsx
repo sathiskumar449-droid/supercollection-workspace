@@ -32,6 +32,7 @@ import { Order, OrderStatus, ReturnCase, ReturnType } from "@/types/orderflow";
 import { ManualReturnModal } from "@/components/returns/manual-return-modal";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
+import { StatusOption } from "@/components/bulk-actions/bulk-toolbar";
 
 // Status definitions mapping to workflow requirements:
 // WooCommerce Processing -> Processing

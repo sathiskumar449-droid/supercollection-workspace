@@ -34,6 +34,7 @@ import { SyncWhatsAppDialog } from "@/components/sync-whatsapp-dialog";
 import { formatINR, formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
+import { StatusOption } from "@/components/bulk-actions/bulk-toolbar";
 
 function OrdersContent() {
   const searchParams = useSearchParams();
