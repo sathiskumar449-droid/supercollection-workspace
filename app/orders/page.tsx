@@ -21,7 +21,8 @@ import {
   FileText,
   Globe,
   MessageSquare,
-  CheckSquare
+  CheckSquare,
+  RotateCcw
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
 import { Order, OrderStatus, CourierStatus, SmsStatus, OrderSource, ReturnCase } from "@/types/orderflow";
@@ -35,6 +36,7 @@ import { formatINR, formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
 import { StatusOption } from "@/components/bulk-actions/bulk-toolbar";
+import { ExcelColumnFilter } from "@/components/orders/excel-column-filter";
 
 function OrdersContent() {
   const searchParams = useSearchParams();
@@ -56,23 +58,145 @@ function OrdersContent() {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [whatsappSyncDialogOpen, setWhatsappSyncDialogOpen] = useState(false);
 
-  // Filters state
-  const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
-  const [sourceFilter, setSourceFilter] = useState<string>("ALL");
-  const [courierFilter, setCourierFilter] = useState<string>("ALL");
-  const [courierStatusFilter, setCourierStatusFilter] = useState<string>("ALL");
-  const [smsStatusFilter, setSmsStatusFilter] = useState<string>("ALL");
+  // Column filter states
+  const [statusFilter, setStatusFilter] = useState<string[]>(
+    initialStatus && initialStatus !== "ALL" ? [initialStatus] : []
+  );
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [courierFilter, setCourierFilter] = useState<string[]>([]);
+  const [courierStatusFilter, setCourierStatusFilter] = useState<string[]>([]);
+  const [smsStatusFilter, setSmsStatusFilter] = useState<string[]>([]);
+  const [orderIdFilter, setOrderIdFilter] = useState<string>("");
+  const [customerFilter, setCustomerFilter] = useState<string>("");
+  const [amountFilter, setAmountFilter] = useState<string[]>([]);
+  const [returnFilter, setReturnFilter] = useState<string>("ALL");
+  const [llrFilter, setLlrFilter] = useState<string>("ALL");
+
+  // Open column filter popover state
+  const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+
+  const toggleFilterColumn = (col: string) => {
+    setOpenFilterColumn((prev) => (prev === col ? null : col));
+  };
   
   // Sort state
-  const [sortField, setSortField] = useState<"createdAt" | "totalAmount" | "orderNumber">("createdAt");
+  const [sortField, setSortField] = useState<
+    "createdAt" | "totalAmount" | "orderNumber" | "customerName" | "itemsCount" | "orderStatus" | "courierName" | "courierStatus" | "smsStatus"
+  >("createdAt");
   const [sortAsc, setSortAsc] = useState(false);
+
+  const handleSort = (field: any, asc: boolean) => {
+    setSortField(field);
+    setSortAsc(asc);
+  };
 
   // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
 
-  // 21. All Orders remains the master overview: all orders stay visible across every lifecycle stage
+  // All Orders remains the master overview: all orders stay visible across every lifecycle stage
   const baseOrders = orders;
+
+  // Dynamic counts for Excel filter checkboxes
+  const {
+    statusCounts,
+    sourceCounts,
+    courierCounts,
+    courierStatusCounts,
+    smsStatusCounts,
+    returnCounts,
+    llrCounts,
+    amountCounts,
+  } = useMemo(() => {
+    const sCounts: Record<string, number> = {
+      CONFIRMED: 0,
+      PACKING: 0,
+      PACKED: 0,
+      DISPATCHED: 0,
+      COMPLETED: 0,
+      RETURN: 0,
+    };
+    const srcCounts: Record<string, number> = {
+      WEBSITE: 0,
+      WHATSAPP: 0,
+    };
+    const cCounts: Record<string, number> = {
+      "ST Courier": 0,
+      "DTDC": 0,
+      "India Post": 0,
+      "Delhivery": 0,
+      "Blue Dart": 0,
+      "(Unassigned)": 0,
+    };
+    const csCounts: Record<string, number> = {
+      PENDING: 0,
+      SHIPPED: 0,
+      WAITING_FOR_PICKUP: 0,
+      PICKED_UP: 0,
+      DELIVERED: 0,
+    };
+    const smsCounts: Record<string, number> = {
+      SENT: 0,
+      PENDING: 0,
+      FAILED: 0,
+    };
+    const retCounts = { HAS_RETURN: 0, NO_RETURN: 0 };
+    const lCounts = { WITH_LLR: 0, WITHOUT_LLR: 0 };
+    const amtCounts = {
+      UNDER_500: 0,
+      "500_1000": 0,
+      "1000_2500": 0,
+      ABOVE_2500: 0,
+    };
+
+    baseOrders.forEach((o) => {
+      // Filter out WooCommerce NEW / RETURN as per existing rule
+      if (o.source === "WEBSITE" && (o.orderStatus === "NEW" || o.orderStatus === "RETURN")) {
+        return;
+      }
+
+      if (sCounts[o.orderStatus] !== undefined) sCounts[o.orderStatus]++;
+      if (srcCounts[o.source] !== undefined) srcCounts[o.source]++;
+
+      const cName = o.dispatch.courierName;
+      if (!cName) {
+        cCounts["(Unassigned)"] = (cCounts["(Unassigned)"] || 0) + 1;
+      } else {
+        cCounts[cName] = (cCounts[cName] || 0) + 1;
+      }
+
+      if (csCounts[o.dispatch.courierStatus] !== undefined) {
+        csCounts[o.dispatch.courierStatus]++;
+      }
+
+      if (smsCounts[o.sms.status] !== undefined) {
+        smsCounts[o.sms.status]++;
+      }
+
+      const hasRet = returns.some((r) => r.orderId === o.id || r.orderNumber === o.orderNumber);
+      if (hasRet) retCounts.HAS_RETURN++;
+      else retCounts.NO_RETURN++;
+
+      if (o.dispatch.llrNumber && o.dispatch.llrNumber.trim()) lCounts.WITH_LLR++;
+      else lCounts.WITHOUT_LLR++;
+
+      if (o.totalAmount < 500) amtCounts.UNDER_500++;
+      else if (o.totalAmount <= 1000) amtCounts["500_1000"]++;
+      else if (o.totalAmount <= 2500) amtCounts["1000_2500"]++;
+      else amtCounts.ABOVE_2500++;
+    });
+
+    return {
+      statusCounts: sCounts,
+      sourceCounts: srcCounts,
+      courierCounts: cCounts,
+      courierStatusCounts: csCounts,
+      smsStatusCounts: smsCounts,
+      returnCounts: retCounts,
+      llrCounts: lCounts,
+      amountCounts: amtCounts,
+    };
+  }, [baseOrders, returns]);
 
   // Filtered & Sorted orders calculation
   const filteredOrders = useMemo(() => {
@@ -82,7 +206,7 @@ function OrdersContent() {
         return false;
       }
 
-      // Search
+      // Global Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matches =
@@ -94,32 +218,82 @@ function OrdersContent() {
         if (!matches) return false;
       }
 
-      // Order Status
-      if (statusFilter !== "ALL" && order.orderStatus !== statusFilter) {
+      // Column: Order ID Search
+      if (orderIdFilter.trim()) {
+        const q = orderIdFilter.toLowerCase();
+        const matches =
+          order.orderNumber.toLowerCase().includes(q) ||
+          order.externalOrderId.toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+
+      // Column: Customer Name Search
+      if (customerFilter.trim()) {
+        const q = customerFilter.toLowerCase();
+        const matches =
+          order.customer.name.toLowerCase().includes(q) ||
+          order.customer.mobile.toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+
+      // Column: Order Status (multi-select)
+      if (statusFilter.length > 0 && !statusFilter.includes(order.orderStatus)) {
         return false;
       }
 
-      // Source
-      if (sourceFilter !== "ALL" && order.source !== sourceFilter) {
+      // Column: Source (multi-select)
+      if (sourceFilter.length > 0 && !sourceFilter.includes(order.source)) {
         return false;
       }
 
-      // Courier
-      if (courierFilter !== "ALL" && order.dispatch.courierName !== courierFilter) {
+      // Column: Courier (multi-select)
+      if (courierFilter.length > 0) {
+        const cName = order.dispatch.courierName;
+        const matchesCourier = 
+          (cName && courierFilter.includes(cName)) ||
+          (!cName && courierFilter.includes("(Unassigned)"));
+        if (!matchesCourier) return false;
+      }
+
+      // Column: Courier Status (multi-select)
+      if (courierStatusFilter.length > 0) {
+        const cs = order.dispatch.courierStatus;
+        const isShippedSelected = courierStatusFilter.includes("SHIPPED");
+        const orderIsShipped = cs === "SHIPPED" || (cs as string) === "DELIVERED";
+        const matchesCS = courierStatusFilter.includes(cs) || (isShippedSelected && orderIsShipped);
+        if (!matchesCS) return false;
+      }
+
+      // Column: SMS Status (multi-select)
+      if (smsStatusFilter.length > 0 && !smsStatusFilter.includes(order.sms.status)) {
         return false;
       }
 
-      // Courier Status
-      if (courierStatusFilter !== "ALL") {
-        const isShippedFilter = courierStatusFilter === "SHIPPED";
-        const orderIsShipped = order.dispatch.courierStatus === "SHIPPED" || (order.dispatch.courierStatus as string) === "DELIVERED";
-        if (isShippedFilter && !orderIsShipped) return false;
-        if (!isShippedFilter && order.dispatch.courierStatus !== courierStatusFilter) return false;
+      // Column: Return
+      if (returnFilter !== "ALL") {
+        const hasReturn = returns.some((r) => r.orderId === order.id || r.orderNumber === order.orderNumber);
+        if (returnFilter === "HAS_RETURN" && !hasReturn) return false;
+        if (returnFilter === "NO_RETURN" && hasReturn) return false;
       }
 
-      // SMS Status
-      if (smsStatusFilter !== "ALL" && order.sms.status !== smsStatusFilter) {
-        return false;
+      // Column: LLR
+      if (llrFilter !== "ALL") {
+        const hasLLR = Boolean(order.dispatch.llrNumber && order.dispatch.llrNumber.trim());
+        if (llrFilter === "WITH_LLR" && !hasLLR) return false;
+        if (llrFilter === "WITHOUT_LLR" && hasLLR) return false;
+      }
+
+      // Column: Amount range (multi-select)
+      if (amountFilter.length > 0) {
+        const amt = order.totalAmount;
+        const matchesAmount = amountFilter.some((range) => {
+          if (range === "UNDER_500") return amt < 500;
+          if (range === "500_1000") return amt >= 500 && amt <= 1000;
+          if (range === "1000_2500") return amt > 1000 && amt <= 2500;
+          if (range === "ABOVE_2500") return amt > 2500;
+          return false;
+        });
+        if (!matchesAmount) return false;
       }
 
       // Date Filter from TopBar / Calendar
@@ -136,10 +310,40 @@ function OrdersContent() {
         comparison = a.totalAmount - b.totalAmount;
       } else if (sortField === "orderNumber") {
         comparison = a.orderNumber.localeCompare(b.orderNumber);
+      } else if (sortField === "customerName") {
+        comparison = a.customer.name.localeCompare(b.customer.name);
+      } else if (sortField === "itemsCount") {
+        comparison = a.items.length - b.items.length;
+      } else if (sortField === "orderStatus") {
+        comparison = a.orderStatus.localeCompare(b.orderStatus);
+      } else if (sortField === "courierName") {
+        comparison = (a.dispatch.courierName || "").localeCompare(b.dispatch.courierName || "");
+      } else if (sortField === "courierStatus") {
+        comparison = (a.dispatch.courierStatus || "").localeCompare(b.dispatch.courierStatus || "");
+      } else if (sortField === "smsStatus") {
+        comparison = (a.sms.status || "").localeCompare(b.sms.status || "");
       }
       return sortAsc ? comparison : -comparison;
     });
-  }, [baseOrders, searchQuery, dateFilter, customDate, statusFilter, sourceFilter, courierFilter, courierStatusFilter, smsStatusFilter, sortField, sortAsc]);
+  }, [
+    baseOrders,
+    returns,
+    searchQuery,
+    orderIdFilter,
+    customerFilter,
+    statusFilter,
+    sourceFilter,
+    courierFilter,
+    courierStatusFilter,
+    smsStatusFilter,
+    returnFilter,
+    llrFilter,
+    amountFilter,
+    dateFilter,
+    customDate,
+    sortField,
+    sortAsc,
+  ]);
 
   // Paginated orders
   const totalPages = Math.ceil(filteredOrders.length / pageSize) || 1;
@@ -255,20 +459,30 @@ function OrdersContent() {
 
   const handleResetFilters = () => {
     setSearchQuery("");
-    setStatusFilter("ALL");
-    setSourceFilter("ALL");
-    setCourierFilter("ALL");
-    setCourierStatusFilter("ALL");
-    setSmsStatusFilter("ALL");
+    setOrderIdFilter("");
+    setCustomerFilter("");
+    setStatusFilter([]);
+    setSourceFilter([]);
+    setCourierFilter([]);
+    setCourierStatusFilter([]);
+    setSmsStatusFilter([]);
+    setReturnFilter("ALL");
+    setLlrFilter("ALL");
+    setAmountFilter([]);
     setPage(1);
   };
 
   const activeFilterCount = [
-    statusFilter !== "ALL",
-    sourceFilter !== "ALL",
-    courierFilter !== "ALL",
-    courierStatusFilter !== "ALL",
-    smsStatusFilter !== "ALL",
+    statusFilter.length > 0,
+    sourceFilter.length > 0,
+    courierFilter.length > 0,
+    courierStatusFilter.length > 0,
+    smsStatusFilter.length > 0,
+    Boolean(orderIdFilter.trim()),
+    Boolean(customerFilter.trim()),
+    amountFilter.length > 0,
+    returnFilter !== "ALL",
+    llrFilter !== "ALL",
     Boolean(searchQuery.trim()),
   ].filter(Boolean).length;
 
@@ -342,7 +556,7 @@ function OrdersContent() {
     const dateStr = new Date().toISOString().slice(0, 10);
     exportToPdf({
       title: "All Orders - Fulfillment Ledger",
-      subtitle: `Filtered Orders: ${filteredOrders.length} | Status: ${statusFilter}`,
+      subtitle: `Filtered Orders: ${filteredOrders.length}`,
       filename: `All_Orders_Report_${dateStr}`,
       headers,
       rows,
@@ -359,7 +573,6 @@ function OrdersContent() {
           <span>{toastMessage}</span>
         </div>
       )}
-
 
       {/* Select All Across Pages Banner */}
       {selectedIds.length > 0 && isAllPageSelected && filteredOrders.length > paginatedOrders.length && selectedIds.length < filteredOrders.length && (
@@ -389,212 +602,328 @@ function OrdersContent() {
         isLoading={isBulkUpdating}
       />
 
-      {/* Filter Toolbar */}
-      <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-subtle space-y-2.5">
-        {/* Row 1: Search + Filters + Export */}
-        <div className="flex items-center gap-2.5 flex-nowrap overflow-x-auto">
-          {/* Search Input */}
-          <div className="relative flex items-center shrink-0">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search Order ID, Customer, Phone..."
-              className="text-xs pl-8 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-800 placeholder-slate-400 w-52 transition-all"
-            />
-            {searchQuery && (
+      {/* Filter Toolbar (Streamlined: Search + Active Filter Pills + Bulk Actions + Export) */}
+      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-subtle space-y-2">
+        {/* Row 1: Global Search + Bulk Actions + Export */}
+        <div className="flex items-center gap-2.5 flex-wrap md:flex-nowrap justify-between">
+          <div className="flex items-center gap-2.5 flex-1 min-w-[280px]">
+            {/* Search Input */}
+            <div className="relative flex items-center shrink-0 w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search Order ID, Customer, Phone..."
+                className="text-xs pl-8 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-800 placeholder-slate-400 w-full transition-all"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Quick Helper badge showing Excel column filter hint */}
+            <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-slate-400 border-l border-slate-200 pl-3">
+              <span className="flex items-center gap-1">
+                Filter directly from column headers using
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-slate-200 text-slate-700 text-[10px] font-bold border border-slate-300">
+                  <svg className="w-2.5 h-2.5" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M1.5 2.5h13a.5.5 0 0 1 .38.82l-4.88 5.69v4.49a.5.5 0 0 1-.72.45l-2.5-1.25A.5.5 0 0 1 6.5 12.25V9.01L1.12 3.32a.5.5 0 0 1 .38-.82z" />
+                  </svg>
+                </span>
+                Excel filter icons
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Bulk Selection Actions (Fixed in Top Toolbar - Always Visible) */}
+            <div className="flex items-center gap-2 shrink-0 bg-orange-50/95 border border-orange-200 px-2.5 py-1.5 rounded-lg">
+              {/* Selected Badge with Clear (Only shown when rows selected) */}
+              {selectedIds.length > 0 && (
+                <>
+                  <div className="flex items-center gap-1.5 font-bold text-orange-900 text-xs animate-in fade-in">
+                    <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
+                    <span>{selectedIds.length} selected</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIds([])}
+                      className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
+                      title="Clear selection"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="h-4 w-px bg-orange-200 mx-0.5" />
+                </>
+              )}
+
+              <select
+                value={bulkStatus}
+                onChange={(e) => setBulkStatus(e.target.value)}
+                className="text-xs px-2.5 py-1 bg-white border border-orange-300 hover:border-orange-400 rounded-md font-semibold text-slate-800 outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
+              >
+                <option value="" disabled>Change Status ▾</option>
+                {BULK_STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
-                title="Clear search"
+                onClick={() => {
+                  if (selectedIds.length === 0) {
+                    triggerToast("Please select at least 1 order using checkbox first to update status");
+                    return;
+                  }
+                  if (!bulkStatus) {
+                    triggerToast("Please select a status from the dropdown");
+                    return;
+                  }
+                  if (validOrders.length === 0) {
+                    triggerToast("None of the selected orders can be transitioned to this status");
+                    return;
+                  }
+                  setIsConfirmDialogOpen(true);
+                }}
+                disabled={isBulkUpdating}
+                className={cn(
+                  "px-3 py-1 rounded-md font-bold text-xs transition-all shadow-2xs cursor-pointer",
+                  isBulkUpdating
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    : "bg-orange-600 hover:bg-orange-700 text-white active:scale-98"
+                )}
               >
-                <X className="w-3 h-3" />
+                {isBulkUpdating ? "Applying..." : "Apply"}
               </button>
-            )}
+            </div>
+
+            {/* Export Actions (inline, rightmost) */}
+            <button
+              onClick={handleExportExcel}
+              title="Export Excel"
+              className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleExportPdf}
+              title="Export PDF"
+              className="inline-flex items-center justify-center p-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
+            >
+              <FileText className="w-4 h-4" />
+            </button>
           </div>
+        </div>
 
-          {/* Order Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer shrink-0"
-          >
-            <option value="ALL">All Order Statuses</option>
-            <option value="CONFIRMED">Processing</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="DISPATCHED">Dispatched</option>
-            <option value="RETURN">↩ Return</option>
-          </select>
+        {/* Row 2: Active Filter Chips (Only shown when any column filter is active) */}
+        {activeFilterCount > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-slate-100 text-xs">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
+              <Filter className="w-3 h-3 text-orange-600" /> Active Filters:
+            </span>
 
-          {/* Source Filter */}
-          <select
-            value={sourceFilter}
-            onChange={(e) => {
-              setSourceFilter(e.target.value);
-              setPage(1);
-            }}
-            className="text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer shrink-0"
-          >
-            <option value="ALL">All Sources</option>
-            <option value="WEBSITE">Website (WooCommerce)</option>
-            <option value="WHATSAPP">WhatsApp Chat Box</option>
-          </select>
+            {/* Status chip */}
+            {statusFilter.length > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 text-[11px] font-medium border border-orange-200">
+                Status: {statusFilter.join(", ")}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatusFilter([]);
+                    setPage(1);
+                  }}
+                  className="hover:text-red-700 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
 
-          {/* Courier Filter */}
-          <select
-            value={courierFilter}
-            onChange={(e) => {
-              setCourierFilter(e.target.value);
-              setPage(1);
-            }}
-            className="text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer shrink-0"
-          >
-            <option value="ALL">All Couriers</option>
-            <option value="ST Courier">ST Courier</option>
-            <option value="DTDC">DTDC</option>
-            <option value="India Post">India Post</option>
-            <option value="Delhivery">Delhivery</option>
-            <option value="Blue Dart">Blue Dart</option>
-          </select>
+            {/* Source chip */}
+            {sourceFilter.length > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-medium border border-blue-200">
+                Source: {sourceFilter.join(", ")}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSourceFilter([]);
+                    setPage(1);
+                  }}
+                  className="hover:text-red-700 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
 
-          {/* Courier Status Filter */}
-          <select
-            value={courierStatusFilter}
-            onChange={(e) => {
-              setCourierStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer shrink-0"
-          >
-            <option value="ALL">All Courier Statuses</option>
-            <option value="PENDING">Courier Pending</option>
-            <option value="SHIPPED">Courier Shipped</option>
-          </select>
+            {/* Courier chip */}
+            {courierFilter.length > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[11px] font-medium border border-purple-200">
+                Courier: {courierFilter.join(", ")}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCourierFilter([]);
+                    setPage(1);
+                  }}
+                  className="hover:text-red-700 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
 
-          {/* SMS Status Filter */}
-          <select
-            value={smsStatusFilter}
-            onChange={(e) => {
-              setSmsStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-700 cursor-pointer shrink-0"
-          >
-            <option value="ALL">All SMS Statuses</option>
-            <option value="SENT">SMS Sent</option>
-            <option value="PENDING">SMS Pending</option>
-            <option value="FAILED">SMS Failed</option>
-          </select>
+            {/* Courier Status chip */}
+            {courierStatusFilter.length > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-medium border border-amber-200">
+                Courier St: {courierStatusFilter.join(", ")}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCourierStatusFilter([]);
+                    setPage(1);
+                  }}
+                  className="hover:text-red-700 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
 
-          {/* Reset Filters */}
-          {activeFilterCount > 0 && (
+            {/* SMS Status chip */}
+            {smsStatusFilter.length > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-medium border border-emerald-200">
+                SMS: {smsStatusFilter.join(", ")}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSmsStatusFilter([]);
+                    setPage(1);
+                  }}
+                  className="hover:text-red-700 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {/* Order ID chip */}
+            {orderIdFilter && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[11px] font-medium border border-slate-300">
+                ID: &quot;{orderIdFilter}&quot;
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrderIdFilter("");
+                    setPage(1);
+                  }}
+                  className="hover:text-red-700 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {/* Customer chip */}
+            {customerFilter && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[11px] font-medium border border-slate-300">
+                Customer: &quot;{customerFilter}&quot;
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomerFilter("");
+                    setPage(1);
+                  }}
+                  className="hover:text-red-700 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {/* Amount chip */}
+            {amountFilter.length > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-medium border border-emerald-200">
+                Amount: {amountFilter.length} range(s)
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAmountFilter([]);
+                    setPage(1);
+                  }}
+                  className="hover:text-red-700 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {/* Return chip */}
+            {returnFilter !== "ALL" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[11px] font-medium border border-rose-200">
+                Return: {returnFilter === "HAS_RETURN" ? "Has Return" : "No Return"}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReturnFilter("ALL");
+                    setPage(1);
+                  }}
+                  className="hover:text-red-700 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {/* LLR chip */}
+            {llrFilter !== "ALL" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[11px] font-medium border border-indigo-200">
+                LLR: {llrFilter === "WITH_LLR" ? "Has LLR" : "Missing LLR"}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLlrFilter("ALL");
+                    setPage(1);
+                  }}
+                  className="hover:text-red-700 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {/* Reset All Filters button */}
             <button
               onClick={handleResetFilters}
-              className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 px-2 py-1.5 rounded hover:bg-red-50 transition-colors shrink-0"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 hover:text-red-700 px-2 py-0.5 rounded hover:bg-red-50 transition-colors ml-auto cursor-pointer"
             >
-              <X className="w-3.5 h-3.5" />
-              <span>Clear ({activeFilterCount})</span>
-            </button>
-          )}
-
-          {/* Spacer */}
-          <div className="flex-1" />
-
-          {/* Bulk Selection Actions (Fixed in Top Toolbar - Always Visible) */}
-          <div className="flex items-center gap-2 shrink-0 bg-orange-50/95 border border-orange-200 px-2.5 py-1.5 rounded-lg">
-            {/* Selected Badge with Clear (Only shown when rows selected) */}
-            {selectedIds.length > 0 && (
-              <>
-                <div className="flex items-center gap-1.5 font-bold text-orange-900 text-xs animate-in fade-in">
-                  <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
-                  <span>{selectedIds.length} selected</span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedIds([])}
-                    className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
-                    title="Clear selection"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-                <div className="h-4 w-px bg-orange-200 mx-0.5" />
-              </>
-            )}
-
-            <select
-              value={bulkStatus}
-              onChange={(e) => setBulkStatus(e.target.value)}
-              className="text-xs px-2.5 py-1 bg-white border border-orange-300 hover:border-orange-400 rounded-md font-semibold text-slate-800 outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
-            >
-              <option value="" disabled>Change Status ▾</option>
-              {BULK_STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (selectedIds.length === 0) {
-                  triggerToast("Please select at least 1 order using checkbox first to update status");
-                  return;
-                }
-                if (!bulkStatus) {
-                  triggerToast("Please select a status from the dropdown");
-                  return;
-                }
-                if (validOrders.length === 0) {
-                  triggerToast("None of the selected orders can be transitioned to this status");
-                  return;
-                }
-                setIsConfirmDialogOpen(true);
-              }}
-              disabled={isBulkUpdating}
-              className={cn(
-                "px-3 py-1 rounded-md font-bold text-xs transition-all shadow-2xs cursor-pointer",
-                isBulkUpdating
-                  ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                  : "bg-orange-600 hover:bg-orange-700 text-white active:scale-98"
-              )}
-            >
-              {isBulkUpdating ? "Applying..." : "Apply"}
+              <RotateCcw className="w-3 h-3" />
+              <span>Clear All ({activeFilterCount})</span>
             </button>
           </div>
-
-          {/* Export Actions (inline, rightmost) */}
-          <button
-            onClick={handleExportExcel}
-            title="Export Excel"
-            className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleExportPdf}
-            title="Export PDF"
-            className="inline-flex items-center justify-center p-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
-          >
-            <FileText className="w-4 h-4" />
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* Orders Table (Excel Spreadsheet Grid Style with S.No) */}
-      <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
+      {/* Orders Table (Excel Spreadsheet Grid Style with S.No & Column Header Filters) */}
+      <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full min-h-[460px]">
         <div className="overflow-x-auto hidden md:block w-full">
-          <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300">
+          <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300 min-w-[1200px]">
             <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight">
               <tr>
+                {/* Checkbox */}
                 <th className="py-2 px-1 w-[2.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
                   <input
                     type="checkbox"
@@ -604,57 +933,407 @@ function OrdersContent() {
                     title={isAllPageSelected ? "Deselect page" : "Select all orders on this page"}
                   />
                 </th>
+
+                {/* S.No */}
                 <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
                   S.No
                 </th>
-                <th
-                  className="py-2 px-1.5 w-[7.5%] cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
-                  onClick={() => {
-                    setSortField("orderNumber");
-                    setSortAsc(!sortAsc);
-                  }}
-                >
-                  <div className="flex items-center gap-1 truncate">
-                    <span>Order ID</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
+
+                {/* ORDER ID */}
+                <th className="py-2 px-1.5 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">ORDER ID</span>
+                    <ExcelColumnFilter
+                      title="Order ID"
+                      columnKey="orderNumber"
+                      isOpen={openFilterColumn === "orderNumber"}
+                      onToggle={() => toggleFilterColumn("orderNumber")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={Boolean(orderIdFilter.trim())}
+                      canSort
+                      currentSortField={sortField}
+                      currentSortAsc={sortAsc}
+                      sortFieldKey="orderNumber"
+                      onSort={handleSort}
+                      sortAscLabel="Sort A to Z"
+                      sortDescLabel="Sort Z to A"
+                      filterType="search"
+                      searchValue={orderIdFilter}
+                      onApplySearch={(val) => {
+                        setOrderIdFilter(val);
+                        setPage(1);
+                      }}
+                      searchPlaceholder="Search Order ID..."
+                      onClearFilter={() => {
+                        setOrderIdFilter("");
+                        setPage(1);
+                      }}
+                      align="left"
+                    />
                   </div>
                 </th>
-                <th
-                  className="py-2 px-1.5 w-[7.5%] cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
-                  onClick={() => {
-                    setSortField("createdAt");
-                    setSortAsc(!sortAsc);
-                  }}
-                >
-                  <div className="flex items-center gap-1 truncate">
-                    <span>Date</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
+
+                {/* DATE */}
+                <th className="py-2 px-1.5 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">DATE</span>
+                    <ExcelColumnFilter
+                      title="Date"
+                      columnKey="createdAt"
+                      isOpen={openFilterColumn === "createdAt"}
+                      onToggle={() => toggleFilterColumn("createdAt")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={false}
+                      canSort
+                      currentSortField={sortField}
+                      currentSortAsc={sortAsc}
+                      sortFieldKey="createdAt"
+                      onSort={handleSort}
+                      sortAscLabel="Sort Oldest to Newest"
+                      sortDescLabel="Sort Newest to Oldest"
+                      onClearFilter={() => {}}
+                      align="left"
+                    />
                   </div>
                 </th>
+
+                {/* CUSTOMER NAME */}
                 <th className="py-2 px-1.5 w-[11.5%] border-r border-b-2 border-slate-300 bg-slate-100">
-                  Customer Name
-                </th>
-                <th className="py-2 px-1 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Source</th>
-                <th className="py-2 px-1 w-[4.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
-                <th
-                  className="py-2 px-1.5 w-[6%] text-right cursor-pointer hover:text-slate-900 border-r border-b-2 border-slate-300 bg-slate-100"
-                  onClick={() => {
-                    setSortField("totalAmount");
-                    setSortAsc(!sortAsc);
-                  }}
-                >
-                  <div className="flex items-center justify-end gap-1">
-                    <span>Amount</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">CUSTOMER NAME</span>
+                    <ExcelColumnFilter
+                      title="Customer Name"
+                      columnKey="customerName"
+                      isOpen={openFilterColumn === "customerName"}
+                      onToggle={() => toggleFilterColumn("customerName")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={Boolean(customerFilter.trim())}
+                      canSort
+                      currentSortField={sortField}
+                      currentSortAsc={sortAsc}
+                      sortFieldKey="customerName"
+                      onSort={handleSort}
+                      sortAscLabel="Sort A to Z"
+                      sortDescLabel="Sort Z to A"
+                      filterType="search"
+                      searchValue={customerFilter}
+                      onApplySearch={(val) => {
+                        setCustomerFilter(val);
+                        setPage(1);
+                      }}
+                      searchPlaceholder="Search Name or Mobile..."
+                      onClearFilter={() => {
+                        setCustomerFilter("");
+                        setPage(1);
+                      }}
+                      align="left"
+                    />
                   </div>
                 </th>
-                <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Order Status</th>
-                <th className="py-2 px-1 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Return</th>
-                <th className="py-2 px-1 w-[7%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
-                <th className="py-2 px-1 w-[6.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">LLR</th>
-                <th className="py-2 px-1 w-[7.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
-                <th className="py-2 px-1 w-[11%] text-center border-r border-b-2 border-slate-300 bg-slate-100">SMS Status</th>
-                <th className="py-2 px-1 w-[5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">TRACKING</th>
+
+                {/* SOURCE */}
+                <th className="py-2 px-1 w-[6.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">SOURCE</span>
+                    <ExcelColumnFilter
+                      title="Source"
+                      columnKey="source"
+                      isOpen={openFilterColumn === "source"}
+                      onToggle={() => toggleFilterColumn("source")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={sourceFilter.length > 0}
+                      options={[
+                        { value: "WEBSITE", label: "Website (WooCommerce)", count: sourceCounts.WEBSITE },
+                        { value: "WHATSAPP", label: "WhatsApp Chat Box", count: sourceCounts.WHATSAPP },
+                      ]}
+                      selectedValues={sourceFilter}
+                      onApplyFilter={(vals) => {
+                        setSourceFilter(vals);
+                        setPage(1);
+                      }}
+                      onClearFilter={() => {
+                        setSourceFilter([]);
+                        setPage(1);
+                      }}
+                      align="left"
+                    />
+                  </div>
+                </th>
+
+                {/* ITEMS */}
+                <th className="py-2 px-1 w-[5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">ITEMS</span>
+                    <ExcelColumnFilter
+                      title="Items"
+                      columnKey="itemsCount"
+                      isOpen={openFilterColumn === "itemsCount"}
+                      onToggle={() => toggleFilterColumn("itemsCount")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={false}
+                      canSort
+                      currentSortField={sortField}
+                      currentSortAsc={sortAsc}
+                      sortFieldKey="itemsCount"
+                      onSort={handleSort}
+                      sortAscLabel="Sort Fewest to Most"
+                      sortDescLabel="Sort Most to Fewest"
+                      onClearFilter={() => {}}
+                      align="left"
+                    />
+                  </div>
+                </th>
+
+                {/* AMOUNT */}
+                <th className="py-2 px-1.5 w-[6.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">AMOUNT</span>
+                    <ExcelColumnFilter
+                      title="Amount"
+                      columnKey="totalAmount"
+                      isOpen={openFilterColumn === "totalAmount"}
+                      onToggle={() => toggleFilterColumn("totalAmount")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={amountFilter.length > 0}
+                      canSort
+                      currentSortField={sortField}
+                      currentSortAsc={sortAsc}
+                      sortFieldKey="totalAmount"
+                      onSort={handleSort}
+                      sortAscLabel="Sort Smallest to Largest"
+                      sortDescLabel="Sort Largest to Smallest"
+                      options={[
+                        { value: "UNDER_500", label: "Under ₹500", count: amountCounts.UNDER_500 },
+                        { value: "500_1000", label: "₹500 - ₹1,000", count: amountCounts["500_1000"] },
+                        { value: "1000_2500", label: "₹1,000 - ₹2,500", count: amountCounts["1000_2500"] },
+                        { value: "ABOVE_2500", label: "Above ₹2,500", count: amountCounts.ABOVE_2500 },
+                      ]}
+                      selectedValues={amountFilter}
+                      onApplyFilter={(vals) => {
+                        setAmountFilter(vals);
+                        setPage(1);
+                      }}
+                      onClearFilter={() => {
+                        setAmountFilter([]);
+                        setPage(1);
+                      }}
+                      align="right"
+                    />
+                  </div>
+                </th>
+
+                {/* ORDER STATUS */}
+                <th className="py-2 px-1 w-[8.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">ORDER STATUS</span>
+                    <ExcelColumnFilter
+                      title="Order Status"
+                      columnKey="orderStatus"
+                      isOpen={openFilterColumn === "orderStatus"}
+                      onToggle={() => toggleFilterColumn("orderStatus")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={statusFilter.length > 0}
+                      canSort
+                      currentSortField={sortField}
+                      currentSortAsc={sortAsc}
+                      sortFieldKey="orderStatus"
+                      onSort={handleSort}
+                      options={[
+                        { value: "CONFIRMED", label: "Processing", count: statusCounts.CONFIRMED },
+                        { value: "PACKING", label: "Packaging", count: statusCounts.PACKING },
+                        { value: "PACKED", label: "Packed", count: statusCounts.PACKED },
+                        { value: "DISPATCHED", label: "Dispatched", count: statusCounts.DISPATCHED },
+                        { value: "COMPLETED", label: "Completed", count: statusCounts.COMPLETED },
+                        { value: "RETURN", label: "↩ Return", count: statusCounts.RETURN },
+                      ]}
+                      selectedValues={statusFilter}
+                      onApplyFilter={(vals) => {
+                        setStatusFilter(vals);
+                        setPage(1);
+                      }}
+                      onClearFilter={() => {
+                        setStatusFilter([]);
+                        setPage(1);
+                      }}
+                      align="right"
+                    />
+                  </div>
+                </th>
+
+                {/* RETURN */}
+                <th className="py-2 px-1 w-[6%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">RETURN</span>
+                    <ExcelColumnFilter
+                      title="Return"
+                      columnKey="return"
+                      isOpen={openFilterColumn === "return"}
+                      onToggle={() => toggleFilterColumn("return")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={returnFilter !== "ALL"}
+                      options={[
+                        { value: "HAS_RETURN", label: "Has Return", count: returnCounts.HAS_RETURN },
+                        { value: "NO_RETURN", label: "No Return", count: returnCounts.NO_RETURN },
+                      ]}
+                      selectedValues={returnFilter === "ALL" ? [] : [returnFilter]}
+                      onApplyFilter={(vals) => {
+                        if (vals.length === 1) setReturnFilter(vals[0]);
+                        else setReturnFilter("ALL");
+                        setPage(1);
+                      }}
+                      onClearFilter={() => {
+                        setReturnFilter("ALL");
+                        setPage(1);
+                      }}
+                      align="right"
+                    />
+                  </div>
+                </th>
+
+                {/* COURIER */}
+                <th className="py-2 px-1 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">COURIER</span>
+                    <ExcelColumnFilter
+                      title="Courier"
+                      columnKey="courierName"
+                      isOpen={openFilterColumn === "courierName"}
+                      onToggle={() => toggleFilterColumn("courierName")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={courierFilter.length > 0}
+                      canSort
+                      currentSortField={sortField}
+                      currentSortAsc={sortAsc}
+                      sortFieldKey="courierName"
+                      onSort={handleSort}
+                      options={[
+                        { value: "ST Courier", label: "ST Courier", count: courierCounts["ST Courier"] || 0 },
+                        { value: "DTDC", label: "DTDC", count: courierCounts["DTDC"] || 0 },
+                        { value: "India Post", label: "India Post", count: courierCounts["India Post"] || 0 },
+                        { value: "Delhivery", label: "Delhivery", count: courierCounts["Delhivery"] || 0 },
+                        { value: "Blue Dart", label: "Blue Dart", count: courierCounts["Blue Dart"] || 0 },
+                        { value: "(Unassigned)", label: "Unassigned", count: courierCounts["(Unassigned)"] || 0 },
+                      ]}
+                      selectedValues={courierFilter}
+                      onApplyFilter={(vals) => {
+                        setCourierFilter(vals);
+                        setPage(1);
+                      }}
+                      onClearFilter={() => {
+                        setCourierFilter([]);
+                        setPage(1);
+                      }}
+                      align="right"
+                    />
+                  </div>
+                </th>
+
+                {/* LLR */}
+                <th className="py-2 px-1 w-[6.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">LLR</span>
+                    <ExcelColumnFilter
+                      title="LLR"
+                      columnKey="llr"
+                      isOpen={openFilterColumn === "llr"}
+                      onToggle={() => toggleFilterColumn("llr")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={llrFilter !== "ALL"}
+                      options={[
+                        { value: "WITH_LLR", label: "With LLR Number", count: llrCounts.WITH_LLR },
+                        { value: "WITHOUT_LLR", label: "Missing LLR", count: llrCounts.WITHOUT_LLR },
+                      ]}
+                      selectedValues={llrFilter === "ALL" ? [] : [llrFilter]}
+                      onApplyFilter={(vals) => {
+                        if (vals.length === 1) setLlrFilter(vals[0]);
+                        else setLlrFilter("ALL");
+                        setPage(1);
+                      }}
+                      onClearFilter={() => {
+                        setLlrFilter("ALL");
+                        setPage(1);
+                      }}
+                      align="right"
+                    />
+                  </div>
+                </th>
+
+                {/* COURIER STATUS */}
+                <th className="py-2 px-1 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">COURIER STATUS</span>
+                    <ExcelColumnFilter
+                      title="Courier Status"
+                      columnKey="courierStatus"
+                      isOpen={openFilterColumn === "courierStatus"}
+                      onToggle={() => toggleFilterColumn("courierStatus")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={courierStatusFilter.length > 0}
+                      canSort
+                      currentSortField={sortField}
+                      currentSortAsc={sortAsc}
+                      sortFieldKey="courierStatus"
+                      onSort={handleSort}
+                      options={[
+                        { value: "PENDING", label: "Courier Pending", count: courierStatusCounts.PENDING },
+                        { value: "SHIPPED", label: "Courier Shipped", count: courierStatusCounts.SHIPPED },
+                        { value: "WAITING_FOR_PICKUP", label: "Waiting for Pickup", count: courierStatusCounts.WAITING_FOR_PICKUP },
+                        { value: "PICKED_UP", label: "Picked Up", count: courierStatusCounts.PICKED_UP },
+                        { value: "DELIVERED", label: "Delivered", count: courierStatusCounts.DELIVERED },
+                      ]}
+                      selectedValues={courierStatusFilter}
+                      onApplyFilter={(vals) => {
+                        setCourierStatusFilter(vals);
+                        setPage(1);
+                      }}
+                      onClearFilter={() => {
+                        setCourierStatusFilter([]);
+                        setPage(1);
+                      }}
+                      align="right"
+                    />
+                  </div>
+                </th>
+
+                {/* SMS STATUS */}
+                <th className="py-2 px-1 w-[8.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">SMS STATUS</span>
+                    <ExcelColumnFilter
+                      title="SMS Status"
+                      columnKey="smsStatus"
+                      isOpen={openFilterColumn === "smsStatus"}
+                      onToggle={() => toggleFilterColumn("smsStatus")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={smsStatusFilter.length > 0}
+                      canSort
+                      currentSortField={sortField}
+                      currentSortAsc={sortAsc}
+                      sortFieldKey="smsStatus"
+                      onSort={handleSort}
+                      options={[
+                        { value: "SENT", label: "SMS Sent", count: smsStatusCounts.SENT },
+                        { value: "PENDING", label: "SMS Pending", count: smsStatusCounts.PENDING },
+                        { value: "FAILED", label: "SMS Failed", count: smsStatusCounts.FAILED },
+                      ]}
+                      selectedValues={smsStatusFilter}
+                      onApplyFilter={(vals) => {
+                        setSmsStatusFilter(vals);
+                        setPage(1);
+                      }}
+                      onClearFilter={() => {
+                        setSmsStatusFilter([]);
+                        setPage(1);
+                      }}
+                      align="right"
+                    />
+                  </div>
+                </th>
+
+                {/* TRACKING */}
+                <th className="py-2 px-1 w-[5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">
+                  TRACKING
+                </th>
               </tr>
             </thead>
 
@@ -727,7 +1406,7 @@ function OrdersContent() {
                         {formatDate(order.createdAt)}
                       </td>
 
-                      {/* Customer Name (compact width, truncated name, phone below) */}
+                      {/* Customer Name */}
                       <td className="py-2 px-1.5 truncate border-r border-b border-slate-300" title={`${order.customer.name} (${order.customer.mobile})`}>
                         <span className="font-semibold text-slate-800 block truncate text-xs">
                           {order.customer.name}
@@ -757,7 +1436,7 @@ function OrdersContent() {
                         <OrderStatusBadge status={order.orderStatus} className="justify-center text-[11px]" />
                       </td>
 
-                      {/* Return Column (Requirement 19) */}
+                      {/* Return Column */}
                       <td className="py-2 px-1 text-center truncate border-r border-b border-slate-300" onClick={(e) => e.stopPropagation()}>
                         {(() => {
                           const orderReturns = returns.filter((r) => r.orderId === order.id || r.orderNumber === order.orderNumber);
@@ -858,7 +1537,7 @@ function OrdersContent() {
 
               <div className="flex items-center justify-between text-[11px] pt-2 border-t border-slate-100 text-slate-500">
                 <span>
-                  Courier: <strong>{order.dispatch.courierName}</strong>
+                  Courier: <strong>{order.dispatch.courierName || "-"}</strong>
                 </span>
                 <SmsStatusBadge status={order.sms.status} />
               </div>
@@ -952,5 +1631,3 @@ export default function OrdersPage() {
     </Suspense>
   );
 }
-
-
