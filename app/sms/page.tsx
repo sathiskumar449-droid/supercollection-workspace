@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { 
   Send, 
-  RefreshCw, 
   CheckCircle2, 
   Clock, 
   AlertCircle, 
@@ -14,11 +13,10 @@ import {
   Info, 
   Eye, 
   Phone,
-  FileSpreadsheet,
-  FileText,
-  CheckCheck,
-  ChevronDown,
-  CheckSquare,
+  FileSpreadsheet, 
+  FileText, 
+  CheckCheck, 
+  CheckSquare, 
   X
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
@@ -35,8 +33,6 @@ function SmsMonitoringContent() {
   const {
     orders,
     user,
-    syncPing4SmsStatus,
-    bulkSyncPing4SmsStatus,
     updateSmsStatus,
     bulkUpdateSmsStatus,
     updateOrderStatus,
@@ -47,13 +43,9 @@ function SmsMonitoringContent() {
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshBanner, setRefreshBanner] = useState<string | null>(null);
 
   // Bulk Selection State
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isBulkRefreshing, setIsBulkRefreshing] = useState(false);
-  const [bulkStatus, setBulkStatus] = useState<string>("");
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
   // ONLY orders that have reached "SHIPPED" in Courier Hub (when LLR / Tracking is entered)
@@ -125,46 +117,13 @@ function SmsMonitoringContent() {
     );
   };
 
-  const handleBulkRefreshSms = async () => {
-    if (selectedIds.length === 0) return;
-    setIsBulkRefreshing(true);
-    try {
-      const res = bulkSyncPing4SmsStatus(selectedIds);
-      triggerToast(`Polled Ping4SMS gateway. ${res.updatedCount} delivery receipts updated for ${selectedIds.length} orders.`);
-      setSelectedIds([]);
-      setBulkStatus("");
-    } finally {
-      setIsBulkRefreshing(false);
-    }
-  };
-
   const handleBulkMarkSent = () => {
     if (selectedIds.length === 0) return;
     setIsBulkUpdating(true);
     try {
-      const res = bulkUpdateSmsStatus(selectedIds, "SENT");
+      bulkUpdateSmsStatus(selectedIds, "SENT");
       triggerToast(`${selectedIds.length} order(s) marked as SMS Sent!`);
       setSelectedIds([]);
-      setBulkStatus("");
-    } finally {
-      setIsBulkUpdating(false);
-    }
-  };
-
-  const handleApplyBulkStatus = () => {
-    if (selectedIds.length === 0 || !bulkStatus) return;
-    setIsBulkUpdating(true);
-    try {
-      const res = bulkUpdateSmsStatus(selectedIds, bulkStatus as SmsStatus);
-      const label =
-        bulkStatus === "SENT"
-          ? "Sent"
-          : bulkStatus === "PENDING"
-          ? "Waiting for SMS"
-          : "Delivery Failed";
-      triggerToast(`${selectedIds.length} order(s) updated to SMS ${label}!`);
-      setSelectedIds([]);
-      setBulkStatus("");
     } finally {
       setIsBulkUpdating(false);
     }
@@ -174,18 +133,6 @@ function SmsMonitoringContent() {
     updateSmsStatus(orderId, newStatus);
     const label = newStatus === "SENT" ? "Sent" : newStatus === "PENDING" ? "Waiting for SMS" : "Failed";
     triggerToast(`Order ${orderNumber} SMS status updated to ${label}`);
-  };
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    setRefreshBanner(null);
-    try {
-      const res = syncPing4SmsStatus();
-      setRefreshBanner(`Polled Ping4SMS gateway. ${res.updatedCount} delivery receipts updated.`);
-      setTimeout(() => setRefreshBanner(null), 4000);
-    } finally {
-      setIsRefreshing(false);
-    }
   };
 
   // Toast feedback state
@@ -341,30 +288,31 @@ function SmsMonitoringContent() {
       {/* Main Table */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
         {/* Controls */}
-        <div className="p-3 border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs w-full md:w-auto overflow-x-auto">
-            {[
-              { key: "ALL", label: "All Statuses" },
-              { key: "PENDING", label: `Waiting for SMS (${pendingCount})` },
-              { key: "SENT", label: `Sent (${sentCount})` },
-              { key: "FAILED", label: `Failed (${failedCount})` },
-            ].map((tab) => (
+        <div className="p-3 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+          {/* 1st Position: Search Bar */}
+          <div className="relative w-full sm:w-72">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by Mobile, Order #, LLR..."
+              className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-orange-500 font-medium text-slate-800 placeholder-slate-400 transition-all"
+            />
+            {searchQuery && (
               <button
-                key={tab.key}
-                onClick={() => setStatusFilter(tab.key)}
-                className={cn(
-                  "px-3 py-1.5 rounded-md font-medium transition-all text-xs whitespace-nowrap",
-                  statusFilter === tab.key
-                    ? "bg-white text-slate-900 shadow-xs font-semibold"
-                    : "text-slate-600 hover:text-slate-900"
-                )}
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                title="Clear search"
               >
-                {tab.label}
+                <X className="w-3 h-3" />
               </button>
-            ))}
+            )}
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap justify-end w-full md:w-auto">
+          {/* Right Side: Active Status Tag / Selected Bulk Actions + Export Buttons */}
+          <div className="flex items-center gap-2.5 flex-wrap justify-end w-full sm:w-auto">
             {toastMessage && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold animate-in fade-in">
                 <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
@@ -372,135 +320,53 @@ function SmsMonitoringContent() {
               </div>
             )}
 
-            {refreshBanner && (
-              <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 animate-in fade-in">
-                {refreshBanner}
-              </span>
-            )}
-
-            {/* Bulk Selection Actions (Fixed in Top Controls - Always Visible) */}
-            <div className="flex items-center gap-2 flex-wrap bg-orange-50/95 border border-orange-200 px-2.5 py-1.5 rounded-lg">
-              {/* Selected Badge with Clear */}
-              {selectedIds.length > 0 && (
-                <>
-                  <div className="flex items-center gap-1.5 font-bold text-orange-900 text-xs animate-in fade-in">
-                    <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
-                    <span>{selectedIds.length} selected</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedIds([]);
-                        setBulkStatus("");
-                      }}
-                      className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
-                      title="Clear selection"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <div className="h-4 w-px bg-orange-200 mx-0.5" />
-                </>
-              )}
-
-              {/* Direct Quick "Mark as Sent" button */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedIds.length === 0) {
-                    triggerToast("Please select orders using checkboxes to mark as SMS Sent");
-                    return;
-                  }
-                  handleBulkMarkSent();
-                }}
-                disabled={isBulkUpdating}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98 transition-all"
-                title="Mark selected orders as SMS Sent"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Mark Sent{selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}</span>
-              </button>
-
-              {/* Bulk Edit dropdown */}
-              <div className="relative">
-                <select
-                  value={bulkStatus}
-                  onChange={(e) => setBulkStatus(e.target.value)}
-                  className="appearance-none bg-white text-slate-800 font-semibold border border-orange-300 hover:border-orange-400 pl-2.5 pr-7 py-1 rounded outline-none focus:ring-1 focus:ring-orange-500 text-xs shadow-2xs cursor-pointer"
+            {/* Active Status Filter Badge (if filtered from top metric cards) */}
+            {statusFilter !== "ALL" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-semibold border border-orange-200">
+                <span>Filter: {statusFilter === "PENDING" ? "Waiting for SMS" : statusFilter === "SENT" ? "Sent" : "Failed"}</span>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("ALL")}
+                  className="hover:text-red-700 cursor-pointer p-0.5"
+                  title="Clear status filter"
                 >
-                  <option value="" disabled>Status ▾</option>
-                  <option value="SENT">SMS Sent</option>
-                  <option value="PENDING">Waiting for SMS</option>
-                  <option value="FAILED">Delivery Failed</option>
-                </select>
-                <ChevronDown className="w-3 h-3 text-slate-500 absolute right-2 top-2 pointer-events-none" />
-              </div>
-
-              {/* Apply Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedIds.length === 0) {
-                    triggerToast("Please select orders using checkboxes first to apply SMS status");
-                    return;
-                  }
-                  if (!bulkStatus) {
-                    triggerToast("Please select an SMS status from the dropdown");
-                    return;
-                  }
-                  handleApplyBulkStatus();
-                }}
-                disabled={isBulkUpdating}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98"
-              >
-                <CheckCheck className="w-3.5 h-3.5" />
-                <span>Apply</span>
-              </button>
-
-              {/* Polling Gateway Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedIds.length === 0) {
-                    triggerToast("Please select orders using checkboxes to poll delivery gateway");
-                    return;
-                  }
-                  handleBulkRefreshSms();
-                }}
-                disabled={isBulkRefreshing}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white font-semibold text-xs shadow-2xs cursor-pointer transition-colors"
-              >
-                <RefreshCw className={cn("w-3.5 h-3.5", isBulkRefreshing && "animate-spin")} />
-                <span>{isBulkRefreshing ? "Polling..." : `Poll${selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}`}</span>
-              </button>
-            </div>
-
-            {refreshBanner && (
-              <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 animate-in fade-in">
-                {refreshBanner}
+                  <X className="w-3 h-3" />
+                </button>
               </span>
             )}
 
-            <div className="relative w-full sm:w-60">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by Mobile, Order #, LLR..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-orange-500"
-              />
-            </div>
+            {/* Bulk Selection Actions (Only shown when rows are checked) */}
+            {selectedIds.length > 0 && (
+              <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-lg animate-in fade-in">
+                <div className="flex items-center gap-1.5 font-bold text-orange-900 text-xs">
+                  <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
+                  <span>{selectedIds.length} selected</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds([])}
+                    className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
+                    title="Clear selection"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
 
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-700 hover:bg-orange-800 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs"
-            >
-              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
-              <span>{isRefreshing ? "Checking..." : "Refresh Status"}</span>
-            </button>
+                <div className="h-4 w-px bg-orange-200 mx-0.5" />
 
-            {/* Export Actions (Last/Rightmost) */}
+                <button
+                  type="button"
+                  onClick={handleBulkMarkSent}
+                  disabled={isBulkUpdating}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-98 transition-all"
+                  title="Mark selected orders as SMS Sent"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Mark Sent</span>
+                </button>
+              </div>
+            )}
+
+            {/* Export Actions (Excel & PDF) */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleExportExcel}
@@ -672,5 +538,3 @@ export default function SmsMonitoringPage() {
     </Suspense>
   );
 }
-
-
