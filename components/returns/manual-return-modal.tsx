@@ -706,21 +706,6 @@ export function ManualReturnModal({
                         </button>
                       </div>
                     )}
-
-                    {/* Quick Link to Manual Entry */}
-                    {!searchQuery && (
-                      <div className="pt-1 flex items-center justify-between text-[11px]">
-                        <span className="text-slate-500">Need to record a return for an offline/unlisted order?</span>
-                        <button
-                          type="button"
-                          onClick={() => handleSwitchToManual()}
-                          className="text-orange-600 hover:text-orange-700 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                          <span>Switch to Direct Manual Entry</span>
-                        </button>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   /* Selected Order Snapshot */
@@ -981,20 +966,12 @@ export function ManualReturnModal({
               </div>
             ) : orderMode === "SEARCH" ? (
               /* Informative card when in SEARCH mode and no order selected yet */
-              <div className="p-6 bg-slate-50/80 border border-dashed border-slate-300 rounded-xl text-center space-y-2.5">
+              <div className="p-6 bg-slate-50/80 border border-dashed border-slate-300 rounded-xl text-center space-y-2">
                 <Package className="w-8 h-8 text-slate-400 mx-auto" />
                 <div className="font-bold text-slate-700 text-xs">No Order Selected Yet</div>
                 <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                  Search and pick an order in Step 1 above to load products automatically, or switch to Direct Manual Entry to type products manually.
+                  Search and pick an order in Step 1 above to load products automatically.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => handleSwitchToManual(searchQuery.trim())}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold text-xs cursor-pointer shadow-xs transition-colors"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Switch to Direct Manual Entry</span>
-                </button>
               </div>
             ) : (
               /* B. If manual order mode: editable manual returned products list */
