@@ -40,7 +40,7 @@ import { ExcelColumnFilter } from "@/components/orders/excel-column-filter";
 
 function OrdersContent() {
   const searchParams = useSearchParams();
-  const initialStatus = (searchParams.get("status") as OrderStatus) || "ALL";
+  const statusParam = searchParams.get("status");
 
   const { 
     orders, 
@@ -60,7 +60,7 @@ function OrdersContent() {
 
   // Column filter states
   const [statusFilter, setStatusFilter] = useState<string[]>(
-    initialStatus && initialStatus !== "ALL" ? [initialStatus] : []
+    statusParam && statusParam !== "ALL" ? [statusParam] : []
   );
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [courierFilter, setCourierFilter] = useState<string[]>([]);
