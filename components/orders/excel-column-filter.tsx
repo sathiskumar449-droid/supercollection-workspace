@@ -2,14 +2,10 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  ArrowUp, 
-  ArrowDown, 
   Search, 
   X, 
-  Check, 
   Filter, 
-  RotateCcw,
-  ArrowUpDown
+  RotateCcw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,15 +24,6 @@ export interface ExcelColumnFilterProps {
   onClose: () => void;
   isActive: boolean;
   
-  // Sorting props
-  canSort?: boolean;
-  currentSortField?: string;
-  currentSortAsc?: boolean;
-  sortFieldKey?: string;
-  onSort?: (field: any, asc: boolean) => void;
-  sortAscLabel?: string;
-  sortDescLabel?: string;
-
   // Filter types
   filterType?: "checkbox" | "search" | "single_select";
 
@@ -55,6 +42,15 @@ export interface ExcelColumnFilterProps {
 
   // Alignment
   align?: "left" | "right";
+
+  // Deprecated sort props (ignored)
+  canSort?: boolean;
+  currentSortField?: string;
+  currentSortAsc?: boolean;
+  sortFieldKey?: string;
+  onSort?: (field: any, asc: boolean) => void;
+  sortAscLabel?: string;
+  sortDescLabel?: string;
 }
 
 export function ExcelColumnFilter({
@@ -64,13 +60,6 @@ export function ExcelColumnFilter({
   onToggle,
   onClose,
   isActive,
-  canSort = true,
-  currentSortField,
-  currentSortAsc = false,
-  sortFieldKey,
-  onSort,
-  sortAscLabel = "Sort A to Z",
-  sortDescLabel = "Sort Z to A",
   filterType = "checkbox",
   options = [],
   selectedValues = [],
@@ -160,9 +149,6 @@ export function ExcelColumnFilter({
     onClose();
   };
 
-  const isSortedAsc = currentSortField === sortFieldKey && currentSortAsc === true;
-  const isSortedDesc = currentSortField === sortFieldKey && currentSortAsc === false;
-
   return (
     <div className="relative inline-flex items-center" ref={containerRef}>
       {/* Excel Filter Button Icon */}
@@ -178,7 +164,7 @@ export function ExcelColumnFilter({
             ? "bg-orange-600 hover:bg-orange-700 text-white shadow-xs ring-1 ring-orange-500"
             : "bg-slate-200/90 hover:bg-slate-300 text-slate-600 hover:text-slate-900 border border-slate-300/80 shadow-2xs"
         )}
-        title={isActive ? `Filtered by ${title} (Active - click to edit)` : `Filter / Sort ${title}`}
+        title={isActive ? `Filtered by ${title} (Active - click to edit)` : `Filter ${title}`}
       >
         {isActive ? (
           <Filter className="w-2.5 h-2.5 fill-current" />
@@ -218,47 +204,6 @@ export function ExcelColumnFilter({
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
-
-          {/* Sort Actions (Excel Style) */}
-          {canSort && sortFieldKey && onSort && (
-            <div className="space-y-0.5 pb-1.5 border-b border-slate-100 mb-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  onSort(sortFieldKey, true);
-                  onClose();
-                }}
-                className={cn(
-                  "w-full flex items-center justify-between px-2 py-1.5 rounded text-left hover:bg-slate-100 transition-colors cursor-pointer",
-                  isSortedAsc && "bg-orange-50 text-orange-700 font-semibold"
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <ArrowUp className="w-3.5 h-3.5 text-slate-500" />
-                  <span>{sortAscLabel}</span>
-                </div>
-                {isSortedAsc && <Check className="w-3.5 h-3.5 text-orange-600" />}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  onSort(sortFieldKey, false);
-                  onClose();
-                }}
-                className={cn(
-                  "w-full flex items-center justify-between px-2 py-1.5 rounded text-left hover:bg-slate-100 transition-colors cursor-pointer",
-                  isSortedDesc && "bg-orange-50 text-orange-700 font-semibold"
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <ArrowDown className="w-3.5 h-3.5 text-slate-500" />
-                  <span>{sortDescLabel}</span>
-                </div>
-                {isSortedDesc && <Check className="w-3.5 h-3.5 text-orange-600" />}
-              </button>
-            </div>
-          )}
 
           {/* Clear Filter Shortcut */}
           {isActive && (

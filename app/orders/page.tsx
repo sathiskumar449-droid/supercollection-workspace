@@ -12,6 +12,8 @@ import {
   Eye, 
   CheckCircle2, 
   ArrowUpDown, 
+  ArrowUp,
+  ArrowDown,
   ChevronLeft, 
   ChevronRight, 
   Package, 
@@ -937,13 +939,6 @@ function OrdersContent() {
                       onToggle={() => toggleFilterColumn("orderNumber")}
                       onClose={() => setOpenFilterColumn(null)}
                       isActive={Boolean(orderIdFilter.trim())}
-                      canSort
-                      currentSortField={sortField}
-                      currentSortAsc={sortAsc}
-                      sortFieldKey="orderNumber"
-                      onSort={handleSort}
-                      sortAscLabel="Sort A to Z"
-                      sortDescLabel="Sort Z to A"
                       filterType="search"
                       searchValue={orderIdFilter}
                       onApplySearch={(val) => {
@@ -961,26 +956,29 @@ function OrdersContent() {
                 </th>
 
                 {/* DATE */}
-                <th className="py-2 px-1.5 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th 
+                  className="py-2 px-1.5 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:bg-slate-200/80 transition-colors select-none"
+                  onClick={() => {
+                    if (sortField === "createdAt") {
+                      setSortAsc(!sortAsc);
+                    } else {
+                      setSortField("createdAt");
+                      setSortAsc(false);
+                    }
+                  }}
+                  title="Click to sort by Date"
+                >
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">DATE</span>
-                    <ExcelColumnFilter
-                      title="Date"
-                      columnKey="createdAt"
-                      isOpen={openFilterColumn === "createdAt"}
-                      onToggle={() => toggleFilterColumn("createdAt")}
-                      onClose={() => setOpenFilterColumn(null)}
-                      isActive={false}
-                      canSort
-                      currentSortField={sortField}
-                      currentSortAsc={sortAsc}
-                      sortFieldKey="createdAt"
-                      onSort={handleSort}
-                      sortAscLabel="Sort Oldest to Newest"
-                      sortDescLabel="Sort Newest to Oldest"
-                      onClearFilter={() => {}}
-                      align="left"
-                    />
+                    {sortField === "createdAt" ? (
+                      sortAsc ? (
+                        <ArrowUp className="w-3 h-3 text-orange-600 shrink-0" />
+                      ) : (
+                        <ArrowDown className="w-3 h-3 text-orange-600 shrink-0" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
+                    )}
                   </div>
                 </th>
 
@@ -995,13 +993,6 @@ function OrdersContent() {
                       onToggle={() => toggleFilterColumn("customerName")}
                       onClose={() => setOpenFilterColumn(null)}
                       isActive={Boolean(customerFilter.trim())}
-                      canSort
-                      currentSortField={sortField}
-                      currentSortAsc={sortAsc}
-                      sortFieldKey="customerName"
-                      onSort={handleSort}
-                      sortAscLabel="Sort A to Z"
-                      sortDescLabel="Sort Z to A"
                       filterType="search"
                       searchValue={customerFilter}
                       onApplySearch={(val) => {
@@ -1048,26 +1039,29 @@ function OrdersContent() {
                 </th>
 
                 {/* ITEMS */}
-                <th className="py-2 px-1 w-[5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th 
+                  className="py-2 px-1 w-[5%] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:bg-slate-200/80 transition-colors select-none"
+                  onClick={() => {
+                    if (sortField === "itemsCount") {
+                      setSortAsc(!sortAsc);
+                    } else {
+                      setSortField("itemsCount");
+                      setSortAsc(false);
+                    }
+                  }}
+                  title="Click to sort by Items"
+                >
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">ITEMS</span>
-                    <ExcelColumnFilter
-                      title="Items"
-                      columnKey="itemsCount"
-                      isOpen={openFilterColumn === "itemsCount"}
-                      onToggle={() => toggleFilterColumn("itemsCount")}
-                      onClose={() => setOpenFilterColumn(null)}
-                      isActive={false}
-                      canSort
-                      currentSortField={sortField}
-                      currentSortAsc={sortAsc}
-                      sortFieldKey="itemsCount"
-                      onSort={handleSort}
-                      sortAscLabel="Sort Fewest to Most"
-                      sortDescLabel="Sort Most to Fewest"
-                      onClearFilter={() => {}}
-                      align="left"
-                    />
+                    {sortField === "itemsCount" ? (
+                      sortAsc ? (
+                        <ArrowUp className="w-3 h-3 text-orange-600 shrink-0" />
+                      ) : (
+                        <ArrowDown className="w-3 h-3 text-orange-600 shrink-0" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
+                    )}
                   </div>
                 </th>
 
@@ -1082,13 +1076,6 @@ function OrdersContent() {
                       onToggle={() => toggleFilterColumn("totalAmount")}
                       onClose={() => setOpenFilterColumn(null)}
                       isActive={amountFilter.length > 0}
-                      canSort
-                      currentSortField={sortField}
-                      currentSortAsc={sortAsc}
-                      sortFieldKey="totalAmount"
-                      onSort={handleSort}
-                      sortAscLabel="Sort Smallest to Largest"
-                      sortDescLabel="Sort Largest to Smallest"
                       options={[
                         { value: "UNDER_500", label: "Under ₹500", count: amountCounts.UNDER_500 },
                         { value: "500_1000", label: "₹500 - ₹1,000", count: amountCounts["500_1000"] },
@@ -1120,11 +1107,6 @@ function OrdersContent() {
                       onToggle={() => toggleFilterColumn("orderStatus")}
                       onClose={() => setOpenFilterColumn(null)}
                       isActive={statusFilter.length > 0}
-                      canSort
-                      currentSortField={sortField}
-                      currentSortAsc={sortAsc}
-                      sortFieldKey="orderStatus"
-                      onSort={handleSort}
                       options={[
                         { value: "CONFIRMED", label: "Processing", count: statusCounts.CONFIRMED },
                         { value: "PACKING", label: "Packaging", count: statusCounts.PACKING },
@@ -1188,11 +1170,6 @@ function OrdersContent() {
                       onToggle={() => toggleFilterColumn("courierName")}
                       onClose={() => setOpenFilterColumn(null)}
                       isActive={courierFilter.length > 0}
-                      canSort
-                      currentSortField={sortField}
-                      currentSortAsc={sortAsc}
-                      sortFieldKey="courierName"
-                      onSort={handleSort}
                       options={[
                         { value: "ST Courier", label: "ST Courier", count: courierCounts["ST Courier"] || 0 },
                         { value: "DTDC", label: "DTDC", count: courierCounts["DTDC"] || 0 },
@@ -1256,11 +1233,6 @@ function OrdersContent() {
                       onToggle={() => toggleFilterColumn("courierStatus")}
                       onClose={() => setOpenFilterColumn(null)}
                       isActive={courierStatusFilter.length > 0}
-                      canSort
-                      currentSortField={sortField}
-                      currentSortAsc={sortAsc}
-                      sortFieldKey="courierStatus"
-                      onSort={handleSort}
                       options={[
                         { value: "PENDING", label: "Courier Pending", count: courierStatusCounts.PENDING },
                         { value: "SHIPPED", label: "Courier Shipped", count: courierStatusCounts.SHIPPED },
@@ -1293,11 +1265,6 @@ function OrdersContent() {
                       onToggle={() => toggleFilterColumn("smsStatus")}
                       onClose={() => setOpenFilterColumn(null)}
                       isActive={smsStatusFilter.length > 0}
-                      canSort
-                      currentSortField={sortField}
-                      currentSortAsc={sortAsc}
-                      sortFieldKey="smsStatus"
-                      onSort={handleSort}
                       options={[
                         { value: "SENT", label: "SMS Sent", count: smsStatusCounts.SENT },
                         { value: "PENDING", label: "SMS Pending", count: smsStatusCounts.PENDING },
