@@ -631,19 +631,6 @@ function OrdersContent() {
                 </button>
               )}
             </div>
-
-            {/* Quick Helper badge showing Excel column filter hint */}
-            <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-slate-400 border-l border-slate-200 pl-3">
-              <span className="flex items-center gap-1">
-                Filter directly from column headers using
-                <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-slate-200 text-slate-700 text-[10px] font-bold border border-slate-300">
-                  <svg className="w-2.5 h-2.5" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M1.5 2.5h13a.5.5 0 0 1 .38.82l-4.88 5.69v4.49a.5.5 0 0 1-.72.45l-2.5-1.25A.5.5 0 0 1 6.5 12.25V9.01L1.12 3.32a.5.5 0 0 1 .38-.82z" />
-                  </svg>
-                </span>
-                Excel filter icons
-              </span>
-            </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
