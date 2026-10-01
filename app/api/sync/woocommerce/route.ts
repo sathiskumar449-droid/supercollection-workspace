@@ -8,17 +8,26 @@ import { parseWooCommerceDate } from "@/lib/woocommerce-source";
  * Connects to WooCommerce REST API with pagination and imports orders (Last Month, Last 30 Days, This Month, Last 2 Days, Custom) into Supabase.
  */
 export async function GET(req: NextRequest) {
-  return POST(req);
+  const url = new URL(req.url);
+  return handleSync({
+    rangeType: url.searchParams.get("rangeType") || "last_2_days",
+    startDate: url.searchParams.get("startDate") || undefined,
+    endDate: url.searchParams.get("endDate") || undefined,
+    storeUrl: url.searchParams.get("storeUrl") || undefined,
+  });
 }
 
 export async function POST(req: NextRequest) {
+  let body: any = {};
   try {
-    let body: any = {};
-    try {
-      body = await req.json();
-    } catch {
-      // Body is optional if env variables exist
-    }
+    body = await req.json();
+  } catch {
+    // Body is optional
+  }
+  return handleSync(body);
+}
+
+async function handleSync(body: any) {
 
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json({
