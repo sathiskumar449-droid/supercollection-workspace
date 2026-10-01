@@ -296,32 +296,88 @@ export function SyncWooCommerceDialog({
         }
       }
 
-      // 2. Send fetched orders to backend to upsert into Supabase
-      setStatusMessage({
-        type: "info",
-        text: fetchedOrders && fetchedOrders.length > 0
-          ? `Saving ${fetchedOrders.length} orders into Work Desk database...`
-          : "Contacting server to sync orders...",
-      });
+      // 2. Send fetched orders to backend in chunks of 20 to prevent Vercel Serverless Function timeout
+      let totalSyncedCount = 0;
 
-      const res = await fetch("/api/sync/woocommerce", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orders: fetchedOrders || undefined,
-          storeUrl: trimmedUrl,
-          consumerKey: trimmedKey,
-          consumerSecret: trimmedSecret,
-          rangeType,
-          startDate: rangeType === "custom" ? startDate : undefined,
-          endDate: rangeType === "custom" ? endDate : undefined,
-        }),
-      });
+      if (fetchedOrders && fetchedOrders.length > 0) {
+        const BATCH_SIZE = 20;
+        const totalOrders = fetchedOrders.length;
+        const totalBatches = Math.ceil(totalOrders / BATCH_SIZE);
 
-      const data = await res.json();
+        for (let b = 0; b < totalBatches; b++) {
+          const start = b * BATCH_SIZE;
+          const end = Math.min(start + BATCH_SIZE, totalOrders);
+          const chunk = fetchedOrders.slice(start, end);
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to sync orders from WooCommerce");
+          setStatusMessage({
+            type: "info",
+            text: `Saving orders into database (${end} / ${totalOrders})...`,
+          });
+
+          const res = await fetch("/api/sync/woocommerce", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orders: chunk,
+              isBatch: true,
+              batchIndex: b,
+              totalBatches,
+              storeUrl: trimmedUrl,
+              consumerKey: trimmedKey,
+              consumerSecret: trimmedSecret,
+              rangeType,
+              startDate: rangeType === "custom" ? startDate : undefined,
+              endDate: rangeType === "custom" ? endDate : undefined,
+            }),
+          });
+
+          const resText = await res.text();
+          let data: any = null;
+          try {
+            data = JSON.parse(resText);
+          } catch {
+            throw new Error(`Server returned error (${res.status}): ${resText.slice(0, 100)}`);
+          }
+
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || `Server error (${res.status}) while saving orders`);
+          }
+
+          totalSyncedCount += (typeof data.syncedCount === "number" ? data.syncedCount : chunk.length);
+        }
+      } else {
+        // Fallback: direct server sync
+        setStatusMessage({
+          type: "info",
+          text: "Contacting server to sync orders...",
+        });
+
+        const res = await fetch("/api/sync/woocommerce", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeUrl: trimmedUrl,
+            consumerKey: trimmedKey,
+            consumerSecret: trimmedSecret,
+            rangeType,
+            startDate: rangeType === "custom" ? startDate : undefined,
+            endDate: rangeType === "custom" ? endDate : undefined,
+          }),
+        });
+
+        const resText = await res.text();
+        let data: any = null;
+        try {
+          data = JSON.parse(resText);
+        } catch {
+          throw new Error(`Server returned error (${res.status}): ${resText.slice(0, 100)}`);
+        }
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Failed to sync orders from WooCommerce");
+        }
+
+        totalSyncedCount = data.syncedCount || 0;
       }
 
       // Purge any old local mock orders and reload fresh from Supabase
@@ -335,11 +391,13 @@ export function SyncWooCommerceDialog({
           ? "Last 30 Days"
           : rangeType === "this_month"
           ? "This Month"
+          : rangeType === "last_2_days"
+          ? "Last 2 Days"
           : rangeType === "all"
           ? "All Time"
           : "Selected Range";
 
-      if (data.syncedCount === 0) {
+      if (totalSyncedCount === 0) {
         setStatusMessage({
           type: "error",
           text: `0 orders found for ${rangeLabel}. If your orders were placed on different dates, please click "All Orders" or "This Month" above to import them!`,
@@ -347,11 +405,11 @@ export function SyncWooCommerceDialog({
       } else {
         setStatusMessage({
           type: "success",
-          text: `Success! Synced ${data.syncedCount} orders from WooCommerce (${rangeLabel})!`,
+          text: `Success! Synced ${totalSyncedCount} orders from WooCommerce (${rangeLabel})!`,
         });
 
         if (onSyncComplete) {
-          onSyncComplete(data.syncedCount);
+          onSyncComplete(totalSyncedCount);
         }
 
         setTimeout(() => {

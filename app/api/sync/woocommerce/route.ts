@@ -4,6 +4,7 @@ import { OrderStatus, OrderSource } from "@/types/orderflow";
 import { parseWooCommerceDate } from "@/lib/woocommerce-source";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * Format a Date object into WooCommerce / WordPress compliant ISO string (YYYY-MM-DDTHH:MM:SS)
@@ -311,9 +312,13 @@ async function handleSync(body: any) {
     }
 
     // Purge any previously imported WooCommerce orders with status NEW or RETURN
-    await db.from("orders").delete().eq("source", "WEBSITE").in("status", ["NEW", "RETURN"]);
+    // Only purge when not in a sub-batch, or on the first batch (batchIndex === 0)
+    if (!body.isBatch || body.batchIndex === 0) {
+      await db.from("orders").delete().eq("source", "WEBSITE").in("status", ["NEW", "RETURN"]);
+    }
 
     let syncedCount = 0;
+    const customerCache = new Map<string, string>();
 
     for (const wc of wcOrders) {
       // Strictly allow ONLY processing and completed orders from WooCommerce
@@ -353,7 +358,9 @@ async function handleSync(body: any) {
 
       // 1. Safe Customer Lookup / Upsert (avoid 42P10 constraint error)
       let customerId: string | null = null;
-      if (mobile) {
+      if (mobile && customerCache.has(mobile)) {
+        customerId = customerCache.get(mobile)!;
+      } else if (mobile) {
         const { data: existingCustomer } = await db
           .from("customers")
           .select("id")
@@ -362,6 +369,7 @@ async function handleSync(body: any) {
 
         if (existingCustomer?.id) {
           customerId = existingCustomer.id;
+          customerCache.set(mobile, customerId);
           await db
             .from("customers")
             .update({
@@ -393,6 +401,7 @@ async function handleSync(body: any) {
 
         if (!newCustErr && newCust) {
           customerId = newCust.id;
+          if (mobile) customerCache.set(mobile, customerId);
         } else {
           console.error("Failed to insert customer:", newCustErr);
         }
@@ -443,35 +452,19 @@ async function handleSync(body: any) {
       if (!orderError && order) {
         syncedCount++;
 
-        // 3. Insert Items (idempotent, safe deduplication)
+        // 3. Insert Items (idempotent, clean refresh)
         if (wc.line_items && wc.line_items.length > 0) {
           await (db as any).from("order_items").delete().eq("order_id", order.id);
 
-          const { data: remainingItems } = await (db as any)
-            .from("order_items")
-            .select("id, sku, size, product_name")
-            .eq("order_id", order.id);
-
-          const existingKeySet = new Set(
-            (remainingItems || []).map((r: any) =>
-              `${(r.sku || "").trim().toLowerCase()}__${(r.size || "").trim().toLowerCase()}__${(r.product_name || "").trim().toLowerCase()}`
-            )
-          );
-
-          const itemsToInsert = wc.line_items
-            .map((it: any, idx: number) => ({
-              order_id: order.id,
-              product_name: it.name || "Product",
-              sku: it.sku || `SKU-${idx + 1}`,
-              size: it.meta_data?.find((m: any) => m.key?.toLowerCase() === "size" || m.key?.toLowerCase() === "pa_size")?.value || "M",
-              quantity: parseInt(it.quantity, 10) || 1,
-              unit_price: parseFloat(it.price || "0") || 0,
-              subtotal: parseFloat(it.total || "0") || 0,
-            }))
-            .filter((it: any) => {
-              const key = `${it.sku.trim().toLowerCase()}__${it.size.trim().toLowerCase()}__${it.product_name.trim().toLowerCase()}`;
-              return !existingKeySet.has(key);
-            });
+          const itemsToInsert = wc.line_items.map((it: any, idx: number) => ({
+            order_id: order.id,
+            product_name: it.name || "Product",
+            sku: it.sku || `SKU-${idx + 1}`,
+            size: it.meta_data?.find((m: any) => m.key?.toLowerCase() === "size" || m.key?.toLowerCase() === "pa_size")?.value || "M",
+            quantity: parseInt(it.quantity, 10) || 1,
+            unit_price: parseFloat(it.price || "0") || 0,
+            subtotal: parseFloat(it.total || "0") || 0,
+          }));
 
           if (itemsToInsert.length > 0) {
             await (db as any).from("order_items").insert(itemsToInsert);
@@ -479,15 +472,10 @@ async function handleSync(body: any) {
         }
 
         // 4. Initial Activity Logs
-        const { data: existingLogs } = await db
-          .from("activity_logs")
-          .select("id, action")
-          .eq("order_id", order.id);
+        if (!existingOrder) {
+          const createdAtTime = parseWooCommerceDate(wc.date_created_gmt, wc.date_created);
+          const baseTime = new Date(createdAtTime).getTime();
 
-        const createdAtTime = parseWooCommerceDate(wc.date_created_gmt, wc.date_created);
-        const baseTime = new Date(createdAtTime).getTime();
-
-        if (!existingLogs || existingLogs.length === 0) {
           const initialLogs: any[] = [
             {
               order_id: order.id,
@@ -530,31 +518,6 @@ async function handleSync(body: any) {
           }
 
           await db.from("activity_logs").insert(initialLogs);
-        } else if (wc.status === "completed") {
-          const hasCompletedLog = existingLogs.some(
-            (l: any) => l.action?.toLowerCase() === "order completed"
-          );
-          if (!hasCompletedLog) {
-            const completedTimestamp = parseWooCommerceDate(wc.date_modified_gmt, wc.date_modified) || new Date().toISOString();
-            await db.from("activity_logs").insert([
-              {
-                order_id: order.id,
-                user_name: "WooCommerce",
-                user_role: "SYSTEM",
-                action: "Order Completed",
-                details: "Order completed in WooCommerce",
-                created_at: completedTimestamp,
-              },
-              {
-                order_id: order.id,
-                user_name: "Packing Station",
-                user_role: "PACKING_STAFF",
-                action: "Waiting for Packing",
-                details: "Order completed, waiting for packing in fulfillment station",
-                created_at: new Date(new Date(completedTimestamp).getTime() + 1000).toISOString(),
-              },
-            ]);
-          }
         }
       } else if (orderError) {
         console.error("Order upsert error for wcId", wcId, orderError);
