@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * Strictly without fractional milliseconds (.000Z), which breaks WordPress rest_parse_date_time regex.
  */
 function toWcDate(date: Date): string {
-  return date.toISOString().split(".")[0];
+  return date.toISOString().split(".")[0] + "Z";
 }
 
 export async function GET(req: NextRequest) {
@@ -227,10 +227,11 @@ async function handleSync(body: any) {
       return orders;
     }
 
-    // 1. ALWAYS fetch active processing orders (without date restriction, because active pending orders must be fulfilled)
+    // 1. ALWAYS fetch active processing & on-hold orders (without date restriction, because active pending orders must be fulfilled)
     // 2. Fetch completed orders within the chosen period
-    const [processingOrders, completedOrders] = await Promise.all([
+    const [processingOrders, onHoldOrders, completedOrders] = await Promise.all([
       fetchWcOrders("processing", {}, 10, false), // Fetch all active processing orders
+      fetchWcOrders("on-hold", {}, 10, false),    // Fetch all active on-hold orders
       fetchWcOrders("completed", {}, 15, rangeType !== "all"), // Completed orders in selected range
     ]);
 
@@ -249,9 +250,16 @@ async function handleSync(body: any) {
         }
       });
     }
+    if (Array.isArray(onHoldOrders)) {
+      onHoldOrders.forEach((o: any) => {
+        if (o.status === "on-hold") {
+          wcOrdersMap.set(String(o.id || o.number), o);
+        }
+      });
+    }
     if (Array.isArray(modifiedOrders)) {
       modifiedOrders.forEach((o: any) => {
-        if (o.status === "processing" || o.status === "completed") {
+        if (o.status === "processing" || o.status === "completed" || o.status === "on-hold") {
           wcOrdersMap.set(String(o.id || o.number), o);
         }
       });
@@ -273,8 +281,8 @@ async function handleSync(body: any) {
     let syncedCount = 0;
 
     for (const wc of wcOrders) {
-      // Strictly ignore pending, cancelled, refunded, failed, on-hold orders from WooCommerce
-      if (wc.status !== "processing" && wc.status !== "completed") {
+      // Allow processing, completed, and on-hold orders from WooCommerce
+      if (wc.status !== "processing" && wc.status !== "completed" && wc.status !== "on-hold") {
         continue;
       }
 

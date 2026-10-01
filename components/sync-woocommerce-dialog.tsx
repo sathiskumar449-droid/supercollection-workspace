@@ -38,9 +38,9 @@ export function SyncWooCommerceDialog({
       if (savedKey) setConsumerKey(savedKey);
       if (savedSecret) setConsumerSecret(savedSecret);
 
-      // If user hasn't explicitly picked a range, default to last_month
+      // Default to last_month, never get stuck on old last_2_days
       const savedRange = localStorage.getItem("sc_wc_range_type") as SyncRange;
-      if (savedRange) {
+      if (savedRange && savedRange !== "last_2_days") {
         setRangeType(savedRange);
       } else {
         setRangeType("last_month");
