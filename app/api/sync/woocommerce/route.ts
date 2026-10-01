@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * Strictly without fractional milliseconds (.000Z), which breaks WordPress rest_parse_date_time regex.
  */
 function toWcDate(date: Date): string {
-  return date.toISOString().split(".")[0] + "Z";
+  return date.toISOString().split(".")[0];
 }
 
 export async function GET(req: NextRequest) {
@@ -89,17 +89,17 @@ async function handleSync(body: any) {
       console.warn("Could not persist WooCommerce keys to integrations table:", saveErr);
     }
 
-    // Calculate Date Range
+    // Calculate Date Range in IST (Asia/Kolkata UTC+5:30)
     const rangeType = body.rangeType || "last_month";
     let afterIso: string | undefined = undefined;
     let beforeIso: string | undefined = undefined;
 
     const now = new Date();
-    // Indian Standard Time (IST = UTC + 5:30)
     const istOffsetMs = 5.5 * 60 * 60 * 1000;
     const nowIST = new Date(now.getTime() + istOffsetMs);
     const currentYear = nowIST.getUTCFullYear();
-    const currentMonth = nowIST.getUTCMonth(); // 0 = Jan, 9 = Oct
+    const currentMonth = nowIST.getUTCMonth(); // 0 = Jan, 8 = Sep, 9 = Oct
+    const currentDay = nowIST.getUTCDate();
 
     switch (rangeType) {
       case "last_month": {
@@ -107,42 +107,54 @@ async function handleSync(body: any) {
         const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
         const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1; // 0-indexed
         const lastDayOfPrevMonth = new Date(Date.UTC(prevYear, prevMonth + 1, 0)).getUTCDate();
+        const mStr = String(prevMonth + 1).padStart(2, "0");
+        const dStr = String(lastDayOfPrevMonth).padStart(2, "0");
 
-        const startUtc = new Date(Date.UTC(prevYear, prevMonth, 1, 0, 0, 0) - istOffsetMs);
-        const endUtc = new Date(Date.UTC(prevYear, prevMonth, lastDayOfPrevMonth, 23, 59, 59, 999) - istOffsetMs);
-
-        afterIso = toWcDate(startUtc);
-        beforeIso = toWcDate(endUtc);
+        afterIso = `${prevYear}-${mStr}-01T00:00:00`;
+        beforeIso = `${prevYear}-${mStr}-${dStr}T23:59:59`;
         break;
       }
 
       case "last_30_days": {
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        afterIso = toWcDate(thirtyDaysAgo);
-        beforeIso = toWcDate(now);
+        const past30IST = new Date(nowIST.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const y = past30IST.getUTCFullYear();
+        const m = String(past30IST.getUTCMonth() + 1).padStart(2, "0");
+        const d = String(past30IST.getUTCDate()).padStart(2, "0");
+        const curM = String(currentMonth + 1).padStart(2, "0");
+        const curD = String(currentDay).padStart(2, "0");
+
+        afterIso = `${y}-${m}-${d}T00:00:00`;
+        beforeIso = `${currentYear}-${curM}-${curD}T23:59:59`;
         break;
       }
 
       case "this_month": {
-        const startUtc = new Date(Date.UTC(currentYear, currentMonth, 1, 0, 0, 0) - istOffsetMs);
-        afterIso = toWcDate(startUtc);
-        beforeIso = toWcDate(now);
+        const curM = String(currentMonth + 1).padStart(2, "0");
+        const curD = String(currentDay).padStart(2, "0");
+        afterIso = `${currentYear}-${curM}-01T00:00:00`;
+        beforeIso = `${currentYear}-${curM}-${curD}T23:59:59`;
         break;
       }
 
       case "last_2_days": {
-        const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-        afterIso = toWcDate(twoDaysAgo);
-        beforeIso = toWcDate(now);
+        const past2IST = new Date(nowIST.getTime() - 2 * 24 * 60 * 60 * 1000);
+        const y = past2IST.getUTCFullYear();
+        const m = String(past2IST.getUTCMonth() + 1).padStart(2, "0");
+        const d = String(past2IST.getUTCDate()).padStart(2, "0");
+        const curM = String(currentMonth + 1).padStart(2, "0");
+        const curD = String(currentDay).padStart(2, "0");
+
+        afterIso = `${y}-${m}-${d}T00:00:00`;
+        beforeIso = `${currentYear}-${curM}-${curD}T23:59:59`;
         break;
       }
 
       case "custom": {
         if (body.startDate) {
-          afterIso = toWcDate(new Date(`${body.startDate}T00:00:00+05:30`));
+          afterIso = `${body.startDate}T00:00:00`;
         }
         if (body.endDate) {
-          beforeIso = toWcDate(new Date(`${body.endDate}T23:59:59+05:30`));
+          beforeIso = `${body.endDate}T23:59:59`;
         }
         break;
       }
@@ -204,6 +216,20 @@ async function handleSync(body: any) {
               console.log("Date filter rejected by WooCommerce REST API, retrying without date parameter...");
               return fetchWcOrders(status, extraParams, maxPages, false);
             }
+
+            let parsedErr: any = null;
+            try { parsedErr = JSON.parse(errText); } catch {}
+            const errorMsg = parsedErr?.message || errText || `HTTP ${res.status}`;
+
+            if (res.status === 401) {
+              throw new Error(`WooCommerce API Authentication Failed (401): ${errorMsg}. Please verify your Consumer Key and Consumer Secret.`);
+            }
+            if (res.status === 403) {
+              throw new Error(`WooCommerce Access Forbidden (403): ${errorMsg}. Please verify API Key permissions are set to Read/Write.`);
+            }
+            if (page === 1) {
+              throw new Error(`WooCommerce API Error (${res.status}): ${errorMsg}`);
+            }
             break;
           }
 
@@ -218,8 +244,14 @@ async function handleSync(body: any) {
           if (pageItems.length < 100) {
             break;
           }
-        } catch (err) {
+        } catch (err: any) {
+          if (err.message && err.message.includes("WooCommerce")) {
+            throw err;
+          }
           console.error(`Error fetching page ${page} for status ${status}:`, err);
+          if (page === 1) {
+            throw new Error(`Connection to WooCommerce failed: ${err.message || "Network error"}`);
+          }
           break;
         }
       }
@@ -227,12 +259,12 @@ async function handleSync(body: any) {
       return orders;
     }
 
-    // 1. ALWAYS fetch active processing & on-hold orders (without date restriction, because active pending orders must be fulfilled)
-    // 2. Fetch completed orders within the chosen period
-    const [processingOrders, onHoldOrders, completedOrders] = await Promise.all([
-      fetchWcOrders("processing", {}, 10, false), // Fetch all active processing orders
-      fetchWcOrders("on-hold", {}, 10, false),    // Fetch all active on-hold orders
-      fetchWcOrders("completed", {}, 15, rangeType !== "all"), // Completed orders in selected range
+    // 1. Fetch orders in the chosen date range across ALL statuses (null = "any" in WooCommerce)
+    // 2. Fetch all active processing & on-hold orders without date restriction so pending items are always fulfilled
+    const [rangeOrders, activeProcessingOrders, activeOnHoldOrders] = await Promise.all([
+      fetchWcOrders(null, {}, 15, rangeType !== "all"), // ALL statuses in selected date range
+      fetchWcOrders("processing", {}, 10, false),
+      fetchWcOrders("on-hold", {}, 10, false),
     ]);
 
     // Also fetch recently modified orders to catch recent status changes
@@ -243,33 +275,24 @@ async function handleSync(body: any) {
 
     // Deduplicate into a unified list by ID
     const wcOrdersMap = new Map<string, any>();
-    if (Array.isArray(completedOrders)) {
-      completedOrders.forEach((o: any) => {
-        if (o.status === "completed") {
-          wcOrdersMap.set(String(o.id || o.number), o);
-        }
+    if (Array.isArray(rangeOrders)) {
+      rangeOrders.forEach((o: any) => {
+        wcOrdersMap.set(String(o.id || o.number), o);
       });
     }
-    if (Array.isArray(onHoldOrders)) {
-      onHoldOrders.forEach((o: any) => {
-        if (o.status === "on-hold") {
-          wcOrdersMap.set(String(o.id || o.number), o);
-        }
+    if (Array.isArray(activeOnHoldOrders)) {
+      activeOnHoldOrders.forEach((o: any) => {
+        wcOrdersMap.set(String(o.id || o.number), o);
+      });
+    }
+    if (Array.isArray(activeProcessingOrders)) {
+      activeProcessingOrders.forEach((o: any) => {
+        wcOrdersMap.set(String(o.id || o.number), o);
       });
     }
     if (Array.isArray(modifiedOrders)) {
       modifiedOrders.forEach((o: any) => {
-        if (o.status === "processing" || o.status === "completed" || o.status === "on-hold") {
-          wcOrdersMap.set(String(o.id || o.number), o);
-        }
-      });
-    }
-    // Active processing orders from WooCommerce take precedence
-    if (Array.isArray(processingOrders)) {
-      processingOrders.forEach((o: any) => {
-        if (o.status === "processing") {
-          wcOrdersMap.set(String(o.id || o.number), o);
-        }
+        wcOrdersMap.set(String(o.id || o.number), o);
       });
     }
 
@@ -281,8 +304,8 @@ async function handleSync(body: any) {
     let syncedCount = 0;
 
     for (const wc of wcOrders) {
-      // Allow processing, completed, and on-hold orders from WooCommerce
-      if (wc.status !== "processing" && wc.status !== "completed" && wc.status !== "on-hold") {
+      // Allow all active orders from WooCommerce (exclude only trash, failed, cancelled, refunded)
+      if (wc.status === "cancelled" || wc.status === "refunded" || wc.status === "failed" || wc.status === "trash") {
         continue;
       }
 
@@ -532,6 +555,11 @@ async function handleSync(body: any) {
       .update({ action: "Order completed", details: "Order completed in WooCommerce" })
       .eq("action", "Order confirmed");
 
+    const message =
+      syncedCount > 0
+        ? `Successfully synced ${syncedCount} orders from WooCommerce!`
+        : `0 orders found for ${rangeType.replace(/_/g, " ")}. If your orders are in other months, please select "All Orders" or "This Month".`;
+
     return NextResponse.json({
       success: true,
       syncedCount,
@@ -541,10 +569,13 @@ async function handleSync(body: any) {
         after: afterIso,
         before: beforeIso,
       },
-      message: `Successfully synced ${syncedCount} orders from WooCommerce!`,
+      message,
     });
   } catch (err: any) {
     console.error("WooCommerce Sync Error:", err);
-    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
+    return NextResponse.json({
+      success: false,
+      error: err.message || "Server error while connecting to WooCommerce",
+    }, { status: 500 });
   }
 }

@@ -149,18 +149,25 @@ export function SyncWooCommerceDialog({
           ? "All Time"
           : "Selected Range";
 
-      setStatusMessage({
-        type: "success",
-        text: `Success! Synced ${data.syncedCount} orders from WooCommerce (${rangeLabel})!`,
-      });
+      if (data.syncedCount === 0) {
+        setStatusMessage({
+          type: "error",
+          text: `0 orders found for ${rangeLabel}. If your orders were placed on different dates, please click "All Orders" or "This Month" above to import them!`,
+        });
+      } else {
+        setStatusMessage({
+          type: "success",
+          text: `Success! Synced ${data.syncedCount} orders from WooCommerce (${rangeLabel})!`,
+        });
 
-      if (onSyncComplete) {
-        onSyncComplete(data.syncedCount);
+        if (onSyncComplete) {
+          onSyncComplete(data.syncedCount);
+        }
+
+        setTimeout(() => {
+          onClose();
+        }, 2500);
       }
-
-      setTimeout(() => {
-        onClose();
-      }, 2500);
     } catch (err: any) {
       console.error("WooCommerce Sync Error:", err);
       setStatusMessage({
