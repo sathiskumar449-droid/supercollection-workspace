@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleSync(body: any) {
-
+  try {
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json({
         success: false,
