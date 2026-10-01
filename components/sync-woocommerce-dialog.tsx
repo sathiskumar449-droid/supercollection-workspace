@@ -224,20 +224,19 @@ export function SyncWooCommerceDialog({
       return list;
     }
 
-    onProgress?.("Checking active orders in WooCommerce...");
-    const [processing, onHold, pending] = await Promise.all([
-      fetchStatus("processing", false),
-      fetchStatus("on-hold", false),
-      fetchStatus("pending", false),
-    ]);
+    onProgress?.("Fetching processing orders from WooCommerce...");
+    const processing = await fetchStatus("processing", false);
 
     onProgress?.("Fetching completed orders from WooCommerce...");
     const completed = await fetchStatus("completed", range !== "all");
 
     const map = new Map<string, any>();
-    [...processing, ...onHold, ...pending, ...completed].forEach((o) => {
+    [...processing, ...completed].forEach((o) => {
       if (o && (o.id || o.number)) {
-        map.set(String(o.id || o.number), o);
+        // Strictly only processing and completed orders
+        if (o.status === "processing" || o.status === "completed") {
+          map.set(String(o.id || o.number), o);
+        }
       }
     });
 

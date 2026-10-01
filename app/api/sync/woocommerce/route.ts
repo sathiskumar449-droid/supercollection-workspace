@@ -281,8 +281,8 @@ async function handleSync(body: any) {
         return orders;
       }
 
-      // Fetch each WooCommerce status individually
-      const statusesToFetch = ["processing", "on-hold", "pending", "completed"];
+      // Fetch only processing and completed WooCommerce statuses
+      const statusesToFetch = ["processing", "completed"];
       const fetchPromises = statusesToFetch.map((st) => {
         if (st === "completed") {
           return fetchWcOrders(st, {}, 15, rangeType !== "all");
@@ -316,8 +316,8 @@ async function handleSync(body: any) {
     let syncedCount = 0;
 
     for (const wc of wcOrders) {
-      // Allow all active orders from WooCommerce (exclude only trash, failed, cancelled, refunded)
-      if (wc.status === "cancelled" || wc.status === "refunded" || wc.status === "failed" || wc.status === "trash") {
+      // Strictly allow ONLY processing and completed orders from WooCommerce
+      if (wc.status !== "processing" && wc.status !== "completed") {
         continue;
       }
 
