@@ -165,11 +165,9 @@ async function handleSync(body: any) {
         break;
     }
 
-    const authHeader = "Basic " + Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
-
     // Helper: Paginated WooCommerce Fetcher (handles up to 1500 orders per status)
     async function fetchWcOrders(
-      status: string | null,
+      status: string,
       extraParams: Record<string, string> = {},
       maxPages = 15,
       useDateFilter = true
@@ -182,10 +180,8 @@ async function handleSync(body: any) {
         url.searchParams.set("page", String(page));
         url.searchParams.set("orderby", extraParams.orderby || "date");
         url.searchParams.set("order", extraParams.order || "desc");
+        url.searchParams.set("status", status);
 
-        if (status) {
-          url.searchParams.set("status", status);
-        }
         if (useDateFilter && afterIso) {
           url.searchParams.set("after", afterIso);
         }
@@ -197,19 +193,20 @@ async function handleSync(body: any) {
           if (k !== "orderby" && k !== "order") url.searchParams.set(k, v);
         });
 
-        // Add consumer credentials to query string for hosting environments where Basic Auth is stripped
+        // Use query-string authentication only (many Indian shared hosts strip Basic Auth headers,
+        // and sending both can trigger WAF false positives)
         url.searchParams.set("consumer_key", consumerKey);
         url.searchParams.set("consumer_secret", consumerSecret);
 
         try {
           const res = await fetch(url.toString(), {
-            headers: { Authorization: authHeader, "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "User-Agent": "WorkDesk/1.0" },
             cache: "no-store",
           });
 
           if (!res.ok) {
             const errText = await res.text().catch(() => "");
-            console.warn(`WooCommerce API page ${page} status ${res.status}:`, errText);
+            console.warn(`WooCommerce API [${status}] page ${page} status ${res.status}:`, errText.slice(0, 200));
             
             // If date parameter caused a 400 error, fallback without date parameter once
             if (res.status === 400 && useDateFilter) {
@@ -217,17 +214,24 @@ async function handleSync(body: any) {
               return fetchWcOrders(status, extraParams, maxPages, false);
             }
 
-            let parsedErr: any = null;
-            try { parsedErr = JSON.parse(errText); } catch {}
-            const errorMsg = parsedErr?.message || errText || `HTTP ${res.status}`;
+            // 403 from WAF/firewall: skip this status silently so other statuses can proceed
+            if (res.status === 403) {
+              console.warn(`WAF/Firewall blocked request for status=${status}, skipping...`);
+              return orders;
+            }
 
             if (res.status === 401) {
+              let parsedErr: any = null;
+              try { parsedErr = JSON.parse(errText); } catch {}
+              const errorMsg = parsedErr?.message || "Invalid credentials";
               throw new Error(`WooCommerce API Authentication Failed (401): ${errorMsg}. Please verify your Consumer Key and Consumer Secret.`);
             }
-            if (res.status === 403) {
-              throw new Error(`WooCommerce Access Forbidden (403): ${errorMsg}. Please verify API Key permissions are set to Read/Write.`);
-            }
+
+            // For other errors on first page, throw
             if (page === 1) {
+              let parsedErr: any = null;
+              try { parsedErr = JSON.parse(errText); } catch {}
+              const errorMsg = parsedErr?.message || `HTTP ${res.status}`;
               throw new Error(`WooCommerce API Error (${res.status}): ${errorMsg}`);
             }
             break;
@@ -259,42 +263,27 @@ async function handleSync(body: any) {
       return orders;
     }
 
-    // 1. Fetch orders in the chosen date range across ALL statuses (null = "any" in WooCommerce)
-    // 2. Fetch all active processing & on-hold orders without date restriction so pending items are always fulfilled
-    const [rangeOrders, activeProcessingOrders, activeOnHoldOrders] = await Promise.all([
-      fetchWcOrders(null, {}, 15, rangeType !== "all"), // ALL statuses in selected date range
-      fetchWcOrders("processing", {}, 10, false),
-      fetchWcOrders("on-hold", {}, 10, false),
-    ]);
+    // Fetch each WooCommerce status individually to avoid WAF blocks from bulk/unfiltered queries
+    // Active statuses fetched WITHOUT date filter (so pending fulfillment items are never missed)
+    // Completed orders fetched WITH date filter for the selected range
+    const statusesToFetch = ["processing", "on-hold", "pending", "completed"];
+    const fetchPromises = statusesToFetch.map((st) => {
+      if (st === "completed") {
+        return fetchWcOrders(st, {}, 15, rangeType !== "all"); // Completed: use date range
+      }
+      return fetchWcOrders(st, {}, 10, false); // Active statuses: no date restriction
+    });
+    const fetchResults = await Promise.all(fetchPromises);
 
-    // Also fetch recently modified orders to catch recent status changes
-    let modifiedOrders: any[] = [];
-    if (rangeType === "last_2_days" || rangeType === "this_month") {
-      modifiedOrders = await fetchWcOrders(null, { orderby: "modified", order: "desc" }, 2, false);
-    }
-
-    // Deduplicate into a unified list by ID
+    // Deduplicate into a unified list by WooCommerce order ID
     const wcOrdersMap = new Map<string, any>();
-    if (Array.isArray(rangeOrders)) {
-      rangeOrders.forEach((o: any) => {
-        wcOrdersMap.set(String(o.id || o.number), o);
-      });
-    }
-    if (Array.isArray(activeOnHoldOrders)) {
-      activeOnHoldOrders.forEach((o: any) => {
-        wcOrdersMap.set(String(o.id || o.number), o);
-      });
-    }
-    if (Array.isArray(activeProcessingOrders)) {
-      activeProcessingOrders.forEach((o: any) => {
-        wcOrdersMap.set(String(o.id || o.number), o);
-      });
-    }
-    if (Array.isArray(modifiedOrders)) {
-      modifiedOrders.forEach((o: any) => {
-        wcOrdersMap.set(String(o.id || o.number), o);
-      });
-    }
+    fetchResults.forEach((resultArray) => {
+      if (Array.isArray(resultArray)) {
+        resultArray.forEach((o: any) => {
+          wcOrdersMap.set(String(o.id || o.number), o);
+        });
+      }
+    });
 
     const wcOrders = Array.from(wcOrdersMap.values());
 
