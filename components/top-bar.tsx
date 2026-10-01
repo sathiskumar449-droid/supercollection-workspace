@@ -59,6 +59,7 @@ export function TopBar({
               { key: "Yesterday", label: "Yesterday", activeClass: "bg-amber-600 text-white shadow-xs font-semibold" },
               { key: "Last 7 Days", label: "Last 7 Days", activeClass: "bg-blue-600 text-white shadow-xs font-semibold" },
               { key: "This Month", label: "This Month", activeClass: "bg-emerald-600 text-white shadow-xs font-semibold" },
+              { key: "Last Month", label: "Last Month", activeClass: "bg-purple-600 text-white shadow-xs font-semibold" },
             ].map((opt) => {
               const isSelected = (dateFilter === opt.key || (!dateFilter && opt.key === "All")) && !customDate;
               return (

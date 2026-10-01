@@ -676,6 +676,7 @@ export function initStore(): Order[] {
                 storeUrl: savedUrl,
                 consumerKey: savedKey,
                 consumerSecret: savedSecret,
+                rangeType: "last_2_days",
               }),
             })
               .then((res) => res.json())

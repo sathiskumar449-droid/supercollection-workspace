@@ -4,8 +4,8 @@ import { OrderStatus, OrderSource } from "@/types/orderflow";
 import { detectWooCommerceSource, parseWooCommerceDate } from "@/lib/woocommerce-source";
 
 /**
- * WooCommerce 2-Day Live Sync Endpoint
- * Connects to WooCommerce REST API and imports only the last 2 days' orders directly into Supabase.
+ * WooCommerce Multi-Period Live Sync Endpoint
+ * Connects to WooCommerce REST API with pagination and imports orders (Last Month, Last 30 Days, This Month, Last 2 Days, Custom) into Supabase.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -16,12 +16,36 @@ export async function POST(req: NextRequest) {
       // Body is optional if env variables exist
     }
 
+    if (!isSupabaseConfigured() || !supabase) {
+      return NextResponse.json({
+        success: false,
+        error: "Supabase database is not configured.",
+      }, { status: 500 });
+    }
+
+    const db = supabaseAdmin || supabase;
+
     let storeUrl = (body.storeUrl || process.env.WOOCOMMERCE_STORE_URL || "https://supercollections.in").trim().replace(/\/+$/, "");
     if (!/^https?:\/\//i.test(storeUrl)) {
       storeUrl = `https://${storeUrl}`;
     }
-    const consumerKey = (body.consumerKey || process.env.WOOCOMMERCE_CONSUMER_KEY || "").trim();
-    const consumerSecret = (body.consumerSecret || process.env.WOOCOMMERCE_CONSUMER_SECRET || "").trim();
+    let consumerKey = (body.consumerKey || process.env.WOOCOMMERCE_CONSUMER_KEY || "").trim();
+    let consumerSecret = (body.consumerSecret || process.env.WOOCOMMERCE_CONSUMER_SECRET || "").trim();
+
+    // If keys not in body or env, check Supabase integrations table
+    if (!consumerKey || !consumerSecret) {
+      const { data: wcInteg } = await db
+        .from("integrations")
+        .select("config")
+        .eq("name", "woocommerce")
+        .maybeSingle();
+
+      if (wcInteg?.config?.consumer_key && wcInteg?.config?.consumer_secret) {
+        storeUrl = wcInteg.config.store_url || storeUrl;
+        consumerKey = wcInteg.config.consumer_key;
+        consumerSecret = wcInteg.config.consumer_secret;
+      }
+    }
 
     if (!consumerKey || !consumerSecret) {
       return NextResponse.json({
@@ -30,41 +54,164 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Limit sync strictly to the last 2 days (today & yesterday)
-    const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-    twoDaysAgo.setHours(0, 0, 0, 0);
-    const afterIso = twoDaysAgo.toISOString();
+    // Persist valid keys to Supabase integrations table for automated server crons and background sync
+    try {
+      await db.from("integrations").upsert({
+        name: "woocommerce",
+        config: {
+          store_url: storeUrl,
+          consumer_key: consumerKey,
+          consumer_secret: consumerSecret,
+        },
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "name" });
+    } catch (saveErr) {
+      console.warn("Could not persist WooCommerce keys to integrations table:", saveErr);
+    }
 
-    // Fetch processing orders, completed orders, and recently modified orders in parallel from WooCommerce
+    // Calculate Date Range
+    const rangeType = body.rangeType || "last_2_days";
+    let afterIso: string | undefined = undefined;
+    let beforeIso: string | undefined = undefined;
+
+    const now = new Date();
+    // Indian Standard Time (IST = UTC + 5:30)
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const nowIST = new Date(now.getTime() + istOffsetMs);
+    const currentYear = nowIST.getUTCFullYear();
+    const currentMonth = nowIST.getUTCMonth(); // 0 = Jan, 9 = Oct
+
+    switch (rangeType) {
+      case "last_month": {
+        // Full previous calendar month (e.g. Sep 01 00:00:00 to Sep 30 23:59:59 IST)
+        const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+        const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1; // 0-indexed
+        const lastDayOfPrevMonth = new Date(Date.UTC(prevYear, prevMonth + 1, 0)).getUTCDate();
+
+        const startUtc = new Date(Date.UTC(prevYear, prevMonth, 1, 0, 0, 0) - istOffsetMs);
+        const endUtc = new Date(Date.UTC(prevYear, prevMonth, lastDayOfPrevMonth, 23, 59, 59, 999) - istOffsetMs);
+
+        afterIso = startUtc.toISOString();
+        beforeIso = endUtc.toISOString();
+        break;
+      }
+
+      case "last_30_days": {
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        afterIso = thirtyDaysAgo.toISOString();
+        beforeIso = now.toISOString();
+        break;
+      }
+
+      case "this_month": {
+        const startUtc = new Date(Date.UTC(currentYear, currentMonth, 1, 0, 0, 0) - istOffsetMs);
+        afterIso = startUtc.toISOString();
+        beforeIso = now.toISOString();
+        break;
+      }
+
+      case "last_2_days": {
+        const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+        twoDaysAgo.setHours(0, 0, 0, 0);
+        afterIso = twoDaysAgo.toISOString();
+        beforeIso = now.toISOString();
+        break;
+      }
+
+      case "custom": {
+        if (body.startDate) {
+          afterIso = new Date(`${body.startDate}T00:00:00+05:30`).toISOString();
+        }
+        if (body.endDate) {
+          beforeIso = new Date(`${body.endDate}T23:59:59+05:30`).toISOString();
+        }
+        break;
+      }
+
+      case "all":
+      default:
+        // No date boundaries
+        break;
+    }
+
+    // Helper: Paginated WooCommerce Fetcher (handles up to 1500 orders per status)
     const authHeader = "Basic " + Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
-    const [resProcessing, resCompleted, resModified] = await Promise.all([
-      fetch(
-        `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=processing&orderby=date&order=desc&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`,
-        {
-          headers: { Authorization: authHeader, "Content-Type": "application/json" },
-          cache: "no-store",
+
+    async function fetchWcOrders(
+      status: string | null,
+      extraParams: Record<string, string> = {},
+      maxPages = 15
+    ): Promise<any[]> {
+      const orders: any[] = [];
+
+      for (let page = 1; page <= maxPages; page++) {
+        const url = new URL(`${storeUrl}/wp-json/wc/v3/orders`);
+        url.searchParams.set("per_page", "100");
+        url.searchParams.set("page", String(page));
+        url.searchParams.set("orderby", extraParams.orderby || "date");
+        url.searchParams.set("order", extraParams.order || "desc");
+
+        if (status) {
+          url.searchParams.set("status", status);
         }
-      ),
-      fetch(
-        `${storeUrl}/wp-json/wc/v3/orders?per_page=100&status=completed&orderby=date&order=desc&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`,
-        {
-          headers: { Authorization: authHeader, "Content-Type": "application/json" },
-          cache: "no-store",
+        if (afterIso) {
+          url.searchParams.set("after", afterIso);
         }
-      ),
-      fetch(
-        `${storeUrl}/wp-json/wc/v3/orders?per_page=100&orderby=modified&order=desc&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}`,
-        {
-          headers: { Authorization: authHeader, "Content-Type": "application/json" },
-          cache: "no-store",
+        if (beforeIso) {
+          url.searchParams.set("before", beforeIso);
         }
-      ),
+
+        Object.entries(extraParams).forEach(([k, v]) => {
+          if (k !== "orderby" && k !== "order") url.searchParams.set(k, v);
+        });
+
+        // Add consumer credentials to query string for hosting environments where Basic Auth is stripped
+        url.searchParams.set("consumer_key", consumerKey);
+        url.searchParams.set("consumer_secret", consumerSecret);
+
+        try {
+          const res = await fetch(url.toString(), {
+            headers: { Authorization: authHeader, "Content-Type": "application/json" },
+            cache: "no-store",
+          });
+
+          if (!res.ok) {
+            console.warn(`WooCommerce API page ${page} status: ${res.status}`);
+            break;
+          }
+
+          const pageItems = await res.json();
+          if (!Array.isArray(pageItems) || pageItems.length === 0) {
+            break;
+          }
+
+          orders.push(...pageItems);
+
+          // If less than 100 items returned, we've reached the last page
+          if (pageItems.length < 100) {
+            break;
+          }
+        } catch (err) {
+          console.error(`Error fetching page ${page} for status ${status}:`, err);
+          break;
+        }
+      }
+
+      return orders;
+    }
+
+    // Parallel fetch for processing and completed orders within the chosen range
+    const [processingOrders, completedOrders] = await Promise.all([
+      fetchWcOrders("processing"),
+      fetchWcOrders("completed"),
     ]);
 
-    const processingOrders = resProcessing.ok ? await resProcessing.json() : [];
-    const completedOrders = resCompleted.ok ? await resCompleted.json() : [];
-    const modifiedOrders = resModified.ok ? await resModified.json() : [];
+    // For recent syncs (last 2 days or this month), also fetch recently modified orders to catch status updates
+    let modifiedOrders: any[] = [];
+    if (rangeType === "last_2_days" || rangeType === "this_month") {
+      modifiedOrders = await fetchWcOrders(null, { orderby: "modified", order: "desc" }, 2);
+    }
 
     // Deduplicate into a unified list by ID
     const wcOrdersMap = new Map<string, any>();
@@ -82,51 +229,19 @@ export async function POST(req: NextRequest) {
         }
       });
     }
-    // Active processing orders from WooCommerce take final precedence
+    // Active processing orders from WooCommerce
     if (Array.isArray(processingOrders)) {
-      processingOrders.forEach((o: any) => wcOrdersMap.set(String(o.id || o.number), o));
+      processingOrders.forEach((o: any) => {
+        if (o.status === "processing") {
+          wcOrdersMap.set(String(o.id || o.number), o);
+        }
+      });
     }
 
     const wcOrders = Array.from(wcOrdersMap.values());
 
-    if (!isSupabaseConfigured() || !supabase) {
-      return NextResponse.json({
-        success: false,
-        error: "Supabase database is not configured.",
-      }, { status: 500 });
-    }
-
-    const db = supabaseAdmin || supabase;
-
     // Purge any previously imported WooCommerce orders with status NEW or RETURN
     await db.from("orders").delete().eq("source", "WEBSITE").in("status", ["NEW", "RETURN"]);
-
-    // CRITICAL: Any existing WEBSITE order in Supabase with status CONFIRMED that is no longer in WooCommerce's processing list
-    // has been completed (or cancelled) in WooCommerce. Update them to COMPLETED!
-    if (Array.isArray(processingOrders)) {
-      const processingIdSet = new Set(processingOrders.map((o: any) => String(o.id || o.number)));
-      const { data: currentConfirmed } = await db
-        .from("orders")
-        .select("id, external_order_id")
-        .eq("source", "WEBSITE")
-        .eq("status", "CONFIRMED");
-
-      if (currentConfirmed && currentConfirmed.length > 0) {
-        const toCompleteIds = currentConfirmed
-          .filter((o: any) => o.external_order_id && !processingIdSet.has(String(o.external_order_id)))
-          .map((o: any) => o.id);
-
-        if (toCompleteIds.length > 0) {
-          await db
-            .from("orders")
-            .update({
-              status: "COMPLETED",
-              updated_at: new Date().toISOString(),
-            })
-            .in("id", toCompleteIds);
-        }
-      }
-    }
 
     // Default ST Courier ID
     const { data: stCourier } = await db
@@ -153,13 +268,25 @@ export async function POST(req: NextRequest) {
       const pincode = wc.shipping?.postcode || wc.billing?.postcode || "600001";
       const totalAmount = parseFloat(wc.total || "0") || 0;
 
-      // Status mapping - Only processing and completed reach here
-      let orderStatus: OrderStatus = wc.status === "completed" ? "COMPLETED" : "CONFIRMED";
+      // Check if order already exists in Supabase to preserve active fulfillment progression
+      const { data: existingOrder } = await db
+        .from("orders")
+        .select("id, status")
+        .eq("external_order_id", wcId)
+        .maybeSingle();
+
+      let effectiveStatus: OrderStatus = wc.status === "completed" ? "COMPLETED" : "CONFIRMED";
+      if (existingOrder?.status) {
+        // Preserve active fulfillment progression so re-syncing does not regress packing status
+        const progressionStatuses: OrderStatus[] = ["PACKING", "PACKED", "DISPATCHED"];
+        if (progressionStatuses.includes(existingOrder.status as OrderStatus)) {
+          effectiveStatus = existingOrder.status as OrderStatus;
+        } else if (wc.status === "completed") {
+          effectiveStatus = "COMPLETED";
+        }
+      }
 
       const paymentStatus = wc.status === "processing" || wc.status === "completed" ? "PAID" : wc.payment_method === "cod" ? "COD" : "PENDING";
-      const courierStatus = "PENDING"; // Synced orders start as PENDING courier status; only dispatched orders from packing reach courier hub
-
-      // All WooCommerce orders are strictly WEBSITE source
       const orderSource: OrderSource = "WEBSITE";
 
       // 1. Safe Customer Lookup / Upsert (avoid 42P10 constraint error)
@@ -218,23 +345,6 @@ export async function POST(req: NextRequest) {
       if (!customerId) {
         console.error("Cannot insert order without customer ID for wcId:", wcId);
         continue;
-      }
-
-      // Check if order already exists in Supabase to preserve active fulfillment progression
-      const { data: existingOrder } = await db
-        .from("orders")
-        .select("id, status")
-        .eq("external_order_id", wcId)
-        .maybeSingle();
-
-      let effectiveStatus: any = orderStatus;
-      if (wc.status === "completed") {
-        effectiveStatus = "COMPLETED";
-      } else if (existingOrder?.status) {
-        const advancedStatuses = ["PACKING", "PACKED", "DISPATCHED", "COMPLETED"];
-        if (advancedStatuses.includes(existingOrder.status)) {
-          effectiveStatus = existingOrder.status;
-        }
       }
 
       // 2. Upsert Order
@@ -306,8 +416,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // 4. Initial Activity Logs (Section 2 & 3: Order Created, Processing Started, and Order Completed / Ready for Packing if completed)
-        // DO NOT automatically create Courier Hub dispatch record or assign ST Courier (Section 7)
+        // 4. Initial Activity Logs
         const { data: existingLogs } = await db
           .from("activity_logs")
           .select("id, action")
@@ -360,7 +469,6 @@ export async function POST(req: NextRequest) {
 
           await db.from("activity_logs").insert(initialLogs);
         } else if (wc.status === "completed") {
-          // If order already existed in DB and WooCommerce now marks it completed
           const hasCompletedLog = existingLogs.some(
             (l: any) => l.action?.toLowerCase() === "order completed"
           );
@@ -397,25 +505,15 @@ export async function POST(req: NextRequest) {
       .update({ action: "Order completed", details: "Order completed in WooCommerce" })
       .eq("action", "Order confirmed");
 
-    // Clean up premature logs for orders still in CONFIRMED (processing) or NEW status
-    const { data: pendingOrders } = await db
-      .from("orders")
-      .select("id")
-      .in("status", ["CONFIRMED", "NEW"]);
-
-    if (pendingOrders && pendingOrders.length > 0) {
-      const pendingIds = pendingOrders.map((o) => o.id);
-      await db
-        .from("activity_logs")
-        .delete()
-        .in("order_id", pendingIds)
-        .in("action", ["Order completed", "Order confirmed", "Waiting for packing"]);
-    }
-
     return NextResponse.json({
       success: true,
       syncedCount,
-      message: `Successfully synced ${syncedCount} live orders from WooCommerce!`,
+      rangeType,
+      dateRange: {
+        after: afterIso,
+        before: beforeIso,
+      },
+      message: `Successfully synced ${syncedCount} orders from WooCommerce!`,
     });
   } catch (err: any) {
     console.error("WooCommerce Sync Error:", err);

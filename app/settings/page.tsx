@@ -64,11 +64,26 @@ export default function SettingsPage() {
   const [pingSenderId, setPingSenderId] = useState("VASTRA");
   const [pingApiUrl, setPingApiUrl] = useState("https://api.ping4sms.com/api/v2/dlr");
 
-  // Webhook state
+  // Webhook & Integration state
   const [wcSecret, setWcSecret] = useState("wc_sec_90fa8319e09bc4");
+  const [wcStoreUrl, setWcStoreUrl] = useState("https://supercollections.in");
+  const [wcConsumerKey, setWcConsumerKey] = useState("");
+  const [wcConsumerSecret, setWcConsumerSecret] = useState("");
+  const [showWcKey, setShowWcKey] = useState(false);
   const [waToken, setWaToken] = useState("wa_box_tok_34089ae832b");
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedUrl = localStorage.getItem("sc_wc_store_url") || "";
+      const savedKey = localStorage.getItem("sc_wc_consumer_key") || "";
+      const savedSecret = localStorage.getItem("sc_wc_consumer_secret") || "";
+      if (savedUrl) setWcStoreUrl(savedUrl);
+      if (savedKey) setWcConsumerKey(savedKey);
+      if (savedSecret) setWcConsumerSecret(savedSecret);
+    }
+  }, []);
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -76,8 +91,27 @@ export default function SettingsPage() {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (typeof window !== "undefined") {
+      if (wcStoreUrl) localStorage.setItem("sc_wc_store_url", wcStoreUrl.trim());
+      if (wcConsumerKey) localStorage.setItem("sc_wc_consumer_key", wcConsumerKey.trim());
+      if (wcConsumerSecret) localStorage.setItem("sc_wc_consumer_secret", wcConsumerSecret.trim());
+    }
+    if (activeTab === "woocommerce" && wcConsumerKey && wcConsumerSecret) {
+      try {
+        await fetch("/api/sync/woocommerce", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeUrl: wcStoreUrl.trim(),
+            consumerKey: wcConsumerKey.trim(),
+            consumerSecret: wcConsumerSecret.trim(),
+            rangeType: "last_2_days",
+          }),
+        });
+      } catch {}
+    }
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
@@ -401,45 +435,57 @@ export default function SettingsPage() {
             </form>
           )}
 
-          {/* 5. WooCommerce Webhook */}
+          {/* 5. WooCommerce Webhook & REST API */}
           {activeTab === "woocommerce" && (
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">WooCommerce Webhook Ingestion</h3>
+                <h3 className="text-sm font-bold text-slate-900">WooCommerce Integration & Webhook</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Configure this webhook inside your WordPress WooCommerce Admin &gt; Advanced &gt; Webhooks.
+                  Configure REST API keys for manual & automated scheduled sync, and webhooks for instant order ingestion.
                 </p>
               </div>
 
               <div className="space-y-3 text-xs pt-2">
                 <div>
-                  <label className="block text-slate-600 font-medium mb-1">Webhook Delivery URL (POST)</label>
-                  <div className="flex items-center gap-2">
+                  <label className="block text-slate-600 font-medium mb-1">WooCommerce Store URL</label>
+                  <input
+                    type="url"
+                    value={wcStoreUrl}
+                    onChange={(e) => setWcStoreUrl(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-mono text-slate-700"
+                    placeholder="https://supercollections.in"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">Consumer Key (ck_...)</label>
+                  <div className="relative">
                     <input
-                      type="text"
-                      readOnly
-                      value="https://your-domain.com/api/webhooks/woocommerce/order"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-mono text-slate-700 select-all"
+                      type={showWcKey ? "text" : "password"}
+                      value={wcConsumerKey}
+                      onChange={(e) => setWcConsumerKey(e.target.value)}
+                      className="w-full px-3 py-2 pr-10 border border-slate-200 rounded-lg outline-none font-mono focus:border-orange-500"
+                      placeholder="ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                     />
                     <button
                       type="button"
-                      onClick={() => copyToClipboard("https://your-domain.com/api/webhooks/woocommerce/order", "wc-url")}
-                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 text-slate-700 flex items-center gap-1 shrink-0"
+                      onClick={() => setShowWcKey(!showWcKey)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
                     >
-                      {copiedKey === "wc-url" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedKey === "wc-url" ? "Copied" : "Copy"}</span>
+                      {showWcKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 font-medium mb-1">Webhook Secret (Masked)</label>
+                  <label className="block text-slate-600 font-medium mb-1">Consumer Secret (cs_...)</label>
                   <div className="relative">
                     <input
                       type={showWcSecret ? "text" : "password"}
-                      value={wcSecret}
-                      onChange={(e) => setWcSecret(e.target.value)}
+                      value={wcConsumerSecret}
+                      onChange={(e) => setWcConsumerSecret(e.target.value)}
                       className="w-full px-3 py-2 pr-10 border border-slate-200 rounded-lg outline-none font-mono focus:border-orange-500"
+                      placeholder="cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                     />
                     <button
                       type="button"
@@ -451,9 +497,29 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
+                <div className="pt-2 border-t border-slate-100">
+                  <label className="block text-slate-600 font-medium mb-1">Webhook Delivery URL (Instant Live Sync)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value="https://supercollection-workspace.vercel.app/api/webhooks/woocommerce"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-mono text-slate-700 select-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard("https://supercollection-workspace.vercel.app/api/webhooks/woocommerce", "wc-url")}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 text-slate-700 flex items-center gap-1 shrink-0"
+                    >
+                      {copiedKey === "wc-url" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedKey === "wc-url" ? "Copied" : "Copy"}</span>
+                    </button>
+                  </div>
+                </div>
+
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-slate-600 space-y-1">
-                  <span className="font-semibold text-slate-800 block">Trigger Topic:</span>
-                  <p>Select <strong>"Order Created"</strong> and <strong>"Order Updated"</strong> in WooCommerce settings.</p>
+                  <span className="font-semibold text-slate-800 block">Trigger Topic in WordPress WooCommerce:</span>
+                  <p>In WooCommerce → Settings → Advanced → Webhooks, add Webhooks for <strong>"Order Created"</strong> and <strong>"Order Updated"</strong>.</p>
                 </div>
               </div>
 
@@ -463,7 +529,7 @@ export default function SettingsPage() {
                   className="px-4 py-2 bg-orange-700 hover:bg-orange-800 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>Save WooCommerce Webhook</span>
+                  <span>Save WooCommerce Configuration</span>
                 </button>
               </div>
             </form>

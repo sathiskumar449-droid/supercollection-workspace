@@ -95,6 +95,18 @@ export function matchesDateFilter(
       return orderIST.slice(0, 7) === currentMonthIST;
     }
 
+    case "Last Month": {
+      const parts = todayIST.split("-");
+      let year = parseInt(parts[0], 10);
+      let month = parseInt(parts[1], 10) - 1;
+      if (month === 0) {
+        month = 12;
+        year -= 1;
+      }
+      const lastMonthIST = `${year}-${String(month).padStart(2, "0")}`;
+      return orderIST.slice(0, 7) === lastMonthIST;
+    }
+
     case "All":
     default:
       return true;
