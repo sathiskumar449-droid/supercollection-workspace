@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 import { OrderStatus, OrderSource } from "@/types/orderflow";
-import { detectWooCommerceSource, parseWooCommerceDate } from "@/lib/woocommerce-source";
+import { parseWooCommerceDate } from "@/lib/woocommerce-source";
 
 /**
  * WooCommerce Multi-Period Live Sync Endpoint
  * Connects to WooCommerce REST API with pagination and imports orders (Last Month, Last 30 Days, This Month, Last 2 Days, Custom) into Supabase.
  */
+export async function GET(req: NextRequest) {
+  return POST(req);
+}
+
 export async function POST(req: NextRequest) {
   try {
     let body: any = {};
