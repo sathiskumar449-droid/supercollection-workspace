@@ -165,127 +165,150 @@ async function handleSync(body: any) {
         break;
     }
 
-    // Helper: Paginated WooCommerce Fetcher (handles up to 1500 orders per status)
-    async function fetchWcOrders(
-      status: string,
-      extraParams: Record<string, string> = {},
-      maxPages = 15,
-      useDateFilter = true
-    ): Promise<any[]> {
-      const orders: any[] = [];
+    let wcOrders: any[] = [];
 
-      for (let page = 1; page <= maxPages; page++) {
-        const url = new URL(`${storeUrl}/wp-json/wc/v3/orders`);
-        url.searchParams.set("per_page", "100");
-        url.searchParams.set("page", String(page));
-        url.searchParams.set("orderby", extraParams.orderby || "date");
-        url.searchParams.set("order", extraParams.order || "desc");
-        url.searchParams.set("status", status);
-
-        if (useDateFilter && afterIso) {
-          url.searchParams.set("after", afterIso);
+    // 1. If orders were fetched directly by client-side browser (which bypasses hosting WAF & Cloudflare blocks), use them directly
+    if (body.orders && Array.isArray(body.orders)) {
+      console.log(`[WooCommerce Sync] Using ${body.orders.length} orders passed directly from client browser sync`);
+      const wcOrdersMap = new Map<string, any>();
+      body.orders.forEach((o: any) => {
+        if (o && (o.id || o.number)) {
+          wcOrdersMap.set(String(o.id || o.number), o);
         }
-        if (useDateFilter && beforeIso) {
-          url.searchParams.set("before", beforeIso);
-        }
+      });
+      wcOrders = Array.from(wcOrdersMap.values());
+    } else {
+      // 2. Server-side fetch fallback
+      const authHeader = "Basic " + Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
+      let had403Block = false;
 
-        Object.entries(extraParams).forEach(([k, v]) => {
-          if (k !== "orderby" && k !== "order") url.searchParams.set(k, v);
-        });
+      // Helper: Paginated WooCommerce Fetcher (handles up to 1500 orders per status)
+      async function fetchWcOrders(
+        status: string,
+        extraParams: Record<string, string> = {},
+        maxPages = 15,
+        useDateFilter = true
+      ): Promise<any[]> {
+        const orders: any[] = [];
 
-        // Use query-string authentication only (many Indian shared hosts strip Basic Auth headers,
-        // and sending both can trigger WAF false positives)
-        url.searchParams.set("consumer_key", consumerKey);
-        url.searchParams.set("consumer_secret", consumerSecret);
+        for (let page = 1; page <= maxPages; page++) {
+          const url = new URL(`${storeUrl}/wp-json/wc/v3/orders`);
+          url.searchParams.set("per_page", "100");
+          url.searchParams.set("page", String(page));
+          url.searchParams.set("orderby", extraParams.orderby || "date");
+          url.searchParams.set("order", extraParams.order || "desc");
+          url.searchParams.set("status", status);
 
-        try {
-          const res = await fetch(url.toString(), {
-            headers: { "Content-Type": "application/json", "User-Agent": "WorkDesk/1.0" },
-            cache: "no-store",
+          if (useDateFilter && afterIso) {
+            url.searchParams.set("after", afterIso);
+          }
+          if (useDateFilter && beforeIso) {
+            url.searchParams.set("before", beforeIso);
+          }
+
+          Object.entries(extraParams).forEach(([k, v]) => {
+            if (k !== "orderby" && k !== "order") url.searchParams.set(k, v);
           });
 
-          if (!res.ok) {
-            const errText = await res.text().catch(() => "");
-            console.warn(`WooCommerce API [${status}] page ${page} status ${res.status}:`, errText.slice(0, 200));
-            
-            // If date parameter caused a 400 error, fallback without date parameter once
-            if (res.status === 400 && useDateFilter) {
-              console.log("Date filter rejected by WooCommerce REST API, retrying without date parameter...");
-              return fetchWcOrders(status, extraParams, maxPages, false);
+          // Pass credentials in query params AND Authorization header for maximum host compatibility
+          url.searchParams.set("consumer_key", consumerKey);
+          url.searchParams.set("consumer_secret", consumerSecret);
+
+          try {
+            const res = await fetch(url.toString(), {
+              headers: {
+                Authorization: authHeader,
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                Accept: "application/json, text/plain, */*",
+              },
+              cache: "no-store",
+            });
+
+            if (!res.ok) {
+              const errText = await res.text().catch(() => "");
+              console.warn(`WooCommerce API [${status}] page ${page} status ${res.status}:`, errText.slice(0, 200));
+              
+              if (res.status === 400 && useDateFilter) {
+                console.log("Date filter rejected by WooCommerce REST API, retrying without date parameter...");
+                return fetchWcOrders(status, extraParams, maxPages, false);
+              }
+
+              if (res.status === 403) {
+                had403Block = true;
+                console.warn(`WAF/Firewall blocked server request for status=${status}`);
+                return orders;
+              }
+
+              if (res.status === 401) {
+                let parsedErr: any = null;
+                try { parsedErr = JSON.parse(errText); } catch {}
+                const errorMsg = parsedErr?.message || "Invalid credentials";
+                throw new Error(`WooCommerce API Authentication Failed (401): ${errorMsg}. Please verify your Consumer Key and Consumer Secret.`);
+              }
+
+              if (page === 1) {
+                let parsedErr: any = null;
+                try { parsedErr = JSON.parse(errText); } catch {}
+                const errorMsg = parsedErr?.message || `HTTP ${res.status}`;
+                throw new Error(`WooCommerce API Error (${res.status}): ${errorMsg}`);
+              }
+              break;
             }
 
-            // 403 from WAF/firewall: skip this status silently so other statuses can proceed
-            if (res.status === 403) {
-              console.warn(`WAF/Firewall blocked request for status=${status}, skipping...`);
-              return orders;
+            const pageItems = await res.json();
+            if (!Array.isArray(pageItems) || pageItems.length === 0) {
+              break;
             }
 
-            if (res.status === 401) {
-              let parsedErr: any = null;
-              try { parsedErr = JSON.parse(errText); } catch {}
-              const errorMsg = parsedErr?.message || "Invalid credentials";
-              throw new Error(`WooCommerce API Authentication Failed (401): ${errorMsg}. Please verify your Consumer Key and Consumer Secret.`);
-            }
+            orders.push(...pageItems);
 
-            // For other errors on first page, throw
+            if (pageItems.length < 100) {
+              break;
+            }
+          } catch (err: any) {
+            if (err.message && err.message.includes("WooCommerce")) {
+              throw err;
+            }
+            console.error(`Error fetching page ${page} for status ${status}:`, err);
             if (page === 1) {
-              let parsedErr: any = null;
-              try { parsedErr = JSON.parse(errText); } catch {}
-              const errorMsg = parsedErr?.message || `HTTP ${res.status}`;
-              throw new Error(`WooCommerce API Error (${res.status}): ${errorMsg}`);
+              throw new Error(`Connection to WooCommerce failed: ${err.message || "Network error"}`);
             }
             break;
           }
-
-          const pageItems = await res.json();
-          if (!Array.isArray(pageItems) || pageItems.length === 0) {
-            break;
-          }
-
-          orders.push(...pageItems);
-
-          // If less than 100 items returned, we've reached the last page
-          if (pageItems.length < 100) {
-            break;
-          }
-        } catch (err: any) {
-          if (err.message && err.message.includes("WooCommerce")) {
-            throw err;
-          }
-          console.error(`Error fetching page ${page} for status ${status}:`, err);
-          if (page === 1) {
-            throw new Error(`Connection to WooCommerce failed: ${err.message || "Network error"}`);
-          }
-          break;
         }
+
+        return orders;
       }
 
-      return orders;
+      // Fetch each WooCommerce status individually
+      const statusesToFetch = ["processing", "on-hold", "pending", "completed"];
+      const fetchPromises = statusesToFetch.map((st) => {
+        if (st === "completed") {
+          return fetchWcOrders(st, {}, 15, rangeType !== "all");
+        }
+        return fetchWcOrders(st, {}, 10, false);
+      });
+      const fetchResults = await Promise.all(fetchPromises);
+
+      // Deduplicate into a unified list by WooCommerce order ID
+      const wcOrdersMap = new Map<string, any>();
+      fetchResults.forEach((resultArray) => {
+        if (Array.isArray(resultArray)) {
+          resultArray.forEach((o: any) => {
+            wcOrdersMap.set(String(o.id || o.number), o);
+          });
+        }
+      });
+
+      wcOrders = Array.from(wcOrdersMap.values());
+
+      if (wcOrders.length === 0 && had403Block) {
+        throw new Error(
+          "WooCommerce Server Block (403): Your WordPress hosting firewall / Cloudflare blocked the cloud server from fetching orders. Please use the 'Sync Website' button in your browser to import orders directly."
+        );
+      }
     }
-
-    // Fetch each WooCommerce status individually to avoid WAF blocks from bulk/unfiltered queries
-    // Active statuses fetched WITHOUT date filter (so pending fulfillment items are never missed)
-    // Completed orders fetched WITH date filter for the selected range
-    const statusesToFetch = ["processing", "on-hold", "pending", "completed"];
-    const fetchPromises = statusesToFetch.map((st) => {
-      if (st === "completed") {
-        return fetchWcOrders(st, {}, 15, rangeType !== "all"); // Completed: use date range
-      }
-      return fetchWcOrders(st, {}, 10, false); // Active statuses: no date restriction
-    });
-    const fetchResults = await Promise.all(fetchPromises);
-
-    // Deduplicate into a unified list by WooCommerce order ID
-    const wcOrdersMap = new Map<string, any>();
-    fetchResults.forEach((resultArray) => {
-      if (Array.isArray(resultArray)) {
-        resultArray.forEach((o: any) => {
-          wcOrdersMap.set(String(o.id || o.number), o);
-        });
-      }
-    });
-
-    const wcOrders = Array.from(wcOrdersMap.values());
 
     // Purge any previously imported WooCommerce orders with status NEW or RETURN
     await db.from("orders").delete().eq("source", "WEBSITE").in("status", ["NEW", "RETURN"]);
