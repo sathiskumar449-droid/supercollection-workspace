@@ -3,6 +3,8 @@ import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 import { OrderStatus, OrderSource } from "@/types/orderflow";
 import { parseWooCommerceDate } from "@/lib/woocommerce-source";
 
+export const dynamic = "force-dynamic";
+
 /**
  * WooCommerce Multi-Period Live Sync Endpoint
  * Connects to WooCommerce REST API with pagination and imports orders (Last Month, Last 30 Days, This Month, Last 2 Days, Custom) into Supabase.
@@ -256,14 +258,6 @@ async function handleSync(body: any) {
     // Purge any previously imported WooCommerce orders with status NEW or RETURN
     await db.from("orders").delete().eq("source", "WEBSITE").in("status", ["NEW", "RETURN"]);
 
-    // Default ST Courier ID
-    const { data: stCourier } = await db
-      .from("couriers")
-      .select("id")
-      .eq("code", "ST_COURIER")
-      .maybeSingle();
-
-    const defaultCourierId = stCourier?.id || null;
     let syncedCount = 0;
 
     for (const wc of wcOrders) {
