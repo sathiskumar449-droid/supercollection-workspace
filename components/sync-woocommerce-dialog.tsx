@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { X, RefreshCw, Globe, CheckCircle2, AlertCircle, KeyRound, ExternalLink, Calendar, Copy, Check, Sparkles } from "lucide-react";
+import { X, RefreshCw, Globe, CheckCircle2, AlertCircle, KeyRound, ExternalLink, Calendar, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { orderflowStore } from "@/lib/store";
 
 interface SyncWooCommerceDialogProps {
@@ -26,18 +26,25 @@ export function SyncWooCommerceDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
+  const [showKeyDetails, setShowKeyDetails] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedUrl = localStorage.getItem("sc_wc_store_url") || "https://supercollections.in";
       const savedKey = localStorage.getItem("sc_wc_consumer_key") || "";
       const savedSecret = localStorage.getItem("sc_wc_consumer_secret") || "";
-      const savedRange = (localStorage.getItem("sc_wc_range_type") as SyncRange) || "last_month";
       
       if (savedUrl) setStoreUrl(savedUrl);
       if (savedKey) setConsumerKey(savedKey);
       if (savedSecret) setConsumerSecret(savedSecret);
-      if (savedRange) setRangeType(savedRange);
+
+      // If user hasn't explicitly picked a range, default to last_month
+      const savedRange = localStorage.getItem("sc_wc_range_type") as SyncRange;
+      if (savedRange) {
+        setRangeType(savedRange);
+      } else {
+        setRangeType("last_month");
+      }
     }
   }, [isOpen]);
 
@@ -81,7 +88,7 @@ export function SyncWooCommerceDialog({
       }
       case "all":
       default:
-        return "All available past orders (Up to 1,500 latest)";
+        return "All past orders without date filter (Up to 1,500 latest)";
     }
   }, [rangeType, startDate, endDate]);
 
@@ -131,9 +138,20 @@ export function SyncWooCommerceDialog({
       orderflowStore.resetData();
       await orderflowStore.refreshFromSupabase();
 
+      const rangeLabel =
+        rangeType === "last_month"
+          ? "Last Month"
+          : rangeType === "last_30_days"
+          ? "Last 30 Days"
+          : rangeType === "this_month"
+          ? "This Month"
+          : rangeType === "all"
+          ? "All Time"
+          : "Selected Range";
+
       setStatusMessage({
         type: "success",
-        text: `Success! Synced ${data.syncedCount} orders from WooCommerce (${data.rangeType?.replace("_", " ") || "chosen range"})!`,
+        text: `Success! Synced ${data.syncedCount} orders from WooCommerce (${rangeLabel})!`,
       });
 
       if (onSyncComplete) {
@@ -154,11 +172,24 @@ export function SyncWooCommerceDialog({
     }
   };
 
+  const syncButtonLabel =
+    rangeType === "last_month"
+      ? "Sync Last Month's Orders Now"
+      : rangeType === "last_30_days"
+      ? "Sync Last 30 Days Orders Now"
+      : rangeType === "this_month"
+      ? "Sync This Month's Orders Now"
+      : rangeType === "last_2_days"
+      ? "Sync Last 2 Days Orders Now"
+      : rangeType === "all"
+      ? "Sync All Available Orders"
+      : "Sync Custom Range Orders";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="w-full max-w-xl max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="w-full max-w-xl max-h-[92vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+        {/* Header - Fixed */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-orange-100 text-orange-600">
               <Globe className="w-5 h-5" />
@@ -170,190 +201,194 @@ export function SyncWooCommerceDialog({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSync} className="p-6 space-y-4 overflow-y-auto">
-          {/* Sync Period Selection */}
-          <div className="space-y-1.5">
-            <label className="flex items-center justify-between text-xs font-semibold text-slate-800">
-              <span className="flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-orange-600" />
-                <span>Select Sync Period (Date Range)</span>
+        <form onSubmit={handleSync} className="p-6 space-y-4 overflow-y-auto flex-1">
+          {/* Section 1: Period Selector (Always clearly visible at the top) */}
+          <div className="space-y-2 p-3.5 bg-orange-50/40 rounded-xl border border-orange-200/80">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-orange-950">
+                <Calendar className="w-4 h-4 text-orange-600" />
+                <span>Select Sync Period (தேர்வு செய்யவும்)</span>
+              </label>
+              <span className="text-[11px] font-semibold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full">
+                {rangeType === "last_month" ? "⭐ Recommended for 1st Sync" : "Custom Period"}
               </span>
-              <span className="text-[11px] font-normal text-slate-500">Pick Last Month for 1st time sync</span>
-            </label>
+            </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
               {[
-                { id: "last_month", label: "Last Month", desc: "Previous full month", isRecommended: true },
-                { id: "last_30_days", label: "Last 30 Days", desc: "Rolling 30 days" },
-                { id: "this_month", label: "This Month", desc: "Current month" },
+                { id: "last_month", label: "Last Month", desc: "Previous full month" },
+                { id: "this_month", label: "This Month", desc: "Current month to date" },
+                { id: "last_30_days", label: "Last 30 Days", desc: "Past 30 days" },
                 { id: "last_2_days", label: "Last 2 Days", desc: "Today & yesterday" },
-                { id: "custom", label: "Custom Range", desc: "Pick start & end" },
                 { id: "all", label: "All Orders", desc: "All past records" },
+                { id: "custom", label: "Custom Range", desc: "Pick start & end" },
               ].map((item) => {
                 const isSelected = rangeType === item.id;
                 return (
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setRangeType(item.id as SyncRange)}
-                    className={`relative p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    onClick={() => {
+                      setRangeType(item.id as SyncRange);
+                      if (typeof window !== "undefined") {
+                        localStorage.setItem("sc_wc_range_type", item.id);
+                      }
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                       isSelected
-                        ? "border-orange-500 bg-orange-50/80 ring-2 ring-orange-500/20 text-orange-950 font-semibold shadow-xs"
-                        : "border-slate-200 hover:border-slate-300 bg-white text-slate-700"
+                        ? "border-orange-500 bg-orange-500 text-white font-bold shadow-sm ring-2 ring-orange-500/20"
+                        : "border-slate-200 hover:border-orange-300 bg-white text-slate-700 hover:bg-slate-50"
                     }`}
                   >
-                    {item.isRecommended && (
-                      <span className="absolute -top-2 right-2 px-1.5 py-0.5 bg-orange-600 text-white rounded-full text-[9px] font-bold tracking-tight shadow-2xs flex items-center gap-0.5">
-                        <Sparkles className="w-2.5 h-2.5" />
-                        Selected
-                      </span>
-                    )}
-                    <div className="text-xs">{item.label}</div>
-                    <div className="text-[10px] text-slate-500 font-normal leading-tight mt-0.5">{item.desc}</div>
+                    <div className={`text-xs font-semibold ${isSelected ? "text-white" : "text-slate-900"}`}>
+                      {item.label}
+                    </div>
+                    <div className={`text-[10px] font-normal leading-tight mt-0.5 ${isSelected ? "text-orange-100" : "text-slate-500"}`}>
+                      {item.desc}
+                    </div>
                   </button>
                 );
               })}
             </div>
 
-            {/* Date Range Preview Badge */}
-            <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs flex items-center justify-between text-slate-600">
-              <span className="text-[11px] text-slate-500">Date Window:</span>
-              <span className="font-semibold text-slate-800 text-[11px]">{rangeDescription}</span>
+            {/* Selected Period Preview */}
+            <div className="mt-2 p-2 bg-white/90 border border-orange-200 rounded-lg text-xs flex items-center justify-between text-slate-700">
+              <span className="text-[11px] text-slate-500 font-medium">Target Date Window:</span>
+              <span className="font-bold text-orange-900 text-[11px]">{rangeDescription}</span>
             </div>
 
             {/* Custom Date Pickers */}
             {rangeType === "custom" && (
-              <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="grid grid-cols-2 gap-3 pt-2">
                 <div>
-                  <label className="block text-[11px] font-medium text-slate-600 mb-1">Start Date (From)</label>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">Start Date (From)</label>
                   <input
                     type="date"
                     required
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500"
+                    className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-slate-600 mb-1">End Date (To)</label>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">End Date (To)</label>
                   <input
                     type="date"
                     required
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500"
+                    className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-orange-500 bg-white"
                   />
                 </div>
               </div>
             )}
           </div>
 
-          {/* Credentials */}
-          <div className="pt-2 border-t border-slate-100 space-y-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Store URL
-              </label>
-              <input
-                type="url"
-                required
-                value={storeUrl}
-                onChange={(e) => setStoreUrl(e.target.value)}
-                className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 bg-slate-50 font-mono text-slate-700"
-                placeholder="https://supercollections.in"
-              />
-            </div>
+          {/* Section 2: Store Credentials */}
+          <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50">
+            <button
+              type="button"
+              onClick={() => setShowKeyDetails(!showKeyDetails)}
+              className="w-full px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100/70 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+                <span>Store Connection & API Keys</span>
+                {consumerKey && (
+                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-mono border border-emerald-200">
+                    Keys Configured
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                <span>{showKeyDetails ? "Collapse" : "Edit / View"}</span>
+                {showKeyDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </div>
+            </button>
 
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-slate-700">
-                  Consumer Key
-                </label>
-                <a
-                  href="https://supercollections.in/wp-admin/admin.php?page=wc-settings&tab=advanced&section=keys"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[11px] text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1"
-                >
-                  <span>Get Keys from WordPress</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  required
-                  value={consumerKey}
-                  onChange={(e) => setConsumerKey(e.target.value)}
-                  className="w-full pl-9 pr-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono"
-                  placeholder="ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                />
-              </div>
-            </div>
+            {(!consumerKey || showKeyDetails) && (
+              <div className="p-4 border-t border-slate-200 space-y-3 bg-white">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Store URL
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    value={storeUrl}
+                    onChange={(e) => setStoreUrl(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 bg-slate-50 font-mono text-slate-700"
+                    placeholder="https://supercollections.in"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Consumer Secret
-              </label>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="password"
-                  required
-                  value={consumerSecret}
-                  onChange={(e) => setConsumerSecret(e.target.value)}
-                  className="w-full pl-9 pr-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono"
-                  placeholder="cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                />
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700">
+                      Consumer Key
+                    </label>
+                    <a
+                      href="https://supercollections.in/wp-admin/admin.php?page=wc-settings&tab=advanced&section=keys"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1"
+                    >
+                      <span>Get Keys from WordPress</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={consumerKey}
+                    onChange={(e) => setConsumerKey(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono"
+                    placeholder="ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Consumer Secret
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={consumerSecret}
+                    onChange={(e) => setConsumerSecret(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono"
+                    placeholder="cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Automatic Daily Sync Info Box */}
-          <div className="p-3.5 bg-gradient-to-br from-amber-50 to-orange-50/50 rounded-xl border border-amber-200/80 text-xs text-amber-950 space-y-2">
-            <div className="font-bold flex items-center justify-between text-amber-900">
-              <span className="flex items-center gap-1.5">
-                <span>⚡ Daily Automatic Update (Zero Manual Clicks)</span>
-              </span>
+          {/* Section 3: Automatic Daily Webhook Setup */}
+          <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200/80 text-xs text-amber-950 space-y-1.5">
+            <div className="font-bold text-amber-900 flex items-center justify-between">
+              <span>⚡ Daily Automatic Orders (Webhook)</span>
+              <button
+                type="button"
+                onClick={handleCopyWebhook}
+                className="text-[10px] text-orange-700 hover:text-orange-900 flex items-center gap-1 font-semibold px-2 py-0.5 bg-orange-100 rounded border border-orange-200 cursor-pointer"
+              >
+                {copiedWebhook ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                <span>{copiedWebhook ? "Copied!" : "Copy Webhook URL"}</span>
+              </button>
             </div>
-            <p className="text-slate-600 text-[11px] leading-relaxed">
-              Once you sync past orders, new daily orders can appear automatically in two ways:
+            <p className="text-slate-600 text-[11px] leading-tight">
+              In WordPress: <b>WooCommerce → Settings → Advanced → Webhooks</b>. Add Webhook with topic <b>Order created</b> to receive new daily orders in 2 seconds automatically.
             </p>
-            <div className="space-y-1.5 text-[11px]">
-              <div className="p-2 bg-white/90 rounded-lg border border-amber-200">
-                <div className="font-semibold text-amber-900 flex items-center justify-between mb-1">
-                  <span>1. Instant Live Webhook (Recommended)</span>
-                  <button
-                    type="button"
-                    onClick={handleCopyWebhook}
-                    className="text-[10px] text-orange-700 hover:text-orange-900 flex items-center gap-1 font-medium px-2 py-0.5 bg-orange-100/70 hover:bg-orange-100 rounded cursor-pointer"
-                  >
-                    {copiedWebhook ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedWebhook ? "Copied URL!" : "Copy Webhook URL"}</span>
-                  </button>
-                </div>
-                <p className="text-slate-500 text-[10px] mb-1">
-                  In WordPress: <b>WooCommerce → Settings → Advanced → Webhooks</b>. Add webhook with Topic <i>Order created</i> and <i>Order updated</i>.
-                </p>
-                <div className="font-mono text-[10px] text-slate-700 bg-slate-50 px-2 py-1 rounded border border-slate-200 select-all break-all">
-                  https://supercollection-workspace.vercel.app/api/webhooks/woocommerce
-                </div>
-              </div>
-
-              <div className="p-2 bg-white/90 rounded-lg border border-amber-200">
-                <span className="font-semibold text-amber-900 block mb-0.5">2. Scheduled Daily Cron & Background Sync</span>
-                <p className="text-slate-500 text-[10px]">
-                  Saving your keys here also enables the automated daily server sync to fetch daily orders every 24 hours.
-                </p>
-              </div>
+            <div className="font-mono text-[10px] text-slate-700 bg-white px-2 py-1 rounded border border-amber-200 select-all break-all">
+              https://supercollection-workspace.vercel.app/api/webhooks/woocommerce
             </div>
           </div>
 
@@ -375,7 +410,7 @@ export function SyncWooCommerceDialog({
             </div>
           )}
 
-          {/* Actions */}
+          {/* Actions - Sticky Footer */}
           <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
             <button
               type="button"
@@ -387,20 +422,10 @@ export function SyncWooCommerceDialog({
             <button
               type="submit"
               disabled={isLoading}
-              className="inline-flex items-center gap-2 px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold transition-all shadow-md hover:shadow-lg disabled:opacity-50 cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-              <span>
-                {isLoading
-                  ? "Syncing Orders from WooCommerce..."
-                  : rangeType === "last_month"
-                  ? "Sync Last Month's Orders Now"
-                  : rangeType === "last_30_days"
-                  ? "Sync Last 30 Days Orders Now"
-                  : rangeType === "custom"
-                  ? "Sync Custom Range Orders Now"
-                  : "Sync Selected Orders Now"}
-              </span>
+              <span>{isLoading ? "Syncing Orders..." : syncButtonLabel}</span>
             </button>
           </div>
         </form>

@@ -6,13 +6,17 @@ import { parseWooCommerceDate } from "@/lib/woocommerce-source";
 export const dynamic = "force-dynamic";
 
 /**
- * WooCommerce Multi-Period Live Sync Endpoint
- * Connects to WooCommerce REST API with pagination and imports orders (Last Month, Last 30 Days, This Month, Last 2 Days, Custom) into Supabase.
+ * Format a Date object into WooCommerce / WordPress compliant ISO string (YYYY-MM-DDTHH:MM:SS)
+ * Strictly without fractional milliseconds (.000Z), which breaks WordPress rest_parse_date_time regex.
  */
+function toWcDate(date: Date): string {
+  return date.toISOString().split(".")[0];
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   return handleSync({
-    rangeType: url.searchParams.get("rangeType") || "last_2_days",
+    rangeType: url.searchParams.get("rangeType") || "last_month",
     startDate: url.searchParams.get("startDate") || undefined,
     endDate: url.searchParams.get("endDate") || undefined,
     storeUrl: url.searchParams.get("storeUrl") || undefined,
@@ -86,7 +90,7 @@ async function handleSync(body: any) {
     }
 
     // Calculate Date Range
-    const rangeType = body.rangeType || "last_2_days";
+    const rangeType = body.rangeType || "last_month";
     let afterIso: string | undefined = undefined;
     let beforeIso: string | undefined = undefined;
 
@@ -107,39 +111,38 @@ async function handleSync(body: any) {
         const startUtc = new Date(Date.UTC(prevYear, prevMonth, 1, 0, 0, 0) - istOffsetMs);
         const endUtc = new Date(Date.UTC(prevYear, prevMonth, lastDayOfPrevMonth, 23, 59, 59, 999) - istOffsetMs);
 
-        afterIso = startUtc.toISOString();
-        beforeIso = endUtc.toISOString();
+        afterIso = toWcDate(startUtc);
+        beforeIso = toWcDate(endUtc);
         break;
       }
 
       case "last_30_days": {
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        afterIso = thirtyDaysAgo.toISOString();
-        beforeIso = now.toISOString();
+        afterIso = toWcDate(thirtyDaysAgo);
+        beforeIso = toWcDate(now);
         break;
       }
 
       case "this_month": {
         const startUtc = new Date(Date.UTC(currentYear, currentMonth, 1, 0, 0, 0) - istOffsetMs);
-        afterIso = startUtc.toISOString();
-        beforeIso = now.toISOString();
+        afterIso = toWcDate(startUtc);
+        beforeIso = toWcDate(now);
         break;
       }
 
       case "last_2_days": {
         const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-        twoDaysAgo.setHours(0, 0, 0, 0);
-        afterIso = twoDaysAgo.toISOString();
-        beforeIso = now.toISOString();
+        afterIso = toWcDate(twoDaysAgo);
+        beforeIso = toWcDate(now);
         break;
       }
 
       case "custom": {
         if (body.startDate) {
-          afterIso = new Date(`${body.startDate}T00:00:00+05:30`).toISOString();
+          afterIso = toWcDate(new Date(`${body.startDate}T00:00:00+05:30`));
         }
         if (body.endDate) {
-          beforeIso = new Date(`${body.endDate}T23:59:59+05:30`).toISOString();
+          beforeIso = toWcDate(new Date(`${body.endDate}T23:59:59+05:30`));
         }
         break;
       }
@@ -150,13 +153,14 @@ async function handleSync(body: any) {
         break;
     }
 
-    // Helper: Paginated WooCommerce Fetcher (handles up to 1500 orders per status)
     const authHeader = "Basic " + Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
 
+    // Helper: Paginated WooCommerce Fetcher (handles up to 1500 orders per status)
     async function fetchWcOrders(
       status: string | null,
       extraParams: Record<string, string> = {},
-      maxPages = 15
+      maxPages = 15,
+      useDateFilter = true
     ): Promise<any[]> {
       const orders: any[] = [];
 
@@ -170,10 +174,10 @@ async function handleSync(body: any) {
         if (status) {
           url.searchParams.set("status", status);
         }
-        if (afterIso) {
+        if (useDateFilter && afterIso) {
           url.searchParams.set("after", afterIso);
         }
-        if (beforeIso) {
+        if (useDateFilter && beforeIso) {
           url.searchParams.set("before", beforeIso);
         }
 
@@ -192,7 +196,14 @@ async function handleSync(body: any) {
           });
 
           if (!res.ok) {
-            console.warn(`WooCommerce API page ${page} status: ${res.status}`);
+            const errText = await res.text().catch(() => "");
+            console.warn(`WooCommerce API page ${page} status ${res.status}:`, errText);
+            
+            // If date parameter caused a 400 error, fallback without date parameter once
+            if (res.status === 400 && useDateFilter) {
+              console.log("Date filter rejected by WooCommerce REST API, retrying without date parameter...");
+              return fetchWcOrders(status, extraParams, maxPages, false);
+            }
             break;
           }
 
@@ -216,16 +227,17 @@ async function handleSync(body: any) {
       return orders;
     }
 
-    // Parallel fetch for processing and completed orders within the chosen range
+    // 1. ALWAYS fetch active processing orders (without date restriction, because active pending orders must be fulfilled)
+    // 2. Fetch completed orders within the chosen period
     const [processingOrders, completedOrders] = await Promise.all([
-      fetchWcOrders("processing"),
-      fetchWcOrders("completed"),
+      fetchWcOrders("processing", {}, 10, false), // Fetch all active processing orders
+      fetchWcOrders("completed", {}, 15, rangeType !== "all"), // Completed orders in selected range
     ]);
 
-    // For recent syncs (last 2 days or this month), also fetch recently modified orders to catch status updates
+    // Also fetch recently modified orders to catch recent status changes
     let modifiedOrders: any[] = [];
     if (rangeType === "last_2_days" || rangeType === "this_month") {
-      modifiedOrders = await fetchWcOrders(null, { orderby: "modified", order: "desc" }, 2);
+      modifiedOrders = await fetchWcOrders(null, { orderby: "modified", order: "desc" }, 2, false);
     }
 
     // Deduplicate into a unified list by ID
@@ -244,7 +256,7 @@ async function handleSync(body: any) {
         }
       });
     }
-    // Active processing orders from WooCommerce
+    // Active processing orders from WooCommerce take precedence
     if (Array.isArray(processingOrders)) {
       processingOrders.forEach((o: any) => {
         if (o.status === "processing") {
@@ -515,6 +527,7 @@ async function handleSync(body: any) {
     return NextResponse.json({
       success: true,
       syncedCount,
+      totalFound: wcOrders.length,
       rangeType,
       dateRange: {
         after: afterIso,
