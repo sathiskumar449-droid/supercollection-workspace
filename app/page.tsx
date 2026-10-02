@@ -226,259 +226,38 @@ export default function DashboardPage() {
             <span className="inline-block text-xl">👋</span>
           </h1>
           <p className="text-sm text-slate-500 mt-1 flex flex-wrap items-center gap-1.5">
-            <span>Here&apos;s your order status overview for</span>
+            <span>Here&apos;s what&apos;s happening with your orders</span>
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200/80">
               {getFilterDisplayLabel(dateFilter, customDate)}
             </span>
-            <span className="text-slate-300">·</span>
-            <span className="font-semibold text-slate-700 font-mono text-xs">
-              {summaryCounts.total} {summaryCounts.total === 1 ? "total order" : "total orders"}
-            </span>
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
+          {/* TOTAL ORDERS COUNTER */}
+          <Link
+            href="/orders"
+            className="inline-flex items-center gap-2.5 px-3.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl transition-all shadow-2xs group"
+          >
+            <div className="p-1 rounded-md bg-orange-50 text-orange-600 border border-orange-100">
+              <Package className="w-4 h-4" />
+            </div>
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="font-semibold text-slate-500">Total Orders:</span>
+              <span
+                suppressHydrationWarning
+                className="font-bold font-mono text-slate-900 group-hover:text-orange-600 text-sm tabular-nums"
+              >
+                {summaryCounts.total}
+              </span>
+            </div>
+          </Link>
+
           <Link
             href="/orders"
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-medium transition-colors shadow-xs"
           >
             <span>View All Orders</span>
             <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-      </div>
-
-      {/* 8-METRIC KPI SUMMARY GRID (DATE FILTERED BREAKDOWN) */}
-      <div className="space-y-2.5">
-        <div className="flex items-center justify-between px-0.5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
-              Summary Breakdown
-            </span>
-            <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-              {getFilterDisplayLabel(dateFilter, customDate)}
-            </span>
-          </div>
-          <span className="text-xs text-slate-500 font-medium">
-            Total Orders:{" "}
-            <strong className="text-slate-900 font-mono font-bold">{summaryCounts.total}</strong>
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
-          {/* 1. TOTAL ORDERS */}
-          <Link
-            href="/orders"
-            className="group relative bg-gradient-to-br from-indigo-50/70 via-white to-slate-50/60 border border-indigo-200/80 hover:border-indigo-400 rounded-xl p-3.5 shadow-xs hover:shadow-sm hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-900/80">
-                Total Orders
-              </span>
-              <div className="p-1.5 rounded-lg bg-indigo-100/70 text-indigo-700 group-hover:scale-105 transition-transform">
-                <Package className="w-4 h-4" />
-              </div>
-            </div>
-            <div>
-              <div
-                suppressHydrationWarning
-                className="text-2xl font-bold font-mono text-indigo-950 tabular-nums group-hover:text-indigo-600 transition-colors"
-              >
-                {summaryCounts.total}
-              </div>
-              <div className="text-[10px] text-indigo-600/80 font-medium mt-0.5 flex items-center gap-0.5">
-                <span>View all</span>
-                <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
-          </Link>
-
-          {/* 2. PROCESSING */}
-          <Link
-            href="/fulfillment/packing?status=CONFIRMED"
-            className="group relative bg-gradient-to-br from-sky-50/70 via-white to-slate-50/60 border border-sky-200/80 hover:border-sky-400 rounded-xl p-3.5 shadow-xs hover:shadow-sm hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-sky-900/80">
-                Processing
-              </span>
-              <div className="p-1.5 rounded-lg bg-sky-100/70 text-sky-700 group-hover:scale-105 transition-transform">
-                <Clock className="w-4 h-4" />
-              </div>
-            </div>
-            <div>
-              <div
-                suppressHydrationWarning
-                className="text-2xl font-bold font-mono text-sky-950 tabular-nums group-hover:text-sky-600 transition-colors"
-              >
-                {summaryCounts.processing}
-              </div>
-              <div className="text-[10px] text-sky-600/80 font-medium mt-0.5 flex items-center gap-0.5">
-                <span>Waiting to pack</span>
-                <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
-          </Link>
-
-          {/* 3. COMPLETED */}
-          <Link
-            href="/fulfillment/packing?status=COMPLETED"
-            className="group relative bg-gradient-to-br from-blue-50/70 via-white to-slate-50/60 border border-blue-200/80 hover:border-blue-400 rounded-xl p-3.5 shadow-xs hover:shadow-sm hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900/80">
-                Completed
-              </span>
-              <div className="p-1.5 rounded-lg bg-blue-100/70 text-blue-700 group-hover:scale-105 transition-transform">
-                <CheckCircle2 className="w-4 h-4" />
-              </div>
-            </div>
-            <div>
-              <div
-                suppressHydrationWarning
-                className="text-2xl font-bold font-mono text-blue-950 tabular-nums group-hover:text-blue-600 transition-colors"
-              >
-                {summaryCounts.completed}
-              </div>
-              <div className="text-[10px] text-blue-600/80 font-medium mt-0.5 flex items-center gap-0.5">
-                <span>Packing done</span>
-                <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
-          </Link>
-
-          {/* 4. DISPATCHED */}
-          <Link
-            href="/fulfillment/packing?status=DISPATCHED"
-            className="group relative bg-gradient-to-br from-emerald-50/70 via-white to-slate-50/60 border border-emerald-200/80 hover:border-emerald-400 rounded-xl p-3.5 shadow-xs hover:shadow-sm hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-900/80">
-                Dispatched
-              </span>
-              <div className="p-1.5 rounded-lg bg-emerald-100/70 text-emerald-700 group-hover:scale-105 transition-transform">
-                <Truck className="w-4 h-4" />
-              </div>
-            </div>
-            <div>
-              <div
-                suppressHydrationWarning
-                className="text-2xl font-bold font-mono text-emerald-950 tabular-nums group-hover:text-emerald-600 transition-colors"
-              >
-                {summaryCounts.dispatched}
-              </div>
-              <div className="text-[10px] text-emerald-600/80 font-medium mt-0.5 flex items-center gap-0.5">
-                <span>At dispatch point</span>
-                <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
-          </Link>
-
-          {/* 5. COURIER PENDING */}
-          <Link
-            href="/couriers?tab=pending-status"
-            className="group relative bg-gradient-to-br from-amber-50/70 via-white to-slate-50/60 border border-amber-200/80 hover:border-amber-400 rounded-xl p-3.5 shadow-xs hover:shadow-sm hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900/80">
-                Pending
-              </span>
-              <div className="p-1.5 rounded-lg bg-amber-100/70 text-amber-700 group-hover:scale-105 transition-transform">
-                <Clock className="w-4 h-4" />
-              </div>
-            </div>
-            <div>
-              <div
-                suppressHydrationWarning
-                className="text-2xl font-bold font-mono text-amber-950 tabular-nums group-hover:text-amber-600 transition-colors"
-              >
-                {summaryCounts.courierPending}
-              </div>
-              <div className="text-[10px] text-amber-600/80 font-medium mt-0.5 flex items-center gap-0.5">
-                <span>Courier pickup/LLR</span>
-                <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
-          </Link>
-
-          {/* 6. SHIPPED */}
-          <Link
-            href="/couriers?tab=shipped"
-            className="group relative bg-gradient-to-br from-cyan-50/70 via-white to-slate-50/60 border border-cyan-200/80 hover:border-cyan-400 rounded-xl p-3.5 shadow-xs hover:shadow-sm hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-900/80">
-                Shipped
-              </span>
-              <div className="p-1.5 rounded-lg bg-cyan-100/70 text-cyan-700 group-hover:scale-105 transition-transform">
-                <Truck className="w-4 h-4" />
-              </div>
-            </div>
-            <div>
-              <div
-                suppressHydrationWarning
-                className="text-2xl font-bold font-mono text-cyan-950 tabular-nums group-hover:text-cyan-600 transition-colors"
-              >
-                {summaryCounts.courierShipped}
-              </div>
-              <div className="text-[10px] text-cyan-600/80 font-medium mt-0.5 flex items-center gap-0.5">
-                <span>In transit with LLR</span>
-                <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
-          </Link>
-
-          {/* 7. SMS SENT */}
-          <Link
-            href="/sms?status=SENT"
-            className="group relative bg-gradient-to-br from-teal-50/70 via-white to-slate-50/60 border border-teal-200/80 hover:border-teal-400 rounded-xl p-3.5 shadow-xs hover:shadow-sm hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-teal-900/80">
-                Sent SMS
-              </span>
-              <div className="p-1.5 rounded-lg bg-teal-100/70 text-teal-700 group-hover:scale-105 transition-transform">
-                <Send className="w-4 h-4" />
-              </div>
-            </div>
-            <div>
-              <div
-                suppressHydrationWarning
-                className="text-2xl font-bold font-mono text-teal-950 tabular-nums group-hover:text-teal-600 transition-colors"
-              >
-                {summaryCounts.smsSent}
-              </div>
-              <div className="text-[10px] text-teal-600/80 font-medium mt-0.5 flex items-center gap-0.5">
-                <span>Delivered to buyer</span>
-                <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
-          </Link>
-
-          {/* 8. SMS PENDING */}
-          <Link
-            href="/sms?status=PENDING"
-            className="group relative bg-gradient-to-br from-violet-50/70 via-white to-slate-50/60 border border-violet-200/80 hover:border-violet-400 rounded-xl p-3.5 shadow-xs hover:shadow-sm hover:-translate-y-0.5 transition-all flex flex-col justify-between"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-violet-900/80">
-                SMS Pending
-              </span>
-              <div className="p-1.5 rounded-lg bg-violet-100/70 text-violet-700 group-hover:scale-105 transition-transform">
-                <Clock className="w-4 h-4" />
-              </div>
-            </div>
-            <div>
-              <div
-                suppressHydrationWarning
-                className="text-2xl font-bold font-mono text-violet-950 tabular-nums group-hover:text-violet-600 transition-colors"
-              >
-                {summaryCounts.smsPending}
-              </div>
-              <div className="text-[10px] text-violet-600/80 font-medium mt-0.5 flex items-center gap-0.5">
-                <span>Queued for dispatch</span>
-                <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
           </Link>
         </div>
       </div>
