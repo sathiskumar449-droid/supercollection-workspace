@@ -55,15 +55,15 @@ export function Sidebar({
       case "dashboard":
         return ["ADMIN", "MANAGER"].includes(user.role);
       case "orders":
-        return ["ADMIN", "MANAGER", "ORDER_STAFF"].includes(user.role);
+        return ["ADMIN", "MANAGER", "ORDER_STAFF", "PACKING_STAFF", "DISPATCH_STAFF"].includes(user.role);
       case "packing":
-        return ["ADMIN", "MANAGER", "PACKING_STAFF"].includes(user.role);
+        return ["ADMIN", "MANAGER", "PACKING_STAFF", "ORDER_STAFF"].includes(user.role);
       case "returns":
-        return ["ADMIN", "MANAGER", "ORDER_STAFF"].includes(user.role);
+        return ["ADMIN", "MANAGER", "ORDER_STAFF", "PACKING_STAFF"].includes(user.role);
       case "courier":
-        return ["ADMIN", "MANAGER", "DISPATCH_STAFF", "COURIER"].includes(user.role);
+        return ["ADMIN", "MANAGER", "DISPATCH_STAFF", "ORDER_STAFF", "PACKING_STAFF", "COURIER"].includes(user.role);
       case "sms":
-        return ["ADMIN", "MANAGER", "DISPATCH_STAFF"].includes(user.role);
+        return ["ADMIN", "MANAGER", "DISPATCH_STAFF", "ORDER_STAFF", "PACKING_STAFF"].includes(user.role);
       case "reports":
         return ["ADMIN", "MANAGER"].includes(user.role);
       case "settings":
@@ -233,14 +233,14 @@ export function Sidebar({
       <div className="p-2 border-t border-slate-100 bg-slate-50/70 flex flex-col items-center text-center">
         <div className="relative mb-1">
           <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-800 font-bold text-xs flex items-center justify-center border border-orange-200 shadow-xs">
-            {user.role === "ADMIN" ? "AD" : user.role === "COURIER" ? "CR" : user.name.split(" ").map((n) => n[0]).join("")}
+            {user.role === "ADMIN" ? "AD" : user.role === "COURIER" ? (user.courierPartnerId === "ST_COURIER" ? "ST" : user.courierPartnerId === "DTDC" ? "DT" : user.courierPartnerId === "INDIA_POST" ? "IP" : "CR") : (user.name ? user.name.split(" ").map((n) => n[0]).join("").slice(0, 2) : "ST")}
           </div>
           {user.online && (
             <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-white" />
           )}
         </div>
         <span className="text-[8px] font-bold text-orange-700 px-1 py-0.5 bg-orange-50 rounded border border-orange-200/60 inline-block uppercase tracking-wide">
-          {user.role === "ADMIN" ? "Admin" : user.role === "COURIER" ? "Courier" : user.role === "MANAGER" ? "Mgr" : "Staff"}
+          {user.role === "ADMIN" ? "Admin" : user.role === "COURIER" ? (user.courierPartnerId === "ST_COURIER" ? "ST Courier" : user.courierPartnerId === "DTDC" ? "DTDC" : user.courierPartnerId === "INDIA_POST" ? "India Post" : "Courier") : "Staff"}
         </span>
         {onLogout && (
           <button

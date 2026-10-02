@@ -48,11 +48,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [user, authUser]);
 
-  // Strict route protection: Courier is strictly restricted to /couriers
+  // Strict route protection:
   useEffect(() => {
-    if (isAuthenticated && authUser?.role === "COURIER") {
-      if (pathname && !pathname.startsWith("/couriers")) {
-        router.replace("/couriers");
+    if (isAuthenticated && authUser) {
+      if (authUser.role === "COURIER") {
+        if (pathname && !pathname.startsWith("/couriers")) {
+          const partnerParam = authUser.courierPartnerId ? `?partner=${authUser.courierPartnerId}` : "";
+          router.replace(`/couriers${partnerParam}`);
+        }
+      } else if (authUser.role !== "ADMIN" && authUser.role !== "MANAGER") {
+        // Staff cannot access /settings
+        if (pathname && pathname.startsWith("/settings")) {
+          router.replace("/fulfillment/packing");
+        }
       }
     }
   }, [isAuthenticated, authUser, pathname, router]);
@@ -84,9 +92,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       };
     }
     if (pathname.startsWith("/couriers")) {
+      const partnerName = authUser?.courierPartnerId === "ST_COURIER"
+        ? "ST Courier"
+        : authUser?.courierPartnerId === "DTDC"
+        ? "DTDC"
+        : authUser?.courierPartnerId === "INDIA_POST"
+        ? "India Post"
+        : authUser?.name || "Courier";
+      const courierTitle = authUser?.role === "COURIER" ? `${partnerName} Work Desk` : "Courier Hub";
       return {
-        title: "Courier Hub",
-        breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "Courier Hub" }],
+        title: courierTitle,
+        breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: courierTitle }],
       };
     }
     if (pathname.startsWith("/sms")) {
@@ -154,9 +170,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated) {
     return (
       <LoginScreen
-        onSuccess={(role) => {
+        onSuccess={(role, partnerId) => {
           if (role === "COURIER") {
-            router.replace("/couriers");
+            const partnerParam = partnerId ? `?partner=${partnerId}` : "";
+            router.replace(`/couriers${partnerParam}`);
+          } else if (role === "ADMIN") {
+            router.replace("/");
+          } else {
+            router.replace("/fulfillment/packing");
           }
         }}
       />

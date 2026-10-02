@@ -30,6 +30,7 @@ interface TopBarProps {
 
 export function TopBar({
   title,
+  user,
   dateFilter = "All",
   onDateFilterChange,
   customDate = "",
@@ -125,25 +126,29 @@ export function TopBar({
           </div>
         </div>
 
-        {/* Sync Website Orders Button */}
-        <button
-          onClick={() => setSyncDialogOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs shrink-0 cursor-pointer"
-          title="Sync & Import Orders from supercollections.in"
-        >
-          <Globe className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-          <span className="hidden sm:inline">Sync Website</span>
-        </button>
+        {user?.role !== "COURIER" && (
+          <>
+            {/* Sync Website Orders Button */}
+            <button
+              onClick={() => setSyncDialogOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs shrink-0 cursor-pointer"
+              title="Sync & Import Orders from supercollections.in"
+            >
+              <Globe className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+              <span className="hidden sm:inline">Sync Website</span>
+            </button>
 
-        {/* Sync WhatsApp Orders Button */}
-        <button
-          onClick={() => setWhatsappSyncDialogOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs shrink-0 cursor-pointer"
-          title="Sync & Import Orders from WhatsApp Chat Box"
-        >
-          <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          <span className="hidden sm:inline">Sync WhatsApp</span>
-        </button>
+            {/* Sync WhatsApp Orders Button */}
+            <button
+              onClick={() => setWhatsappSyncDialogOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs shrink-0 cursor-pointer"
+              title="Sync & Import Orders from WhatsApp Chat Box"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span className="hidden sm:inline">Sync WhatsApp</span>
+            </button>
+          </>
+        )}
       </div>
 
       <SyncWooCommerceDialog
