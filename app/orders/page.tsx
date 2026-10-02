@@ -94,7 +94,7 @@ function OrdersContent() {
 
   // Pagination state
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(15);
+  const [pageSize, setPageSize] = useState(100);
 
   // All Orders remains the master overview: all orders stay visible across every lifecycle stage
   const baseOrders = orders;
@@ -1515,10 +1515,10 @@ function OrdersContent() {
               }}
               className="px-2 py-1 bg-white border border-slate-200 rounded text-xs outline-none ml-2"
             >
-              <option value={10}>10 / page</option>
-              <option value={15}>15 / page</option>
               <option value={25}>25 / page</option>
               <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+              <option value={200}>200 / page</option>
             </select>
           </div>
 

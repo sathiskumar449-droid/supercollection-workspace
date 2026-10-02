@@ -22,7 +22,9 @@ import {
   Plus,
   Sparkles,
   X,
-  CheckSquare
+  CheckSquare,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
 import { SourceBadge, OrderStatusBadge } from "@/components/ui/status-badge";
@@ -187,7 +189,13 @@ export default function PackingPage() {
 
   // Filtering & Search
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [searchQuery, statusFilter, dateFilter, customDate]);
   const [expandedOrderIds, setExpandedOrderIds] = useState<string[]>([]);
 
   const toggleExpandOrder = (orderId: string, e: React.MouseEvent) => {
@@ -373,6 +381,13 @@ export default function PackingPage() {
     });
   }, [packingEligibleOrders, statusFilter, searchQuery]);
 
+  const totalPages = Math.ceil(filteredOrders.length / pageSize) || 1;
+
+  const paginatedOrders = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredOrders.slice(start, start + pageSize);
+  }, [filteredOrders, page, pageSize]);
+
   // Validate selected orders against chosen bulk target status
   const { validOrders, skippedOrders } = useMemo(() => {
     if (!bulkStatus || selectedIds.length === 0) {
@@ -419,18 +434,18 @@ export default function PackingPage() {
   }, [selectedIds, bulkStatus, orders]);
 
   const isAllFilteredSelected =
-    filteredOrders.length > 0 &&
-    filteredOrders.every((o) => selectedIds.includes(o.id));
+    paginatedOrders.length > 0 &&
+    paginatedOrders.every((o) => selectedIds.includes(o.id));
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      // Filter-aware: select all currently filtered orders
-      const newIds = Array.from(new Set([...selectedIds, ...filteredOrders.map((o) => o.id)]));
+      // Page-aware: select all orders on current page
+      const newIds = Array.from(new Set([...selectedIds, ...paginatedOrders.map((o) => o.id)]));
       setSelectedIds(newIds);
     } else {
-      // Deselect currently filtered orders
-      const filteredIdSet = new Set(filteredOrders.map((o) => o.id));
-      setSelectedIds(selectedIds.filter((id) => !filteredIdSet.has(id)));
+      // Deselect orders on current page
+      const pageIdSet = new Set(paginatedOrders.map((o) => o.id));
+      setSelectedIds(selectedIds.filter((id) => !pageIdSet.has(id)));
     }
   };
 
@@ -686,7 +701,7 @@ export default function PackingPage() {
 
           {/* Showing Count */}
           <div className="flex items-center gap-1.5 text-slate-500 font-medium whitespace-nowrap">
-            <span>Showing <strong className="text-slate-800">{filteredOrders.length}</strong> orders</span>
+            <span>Showing <strong className="text-slate-800">{filteredOrders.length > 0 ? (page - 1) * pageSize + 1 : 0} - {Math.min(page * pageSize, filteredOrders.length)}</strong> of <strong className="text-slate-800">{filteredOrders.length}</strong> orders (Page {page} of {totalPages})</span>
             {searchQuery && (
               <button
                 type="button"
@@ -841,7 +856,8 @@ export default function PackingPage() {
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map((order, index) => {
+                paginatedOrders.map((order, index) => {
+                  const sNo = (page - 1) * pageSize + index + 1;
                   const primaryItem = order.items[0];
                   const allSizes = Array.from(new Set(order.items.map((it) => it.size))).join(", ");
                   const totalQuantity = order.items.reduce((sum, it) => sum + it.quantity, 0);
@@ -873,7 +889,7 @@ export default function PackingPage() {
 
                       {/* 1. S.No (Spreadsheet row index) */}
                       <td className="py-2 px-1 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-b border-slate-300 align-top">
-                        {index + 1}
+                        {sNo}
                       </td>
 
                       {/* 2. Date */}
@@ -992,7 +1008,7 @@ export default function PackingPage() {
                         <InlineDispatchInput
                           orderId={order.id}
                           orderNumber={order.orderNumber}
-                          orderIndex={index + 1}
+                          orderIndex={sNo}
                           orderDate={order.createdAt}
                           initialValue={order.dispatch.dispatchId || ""}
                           onSave={handleDispatchNoChange}
@@ -1087,6 +1103,54 @@ export default function PackingPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Bar */}
+        <div className="px-6 py-2.5 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing {filteredOrders.length > 0 ? (page - 1) * pageSize + 1 : 0} to{" "}
+              {Math.min(page * pageSize, filteredOrders.length)} of {filteredOrders.length} orders
+            </span>
+
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+              className="px-2 py-1 bg-white border border-slate-200 rounded text-xs outline-none ml-2"
+            >
+              <option value={25}>25 / page</option>
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+              <option value={200}>200 / page</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+              className="p-1.5 rounded border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600"
+              title="Previous Page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="px-3 py-1 font-medium text-slate-700">
+              Page {page} of {totalPages}
+            </span>
+
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage(page + 1)}
+              className="p-1.5 rounded border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-600"
+              title="Next Page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
