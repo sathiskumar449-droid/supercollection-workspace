@@ -1286,8 +1286,6 @@ export const orderflowStore = {
       });
     }
 
-    const updatedTimeline: ActivityLog[] = [...order.timeline, ...newEntries];
-
     const isDispatched = newStatus === "DISPATCHED";
     const wasAlreadyPickedUp = Boolean(order.dispatch?.verifiedCustomerPhone || order.dispatch?.llrNumber);
 
