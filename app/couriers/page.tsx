@@ -450,9 +450,14 @@ function CourierHubContent() {
   const handleSaveLlr = (orderId: string, orderNumber: string, val: string) => {
     const trimmed = (val || "").trim();
     if (trimmed) {
+      const order = orders.find((o) => o.id === orderId);
+      const partnerCode = order?.dispatch?.courierPartnerId || activePartnerCode;
+      const partnerName = order?.dispatch?.courierName || currentPartner.name;
       updateCourierDetails(orderId, {
         llrNumber: trimmed,
         courierStatus: "SHIPPED",
+        courierPartnerId: partnerCode,
+        courierName: partnerName,
       });
       triggerToast(`Order ${orderNumber} LLR ${trimmed} saved & status marked Shipped!`);
     } else {
@@ -873,6 +878,8 @@ function CourierHubContent() {
                             updateCourierDetails(order.id, {
                               courierStatus: newStatus,
                               llrNumber: order.dispatch?.llrNumber,
+                              courierPartnerId: order.dispatch?.courierPartnerId || activePartnerCode,
+                              courierName: order.dispatch?.courierName || currentPartner.name,
                             });
                             triggerToast(`Order ${order.orderNumber} status updated to ${newStatus === "SHIPPED" ? "Shipped" : "Picked Up"}`);
                           }}

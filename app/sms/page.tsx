@@ -9,18 +9,15 @@ import {
   Clock, 
   AlertCircle, 
   Search, 
-  ShieldAlert, 
-  Info, 
-  Eye, 
   Phone,
   FileSpreadsheet, 
   FileText, 
   CheckCheck, 
   CheckSquare, 
-  X
+  X,
+  Truck
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
-import { SmsStatusBadge, SourceBadge } from "@/components/ui/status-badge";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { formatDate, cn, matchesDateFilter } from "@/lib/utils";
 import { Order, SmsStatus } from "@/types/orderflow";
@@ -29,10 +26,12 @@ import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 function SmsMonitoringContent() {
   const searchParams = useSearchParams();
   const initialStatus = searchParams.get("status") || "ALL";
+  const initialPartnerParam = searchParams.get("partner") || "ALL";
 
   const {
     orders,
     user,
+    courierPartners,
     updateSmsStatus,
     bulkUpdateSmsStatus,
     updateOrderStatus,
@@ -40,13 +39,64 @@ function SmsMonitoringContent() {
     dateFilter,
     customDate,
   } = useOrderFlow();
+
+  const isCourierUser = user.role === "COURIER";
+  const userCourierPartnerId = user.courierPartnerId;
+
+  // Filter out any unwanted courier partners (e.g. Professional Courier)
+  const activeCourierPartners = useMemo(() => {
+    return courierPartners.filter(
+      (cp) => cp.code !== "PROFESSIONAL" && !cp.name.toLowerCase().includes("professional")
+    );
+  }, [courierPartners]);
+
+  // Courier partner filter state: "ALL" or specific partner code e.g. "ST_COURIER" | "DTDC" | "INDIA_POST"
+  const [courierFilter, setCourierFilter] = useState<string>(() => {
+    if (isCourierUser && userCourierPartnerId && userCourierPartnerId !== "PROFESSIONAL") {
+      return userCourierPartnerId;
+    }
+    return initialPartnerParam;
+  });
+
   const [inspectOrder, setInspectOrder] = useState<Order | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
+  // Sync courier filter with URL params
+  React.useEffect(() => {
+    const p = searchParams.get("partner");
+    if (isCourierUser && userCourierPartnerId && userCourierPartnerId !== "PROFESSIONAL") {
+      setCourierFilter(userCourierPartnerId);
+    } else if (p) {
+      setCourierFilter(p);
+    }
+  }, [searchParams, isCourierUser, userCourierPartnerId]);
+
   // Bulk Selection State
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+
+  // Helper to reliably resolve an order's courier partner code
+  const getOrderCourierCode = (o: Order): string => {
+    if (o.dispatch?.courierPartnerId) {
+      return o.dispatch.courierPartnerId;
+    }
+    const name = (o.dispatch?.courierName || "").toLowerCase();
+    if (name.includes("india") || name.includes("post")) return "INDIA_POST";
+    if (name.includes("dtdc")) return "DTDC";
+    if (name.includes("st courier") || name.includes("st")) return "ST_COURIER";
+    return "ST_COURIER";
+  };
+
+  // Helper to resolve display name of an order's courier partner
+  const getOrderCourierName = (o: Order): string => {
+    if (o.dispatch?.courierName && o.dispatch.courierName !== "Courier") {
+      return o.dispatch.courierName;
+    }
+    const code = getOrderCourierCode(o);
+    const matched = activeCourierPartners.find((c) => c.code === code);
+    return matched?.name || (code === "DTDC" ? "DTDC" : code === "INDIA_POST" ? "India Post" : "ST Courier");
+  };
 
   // ONLY orders that have reached "SHIPPED" in Courier Hub (when LLR / Tracking is entered)
   // Filtered by global TopBar date filter / calendar picker
@@ -67,21 +117,58 @@ function SmsMonitoringContent() {
     });
   }, [orders, dateFilter, customDate]);
 
-  // Orders that have SMS logged (shipped orders)
+  // Partner order counts across shipped orders for courier selector badges
+  const partnerCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: shippedOrders.length };
+    activeCourierPartners.forEach((cp) => {
+      counts[cp.code] = 0;
+    });
+
+    shippedOrders.forEach((o) => {
+      const code = getOrderCourierCode(o);
+      if (counts[code] !== undefined) {
+        counts[code]++;
+      }
+    });
+
+    return counts;
+  }, [shippedOrders, activeCourierPartners]);
+
+  // Shipped orders filtered by selected courier partner
+  const partnerOrders = useMemo(() => {
+    if (isCourierUser && userCourierPartnerId) {
+      return shippedOrders.filter((o) => getOrderCourierCode(o) === userCourierPartnerId);
+    }
+    if (courierFilter === "ALL") {
+      return shippedOrders;
+    }
+    return shippedOrders.filter((o) => getOrderCourierCode(o) === courierFilter);
+  }, [shippedOrders, courierFilter, isCourierUser, userCourierPartnerId]);
+
+  // Overall counts for the selected courier partner
+  const totalSms = partnerOrders.length;
+  const sentCount = partnerOrders.filter((o) => o.sms.status === "SENT").length;
+  const pendingCount = partnerOrders.filter((o) => o.sms.status === "PENDING").length;
+  const failedCount = partnerOrders.filter((o) => o.sms.status === "FAILED").length;
+  const deliveryRate = totalSms > 0 ? Math.round((sentCount / totalSms) * 100) : 0;
+
+  // Final orders filtered by SMS Status and Search query
   const smsOrders = useMemo(() => {
-    return shippedOrders.filter((o) => {
+    return partnerOrders.filter((o) => {
       // Filter by SMS status
       if (statusFilter !== "ALL" && o.sms.status !== statusFilter) {
         return false;
       }
 
-      // Search
+      // Search across Order #, Customer Name, Mobile, Courier Name, LLR #
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
+        const courierName = getOrderCourierName(o).toLowerCase();
         return (
           o.orderNumber.toLowerCase().includes(q) ||
           o.customer.name.toLowerCase().includes(q) ||
           o.customer.mobile.toLowerCase().includes(q) ||
+          courierName.includes(q) ||
           (o.dispatch.llrNumber && o.dispatch.llrNumber.toLowerCase().includes(q)) ||
           (o.sms.providerMessageId && o.sms.providerMessageId.toLowerCase().includes(q))
         );
@@ -89,14 +176,23 @@ function SmsMonitoringContent() {
 
       return true;
     });
-  }, [shippedOrders, statusFilter, searchQuery]);
+  }, [partnerOrders, statusFilter, searchQuery]);
 
-  // Overall counts across shipped orders
-  const totalSms = shippedOrders.length;
-  const sentCount = shippedOrders.filter((o) => o.sms.status === "SENT").length;
-  const pendingCount = shippedOrders.filter((o) => o.sms.status === "PENDING").length;
-  const failedCount = shippedOrders.filter((o) => o.sms.status === "FAILED").length;
-  const deliveryRate = totalSms > 0 ? Math.round((sentCount / totalSms) * 100) : 0;
+  // Handle Courier Partner change
+  const handleSelectCourierPartner = (code: string) => {
+    setCourierFilter(code);
+    setSelectedIds([]);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (code === "ALL") {
+        params.delete("partner");
+      } else {
+        params.set("partner", code);
+      }
+      const newSearch = params.toString() ? `?${params.toString()}` : "";
+      window.history.replaceState({}, "", `${window.location.pathname}${newSearch}`);
+    }
+  };
 
   // Bulk selection state helpers
   const isAllSelected = smsOrders.length > 0 && selectedIds.length === smsOrders.length;
@@ -143,6 +239,13 @@ function SmsMonitoringContent() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Current selected partner object
+  const currentPartnerName = useMemo(() => {
+    if (courierFilter === "ALL") return "All Couriers";
+    const found = activeCourierPartners.find((c) => c.code === courierFilter);
+    return found?.name || courierFilter;
+  }, [courierFilter, activeCourierPartners]);
+
   // Export handlers for Excel and PDF
   const handleExportExcel = () => {
     const headers = [
@@ -151,6 +254,7 @@ function SmsMonitoringContent() {
       "Customer Name",
       "City",
       "Customer Phone Number",
+      "Courier Partner",
       "LLR Number",
       "SMS Status",
       "Last SMS Date",
@@ -162,13 +266,15 @@ function SmsMonitoringContent() {
       order.customer.name,
       order.customer.city || "",
       order.customer.mobile,
+      getOrderCourierName(order),
       order.dispatch.llrNumber || "No LLR",
       order.sms.status,
       formatDate(order.sms.sentAt || order.createdAt),
     ]);
 
     const dateStr = new Date().toISOString().slice(0, 10);
-    exportToExcel(`SMS_Monitoring_Records_${dateStr}`, headers, rows);
+    const fileSuffix = courierFilter === "ALL" ? "All" : courierFilter;
+    exportToExcel(`SMS_Monitoring_${fileSuffix}_${dateStr}`, headers, rows);
     triggerToast(`Exported ${rows.length} SMS records to Excel successfully`);
   };
 
@@ -178,6 +284,7 @@ function SmsMonitoringContent() {
       "Order ID",
       "Customer Name",
       "Phone Number",
+      "Courier Partner",
       "LLR Number",
       "SMS Status",
       "Date",
@@ -188,16 +295,18 @@ function SmsMonitoringContent() {
       order.orderNumber,
       order.customer.name,
       order.customer.mobile,
+      getOrderCourierName(order),
       order.dispatch.llrNumber || "-",
       order.sms.status,
       formatDate(order.sms.sentAt || order.createdAt),
     ]);
 
     const dateStr = new Date().toISOString().slice(0, 10);
+    const fileSuffix = courierFilter === "ALL" ? "All" : courierFilter;
     exportToPdf({
-      title: "Ping4SMS Gateway - SMS Delivery Monitoring Report",
-      subtitle: `Status Filter: ${statusFilter} | Total Records: ${smsOrders.length}`,
-      filename: `SMS_Monitoring_Report_${dateStr}`,
+      title: `Ping4SMS Gateway - SMS Delivery Monitoring Report (${currentPartnerName})`,
+      subtitle: `Courier: ${currentPartnerName} | Status Filter: ${statusFilter} | Total Records: ${smsOrders.length}`,
+      filename: `SMS_Monitoring_${fileSuffix}_${dateStr}`,
       headers,
       rows,
       orientation: "landscape",
@@ -206,6 +315,88 @@ function SmsMonitoringContent() {
 
   return (
     <div className="space-y-4 max-w-full pb-16">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold shadow-lg animate-in fade-in">
+          <CheckCheck className="w-4 h-4 text-emerald-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* TOP SECTION: Courier Partner Selector Bar (matching Courier Hub style) */}
+      {(!isCourierUser || !userCourierPartnerId) && (
+        <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 overflow-x-auto text-xs py-0.5 scrollbar-none">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0 flex items-center gap-1.5">
+              <Truck className="w-3.5 h-3.5 text-slate-400" />
+              <span>Courier Partner:</span>
+            </span>
+
+            {/* "All" Courier Tab */}
+            <button
+              type="button"
+              onClick={() => handleSelectCourierPartner("ALL")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs",
+                courierFilter === "ALL"
+                  ? "bg-orange-600 text-white shadow-xs ring-1 ring-orange-500"
+                  : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-300"
+              )}
+            >
+              <span>All</span>
+              <span
+                className={cn(
+                  "px-1.5 py-0.2 rounded-full text-[10.5px] font-bold",
+                  courierFilter === "ALL"
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-100 text-slate-600 border border-slate-200"
+                )}
+              >
+                {partnerCounts["ALL"] || 0}
+              </span>
+            </button>
+
+            {/* Individual Courier Partner Tabs (ST Courier, DTDC, India Post) */}
+            {activeCourierPartners.map((cp) => {
+              const isSelected = courierFilter === cp.code;
+              const count = partnerCounts[cp.code] || 0;
+              return (
+                <button
+                  key={cp.id}
+                  type="button"
+                  onClick={() => handleSelectCourierPartner(cp.code)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs",
+                    isSelected
+                      ? "bg-orange-600 text-white shadow-xs ring-1 ring-orange-500"
+                      : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-300"
+                  )}
+                >
+                  <span>{cp.name}</span>
+                  <span
+                    className={cn(
+                      "px-1.5 py-0.2 rounded-full text-[10.5px] font-bold",
+                      isSelected
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-100 text-slate-600 border border-slate-200"
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Quick Partner Summary & Export Shortcuts */}
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            <span className="text-[11px] font-semibold text-slate-500 hidden md:inline">
+              Viewing: <strong className="text-slate-800">{currentPartnerName}</strong> ({totalSms} records)
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Metric Cards (Compact matching Courier page with themed border colors) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         {/* Total SMS */}
@@ -285,9 +476,9 @@ function SmsMonitoringContent() {
         </div>
       </div>
 
-      {/* Main Table */}
+      {/* Main Table Card */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
-        {/* Controls */}
+        {/* Controls Toolbar */}
         <div className="p-3 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
           {/* 1st Position: Search Bar */}
           <div className="relative w-full sm:w-72">
@@ -296,7 +487,7 @@ function SmsMonitoringContent() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Mobile, Order #, LLR..."
+              placeholder="Search by Mobile, Order #, LLR, Courier..."
               className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-orange-500 font-medium text-slate-800 placeholder-slate-400 transition-all"
             />
             {searchQuery && (
@@ -311,15 +502,8 @@ function SmsMonitoringContent() {
             )}
           </div>
 
-          {/* Right Side: Active Status Tag / Selected Bulk Actions + Export Buttons */}
+          {/* Right Side: Active Filter Badges + Selected Bulk Actions + Export Buttons */}
           <div className="flex items-center gap-2.5 flex-wrap justify-end w-full sm:w-auto">
-            {toastMessage && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold animate-in fade-in">
-                <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{toastMessage}</span>
-              </div>
-            )}
-
             {/* Active Status Filter Badge (if filtered from top metric cards) */}
             {statusFilter !== "ALL" && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-semibold border border-orange-200">
@@ -329,6 +513,21 @@ function SmsMonitoringContent() {
                   onClick={() => setStatusFilter("ALL")}
                   className="hover:text-red-700 cursor-pointer p-0.5"
                   title="Clear status filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {/* Active Courier Filter Badge (if non-ALL) */}
+            {courierFilter !== "ALL" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-300">
+                <span>Courier: {currentPartnerName}</span>
+                <button
+                  type="button"
+                  onClick={() => handleSelectCourierPartner("ALL")}
+                  className="hover:text-red-700 cursor-pointer p-0.5"
+                  title="Clear courier filter"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -367,17 +566,17 @@ function SmsMonitoringContent() {
             )}
 
             {/* Export Actions (Excel & PDF) */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2">
               <button
                 onClick={handleExportExcel}
-                title="Export Excel"
+                title={`Export ${currentPartnerName} SMS Records to Excel`}
                 className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer"
               >
                 <FileSpreadsheet className="w-4 h-4" />
               </button>
               <button
                 onClick={handleExportPdf}
-                title="Export PDF"
+                title={`Export ${currentPartnerName} SMS Records to PDF`}
                 className="inline-flex items-center justify-center p-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer"
               >
                 <FileText className="w-4 h-4" />
@@ -403,115 +602,146 @@ function SmsMonitoringContent() {
                     className="w-3.5 h-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer align-middle"
                   />
                 </th>
-                <th className="py-2.5 px-2 w-[5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
-                <th className="py-2.5 px-3 w-[16%] border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
-                <th className="py-2.5 px-3 w-[23%] border-r border-b-2 border-slate-300 bg-slate-100">Customer Name</th>
-                <th className="py-2.5 px-3 w-[18%] border-r border-b-2 border-slate-300 bg-slate-100">Customer Phone Number</th>
-                <th className="py-2.5 px-3 w-[17%] border-r border-b-2 border-slate-300 bg-slate-100">LLR Number</th>
-                <th className="py-2.5 px-2 w-[17%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">SMS Status</th>
+                <th className="py-2.5 px-2 w-[4%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
+                <th className="py-2.5 px-3 w-[15%] border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
+                <th className="py-2.5 px-3 w-[20%] border-r border-b-2 border-slate-300 bg-slate-100">Customer Name</th>
+                <th className="py-2.5 px-3 w-[16%] border-r border-b-2 border-slate-300 bg-slate-100">Customer Phone Number</th>
+                <th className="py-2.5 px-3 w-[13%] border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
+                <th className="py-2.5 px-3 w-[14%] border-r border-b-2 border-slate-300 bg-slate-100">LLR Number</th>
+                <th className="py-2.5 px-2 w-[14%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">SMS Status</th>
               </tr>
             </thead>
             <tbody>
               {smsOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400 border-b border-slate-300">
+                  <td colSpan={8} className="py-12 text-center text-slate-400 border-b border-slate-300">
                     <Send className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    <p className="text-sm font-semibold text-slate-700">No Shipped Orders for SMS Tracking</p>
+                    <p className="text-sm font-semibold text-slate-700">
+                      {courierFilter !== "ALL"
+                        ? `No Shipped Orders found for ${currentPartnerName}`
+                        : "No Shipped Orders for SMS Tracking"}
+                    </p>
                     <p className="text-xs text-slate-500 mt-1">
                       {shippedOrders.length === 0
                         ? "Orders will appear here automatically once marked as 'Shipped' in the Courier Hub."
-                        : "Try switching status filters or clearing the search query."}
+                        : "Try switching courier partner tabs, status filters, or clearing the search query."}
                     </p>
                   </td>
                 </tr>
               ) : (
-                smsOrders.map((order, index) => (
-                  <tr
-                    key={order.id}
-                    onClick={() => setInspectOrder(order)}
-                    className={cn(
-                      "hover:bg-orange-50/40 transition-colors cursor-pointer group",
-                      selectedIds.includes(order.id) && "bg-orange-50/60"
-                    )}
-                  >
-                    {/* Checkbox */}
-                    <td
-                      className="py-2.5 px-2 text-center border-r border-b border-slate-300"
-                      onClick={(e) => e.stopPropagation()}
+                smsOrders.map((order, index) => {
+                  const courierCode = getOrderCourierCode(order);
+                  const courierDisplayName = getOrderCourierName(order);
+
+                  return (
+                    <tr
+                      key={order.id}
+                      onClick={() => setInspectOrder(order)}
+                      className={cn(
+                        "hover:bg-orange-50/40 transition-colors cursor-pointer group",
+                        selectedIds.includes(order.id) && "bg-orange-50/60"
+                      )}
                     >
-                      <input
-                        type="checkbox"
-                        aria-label={`Select order ${order.orderNumber}`}
-                        checked={selectedIds.includes(order.id)}
-                        onChange={() => handleToggleSelect(order.id)}
-                        className="w-3.5 h-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer align-middle"
-                      />
-                    </td>
+                      {/* Checkbox */}
+                      <td
+                        className="py-2.5 px-2 text-center border-r border-b border-slate-300"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          aria-label={`Select order ${order.orderNumber}`}
+                          checked={selectedIds.includes(order.id)}
+                          onChange={() => handleToggleSelect(order.id)}
+                          className="w-3.5 h-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer align-middle"
+                        />
+                      </td>
 
-                    {/* 1. S.No (Spreadsheet row index) */}
-                    <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-b border-slate-300">
-                      {index + 1}
-                    </td>
+                      {/* 1. S.No (Spreadsheet row index) */}
+                      <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-b border-slate-300">
+                        {index + 1}
+                      </td>
 
-                    {/* 2. Order ID */}
-                    <td className="py-2.5 px-3 whitespace-nowrap font-mono font-semibold text-slate-900 border-r border-b border-slate-300 text-xs">
-                      {order.orderNumber}
-                    </td>
+                      {/* 2. Order ID */}
+                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-semibold text-slate-900 border-r border-b border-slate-300 text-xs">
+                        {order.orderNumber}
+                      </td>
 
-                    {/* 3. Customer Name */}
-                    <td className="py-2.5 px-3 border-r border-b border-slate-300 truncate">
-                      <span className="font-semibold text-slate-800 truncate block text-xs" title={order.customer.name}>
-                        {order.customer.name}
-                      </span>
-                      {order.customer.city && (
-                        <span className="text-[10px] text-slate-400 block truncate">
-                          {order.customer.city}
+                      {/* 3. Customer Name */}
+                      <td className="py-2.5 px-3 border-r border-b border-slate-300 truncate">
+                        <span className="font-semibold text-slate-800 truncate block text-xs" title={order.customer.name}>
+                          {order.customer.name}
                         </span>
-                      )}
-                    </td>
+                        {order.customer.city && (
+                          <span className="text-[10px] text-slate-400 block truncate">
+                            {order.customer.city}
+                          </span>
+                        )}
+                      </td>
 
-                    {/* 4. Customer Phone Number */}
-                    <td className="py-2.5 px-3 whitespace-nowrap font-mono text-slate-700 border-r border-b border-slate-300 text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{order.customer.mobile}</span>
-                      </div>
-                    </td>
+                      {/* 4. Customer Phone Number */}
+                      <td className="py-2.5 px-3 whitespace-nowrap font-mono text-slate-700 border-r border-b border-slate-300 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{order.customer.mobile}</span>
+                        </div>
+                      </td>
 
-                    {/* 5. LLR Number */}
-                    <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300 font-mono text-xs">
-                      {order.dispatch.llrNumber ? (
-                        <span className="font-semibold text-slate-800 font-mono">
-                          {order.dispatch.llrNumber}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 italic text-[11px]">No LLR</span>
-                      )}
-                    </td>
-
-                    {/* 6. SMS Status (Interactive Manual Dropdown) */}
-                    <td className="py-2.5 px-2 text-center whitespace-nowrap border-b border-slate-300 bg-slate-50/50" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center">
-                        <select
-                          value={order.sms.status}
-                          onChange={(e) => handleUpdateSmsStatus(order.id, order.orderNumber, e.target.value as SmsStatus)}
+                      {/* 5. Courier Partner Pill Badge */}
+                      <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300 text-xs">
+                        <span
                           className={cn(
-                            "text-xs font-semibold py-1 px-2.5 rounded-md border shadow-2xs outline-none cursor-pointer transition-all",
-                            order.sms.status === "SENT"
-                              ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
-                              : order.sms.status === "FAILED"
-                              ? "bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100"
-                              : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 font-bold"
+                            "px-2 py-0.5 rounded text-[11px] font-bold border inline-block",
+                            courierCode === "INDIA_POST"
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : courierCode === "DTDC"
+                              ? "bg-cyan-50 text-cyan-700 border-cyan-200"
+                              : courierCode === "ST_COURIER"
+                              ? "bg-orange-50 text-orange-700 border-orange-200"
+                              : "bg-slate-100 text-slate-600 border-slate-200"
                           )}
                         >
-                          <option value="PENDING">Waiting for SMS</option>
-                          <option value="SENT">Sent</option>
-                          <option value="FAILED">Failed</option>
-                        </select>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {courierDisplayName}
+                        </span>
+                      </td>
+
+                      {/* 6. LLR Number */}
+                      <td className="py-2.5 px-3 whitespace-nowrap border-r border-b border-slate-300 font-mono text-xs">
+                        {order.dispatch.llrNumber ? (
+                          <span className="font-semibold text-slate-800 font-mono">
+                            {order.dispatch.llrNumber}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic text-[11px]">No LLR</span>
+                        )}
+                      </td>
+
+                      {/* 7. SMS Status (Interactive Manual Dropdown) */}
+                      <td
+                        className="py-2.5 px-2 text-center whitespace-nowrap border-b border-slate-300 bg-slate-50/50"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-center">
+                          <select
+                            value={order.sms.status}
+                            onChange={(e) => handleUpdateSmsStatus(order.id, order.orderNumber, e.target.value as SmsStatus)}
+                            className={cn(
+                              "text-xs font-semibold py-1 px-2.5 rounded-md border shadow-2xs outline-none cursor-pointer transition-all",
+                              order.sms.status === "SENT"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                                : order.sms.status === "FAILED"
+                                ? "bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100"
+                                : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 font-bold"
+                            )}
+                          >
+                            <option value="PENDING">Waiting for SMS</option>
+                            <option value="SENT">Sent</option>
+                            <option value="FAILED">Failed</option>
+                          </select>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -526,6 +756,7 @@ function SmsMonitoringContent() {
         onUpdateStatus={updateOrderStatus}
         onUpdateCourier={updateCourierDetails}
         userRole={user.role}
+        courierPartnerId={user.courierPartnerId}
       />
     </div>
   );
