@@ -37,6 +37,7 @@ import { ManualReturnModal } from "@/components/returns/manual-return-modal";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
 import { StatusOption } from "@/components/bulk-actions/bulk-toolbar";
+import { showToast } from "@/components/ui/toast";
 
 // Status definitions mapping to workflow requirements:
 // WooCommerce Processing -> Processing
@@ -236,9 +237,6 @@ function PackingContent() {
     );
   };
 
-  // Instant notification feedback when status or dispatch number is updated
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   // Create Return Modal State (Packing -> Return -> Create Return)
   const [returnModalOrder, setReturnModalOrder] = useState<Order | null>(null);
 
@@ -252,8 +250,7 @@ function PackingContent() {
   const [pendingNote, setPendingNote] = useState<string>("");
 
   const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    showToast(msg, "success");
   };
 
   const handleOpenPendingModal = (order: Order, e?: React.MouseEvent) => {
@@ -735,13 +732,6 @@ function PackingContent() {
         </div>
 
         <div className="flex items-center gap-2.5 text-xs flex-wrap justify-end w-full md:w-auto">
-          {toastMessage && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold animate-in fade-in">
-              <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{toastMessage}</span>
-            </div>
-          )}
-
           {/* Showing Count */}
           <div className="flex items-center gap-1.5 text-slate-500 font-medium whitespace-nowrap">
             <span>Showing <strong className="text-slate-800">{filteredOrders.length > 0 ? (page - 1) * pageSize + 1 : 0} - {Math.min(page * pageSize, filteredOrders.length)}</strong> of <strong className="text-slate-800">{filteredOrders.length}</strong> orders (Page {page} of {totalPages})</span>

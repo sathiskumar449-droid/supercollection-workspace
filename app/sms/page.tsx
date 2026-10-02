@@ -22,6 +22,7 @@ import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { formatDate, cn, matchesDateFilter, normalizePhoneDigits } from "@/lib/utils";
 import { Order, SmsStatus } from "@/types/orderflow";
 import { exportToXlsx, exportToPdf } from "@/lib/export-utils";
+import { showToast } from "@/components/ui/toast";
 
 function SmsMonitoringContent() {
   const searchParams = useSearchParams();
@@ -237,11 +238,8 @@ function SmsMonitoringContent() {
   };
 
   // Toast feedback state
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    showToast(msg, "success");
   };
 
   // Current selected partner object
@@ -380,14 +378,6 @@ function SmsMonitoringContent() {
 
   return (
     <div className="space-y-4 max-w-full pb-16">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold shadow-lg animate-in fade-in">
-          <CheckCheck className="w-4 h-4 text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       {/* TOP SECTION: Courier Partner Selector Bar (matching Courier Hub style) */}
       {(!isCourierUser || !userCourierPartnerId) && (
         <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">

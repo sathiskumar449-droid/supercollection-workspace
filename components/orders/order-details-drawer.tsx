@@ -22,6 +22,7 @@ import { useOrderFlow } from "@/lib/hooks";
 import { normalizeOrderTimeline } from "@/lib/store";
 import { ReturnStatusBadge } from "@/components/returns/return-status-badge";
 import { ReturnDetailsDrawer } from "@/components/returns/return-details-drawer";
+import { showToast } from "@/components/ui/toast";
 
 interface OrderDetailsDrawerProps {
   order: Order | null;
@@ -168,8 +169,7 @@ export function OrderDetailsDrawer({
       courierName: courierNameInput || undefined,
     });
     setIsEditingCourier(false);
-    setSaveSuccessNotice(true);
-    setTimeout(() => setSaveSuccessNotice(false), 3000);
+    showToast(`Order ${order.orderNumber} courier details updated!`, "success");
   };
 
   const canEditCourier = ["ADMIN", "MANAGER", "DISPATCH_STAFF", "COURIER"].includes(userRole);

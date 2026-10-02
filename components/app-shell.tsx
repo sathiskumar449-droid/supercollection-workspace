@@ -11,6 +11,7 @@ import { orderflowStore } from "@/lib/store";
 import { Order } from "@/types/orderflow";
 import { useAuth } from "@/lib/auth-context";
 import { LoginScreen } from "./auth/login-screen";
+import { ToastContainer } from "./ui/toast";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -262,6 +263,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         userRole={effectiveUser.role}
         courierPartnerId={effectiveUser.courierPartnerId}
       />
+
+      {/* Global Floating Side Toast Notification Popup */}
+      <ToastContainer />
     </div>
   );
 }

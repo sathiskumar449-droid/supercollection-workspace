@@ -40,6 +40,7 @@ import { exportToExcel, exportToPdf } from "@/lib/export-utils";
 import { BulkConfirmDialog } from "@/components/bulk-actions/bulk-confirm-dialog";
 import { StatusOption } from "@/components/bulk-actions/bulk-toolbar";
 import { ExcelColumnFilter } from "@/components/orders/excel-column-filter";
+import { showToast } from "@/components/ui/toast";
 
 function OrdersContent() {
   const searchParams = useSearchParams();
@@ -363,11 +364,8 @@ function OrdersContent() {
   const [bulkStatus, setBulkStatus] = useState<string>("");
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    showToast(msg, "success");
   };
 
   const BULK_STATUS_OPTIONS: StatusOption[] = [

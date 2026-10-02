@@ -23,6 +23,7 @@ import { Order, CourierStatus } from "@/types/orderflow";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
 import { formatDate, cn, normalizePhoneDigits } from "@/lib/utils";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
+import { showToast } from "@/components/ui/toast";
 
 /**
  * Inline editor for Courier Pickup Person's Phone number
@@ -222,11 +223,8 @@ function CourierHubContent() {
     );
   }, [activeCourierPartners, activePartnerCode]);
 
-  // Toast feedback state
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    showToast(msg, "success");
   };
 
   // Top Customer Mobile Input State (automatic search & pickup)
@@ -617,14 +615,6 @@ function CourierHubContent() {
 
   return (
     <div className="space-y-4 max-w-full pb-16">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       {/* TOP SECTION: Customer Mobile Number Input + Courier Partner Selector + Export Buttons */}
       <div className="bg-white p-3.5 rounded-lg border border-slate-300 shadow-2xs flex flex-col lg:flex-row lg:items-end justify-between gap-3.5">
         {/* Left: Customer Mobile Number Input */}
