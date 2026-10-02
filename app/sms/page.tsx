@@ -19,9 +19,9 @@ import {
 } from "lucide-react";
 import { useOrderFlow } from "@/lib/hooks";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
-import { formatDate, cn, matchesDateFilter } from "@/lib/utils";
+import { formatDate, cn, matchesDateFilter, normalizePhoneDigits } from "@/lib/utils";
 import { Order, SmsStatus } from "@/types/orderflow";
-import { exportToExcel, exportToPdf } from "@/lib/export-utils";
+import { exportToXlsx, exportToPdf } from "@/lib/export-utils";
 
 function SmsMonitoringContent() {
   const searchParams = useSearchParams();
@@ -246,39 +246,72 @@ function SmsMonitoringContent() {
     return found?.name || courierFilter;
   }, [courierFilter, activeCourierPartners]);
 
-  // Export handlers for Excel and PDF
+  // Export handler matching client's exact Excel format:
+  // Columns: [Mobile no, Name, Trcking id, Transport, Website]
+  // Filename: st DDMM.xlsx (e.g. st 3009.xlsx)
   const handleExportExcel = () => {
-    const headers = [
-      "S.No",
-      "Order ID",
-      "Customer Name",
-      "City",
-      "Customer Phone Number",
-      "Courier Partner",
-      "LLR Number",
-      "SMS Status",
-      "Last SMS Date",
-    ];
+    const targetOrders = selectedIds.length > 0 
+      ? smsOrders.filter((o) => selectedIds.includes(o.id))
+      : smsOrders;
 
-    const rows = smsOrders.map((order, index) => [
-      index + 1,
-      order.orderNumber,
-      order.customer.name,
-      order.customer.city || "",
-      order.customer.mobile,
-      getOrderCourierName(order),
-      order.dispatch.llrNumber || "No LLR",
-      order.sms.status,
-      formatDate(order.sms.sentAt || order.createdAt),
-    ]);
+    if (targetOrders.length === 0) {
+      triggerToast("No orders available to export");
+      return;
+    }
 
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const fileSuffix = courierFilter === "ALL" ? "All" : courierFilter;
-    exportToExcel(`SMS_Monitoring_${fileSuffix}_${dateStr}`, headers, rows);
-    triggerToast(`Exported ${rows.length} SMS records to Excel successfully`);
+    // Exact headers from the client's spreadsheet:
+    const headers = ["Mobile no", "Name", "Trcking id", "Transport", "Website"];
+
+    const rows = targetOrders.map((order) => {
+      const code = getOrderCourierCode(order);
+      let transport = "ST courier";
+      let website = "stcourier.com";
+
+      if (code === "DTDC") {
+        transport = "DTDC";
+        website = "dtdc.in";
+      } else if (code === "INDIA_POST") {
+        transport = "India Post";
+        website = "indiapost.gov.in";
+      }
+
+      return [
+        normalizePhoneDigits(order.customer.mobile),
+        "Sir/Madam",
+        order.dispatch.llrNumber || "",
+        transport,
+        website,
+      ];
+    });
+
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, "0");
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+
+    let prefix = "st";
+    if (courierFilter === "DTDC") {
+      prefix = "dtdc";
+    } else if (courierFilter === "INDIA_POST") {
+      prefix = "indiapost";
+    } else if (courierFilter === "ALL") {
+      prefix = "sms";
+    }
+
+    const filename = `${prefix} ${dd}${mm}.xlsx`;
+    exportToXlsx(filename, headers, rows);
+    triggerToast(`Exported ${rows.length} records in SMS format (${filename})`);
   };
 
   const handleExportPdf = () => {
+    const targetOrders = selectedIds.length > 0 
+      ? smsOrders.filter((o) => selectedIds.includes(o.id))
+      : smsOrders;
+
+    if (targetOrders.length === 0) {
+      triggerToast("No orders available to export");
+      return;
+    }
+
     const headers = [
       "S.No",
       "Order ID",
@@ -290,7 +323,7 @@ function SmsMonitoringContent() {
       "Date",
     ];
 
-    const rows = smsOrders.map((order, index) => [
+    const rows = targetOrders.map((order, index) => [
       index + 1,
       order.orderNumber,
       order.customer.name,
@@ -305,7 +338,7 @@ function SmsMonitoringContent() {
     const fileSuffix = courierFilter === "ALL" ? "All" : courierFilter;
     exportToPdf({
       title: `Ping4SMS Gateway - SMS Delivery Monitoring Report (${currentPartnerName})`,
-      subtitle: `Courier: ${currentPartnerName} | Status Filter: ${statusFilter} | Total Records: ${smsOrders.length}`,
+      subtitle: `Courier: ${currentPartnerName} | Status Filter: ${statusFilter} | Total Records: ${targetOrders.length}`,
       filename: `SMS_Monitoring_${fileSuffix}_${dateStr}`,
       headers,
       rows,
@@ -388,7 +421,7 @@ function SmsMonitoringContent() {
             })}
           </div>
 
-          {/* Quick Partner Summary & Export Shortcuts */}
+          {/* Quick Partner Summary */}
           <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
             <span className="text-[11px] font-semibold text-slate-500 hidden md:inline">
               Viewing: <strong className="text-slate-800">{currentPartnerName}</strong> ({totalSms} records)
@@ -565,12 +598,12 @@ function SmsMonitoringContent() {
               </div>
             )}
 
-            {/* Export Actions (Excel & PDF) */}
+            {/* Export Actions (Excel .xlsx & PDF) */}
             <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2">
               <button
                 onClick={handleExportExcel}
-                title={`Export ${currentPartnerName} SMS Records to Excel`}
-                className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer"
+                title={`Export ${currentPartnerName} SMS Format Excel (.xlsx)`}
+                className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer group relative"
               >
                 <FileSpreadsheet className="w-4 h-4" />
               </button>

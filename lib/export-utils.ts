@@ -1,7 +1,8 @@
 /**
- * Export Utilities for Excel and PDF
- * Zero-dependency, client-side export for OrderFlow tables.
+ * Export Utilities for Excel (.xlsx, .csv) and PDF
+ * Client-side export for OrderFlow tables.
  */
+import * as XLSX from "xlsx";
 
 interface ExportTableData {
   title: string;
@@ -13,13 +14,11 @@ interface ExportTableData {
 }
 
 /**
- * Escapes a cell value for CSV / Excel.
- * Treats numbers, strings, and handles commas, quotes, and newlines.
+ * Escapes a cell value for CSV.
  */
 function escapeCsvValue(val: string | number | undefined | null): string {
   if (val === undefined || val === null) return '""';
   const str = String(val);
-  // If string contains comma, double-quote, or newline, escape it with double-quotes
   if (/[",\n\r]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }
@@ -28,7 +27,6 @@ function escapeCsvValue(val: string | number | undefined | null): string {
 
 /**
  * Exports data as an Excel-compatible CSV file with UTF-8 BOM.
- * Opens seamlessly in Microsoft Excel, Google Sheets, and LibreOffice.
  */
 export function exportToExcel(
   filename: string,
@@ -36,11 +34,7 @@ export function exportToExcel(
   rows: (string | number)[][]
 ): void {
   const csvRows: string[] = [];
-
-  // Header row
   csvRows.push(headers.map(escapeCsvValue).join(","));
-
-  // Data rows
   for (const row of rows) {
     csvRows.push(row.map(escapeCsvValue).join(","));
   }
@@ -59,8 +53,54 @@ export function exportToExcel(
 }
 
 /**
+ * Exports data as a true native Excel (.xlsx) file using SheetJS.
+ * Creates "Sheet1" matching Microsoft Excel format.
+ */
+export function exportToXlsx(
+  filename: string,
+  headers: string[],
+  rows: (string | number)[][]
+): void {
+  const worksheetData = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+
+  // Set appropriate column widths
+  const colWidths = headers.map((h, i) => {
+    let maxLen = h.length;
+    for (const r of rows) {
+      const cellLen = r[i] !== undefined && r[i] !== null ? String(r[i]).length : 0;
+      if (cellLen > maxLen) maxLen = cellLen;
+    }
+    return { wch: Math.max(maxLen + 3, 14) };
+  });
+  ws["!cols"] = colWidths;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+  const cleanName = filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`;
+
+  if (typeof window !== "undefined") {
+    try {
+      XLSX.writeFile(wb, cleanName);
+    } catch {
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = cleanName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  }
+}
+
+/**
  * Exports data as a beautifully formatted PDF report via the browser's native Print dialog.
- * Opens a print-optimized window formatted with crisp Excel table borders, headers, and metadata.
  */
 export function exportToPdf({
   title,
