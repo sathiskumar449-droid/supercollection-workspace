@@ -246,9 +246,9 @@ function SmsMonitoringContent() {
     return found?.name || courierFilter;
   }, [courierFilter, activeCourierPartners]);
 
-  // Export handler matching client's exact Excel format:
-  // Columns: [Mobile no, Name, Trcking id, Transport, Website]
-  // Filename: st DDMM.xlsx (e.g. st 3009.xlsx)
+  // Export handler matching client's exact Excel formats:
+  // - ST Courier: [Mobile no, Name, Trcking id, Transport, Website] -> st DDMM.xlsx (e.g. st 3009.xlsx)
+  // - DTDC: [Mobile no, Tracking id, Transport, Website] -> dtdcDDMM.xlsx (e.g. dtdc3001.xlsx)
   const handleExportExcel = () => {
     const targetOrders = selectedIds.length > 0 
       ? smsOrders.filter((o) => selectedIds.includes(o.id))
@@ -259,47 +259,74 @@ function SmsMonitoringContent() {
       return;
     }
 
-    // Exact headers from the client's spreadsheet:
-    const headers = ["Mobile no", "Name", "Trcking id", "Transport", "Website"];
-
-    const rows = targetOrders.map((order) => {
-      const code = getOrderCourierCode(order);
-      let transport = "ST courier";
-      let website = "stcourier.com";
-
-      if (code === "DTDC") {
-        transport = "DTDC";
-        website = "dtdc.in";
-      } else if (code === "INDIA_POST") {
-        transport = "India Post";
-        website = "indiapost.gov.in";
-      }
-
-      return [
-        normalizePhoneDigits(order.customer.mobile),
-        "Sir/Madam",
-        order.dispatch.llrNumber || "",
-        transport,
-        website,
-      ];
-    });
-
     const now = new Date();
     const dd = String(now.getDate()).padStart(2, "0");
     const mm = String(now.getMonth() + 1).padStart(2, "0");
 
-    let prefix = "st";
+    let headers: string[] = [];
+    let rows: (string | number)[][] = [];
+    let filename = "";
+
     if (courierFilter === "DTDC") {
-      prefix = "dtdc";
+      // Exact DTDC format from client screenshot:
+      // Columns: [Mobile no, Tracking id, Transport, Website]
+      // Values: [Phone, Tracking id, "DTDC courier", "dtdc.com"]
+      headers = ["Mobile no", "Tracking id", "Transport", "Website"];
+      rows = targetOrders.map((order) => [
+        normalizePhoneDigits(order.customer.mobile),
+        order.dispatch.llrNumber || "",
+        "DTDC courier",
+        "dtdc.com",
+      ]);
+      filename = `dtdc${dd}${mm}.xlsx`;
+    } else if (courierFilter === "ST_COURIER") {
+      // Exact ST Courier format from client screenshot:
+      // Columns: [Mobile no, Name, Trcking id, Transport, Website]
+      // Values: [Phone, "Sir/Madam", Trcking id, "ST courier", "stcourier.com"]
+      headers = ["Mobile no", "Name", "Trcking id", "Transport", "Website"];
+      rows = targetOrders.map((order) => [
+        normalizePhoneDigits(order.customer.mobile),
+        "Sir/Madam",
+        order.dispatch.llrNumber || "",
+        "ST courier",
+        "stcourier.com",
+      ]);
+      filename = `st ${dd}${mm}.xlsx`;
     } else if (courierFilter === "INDIA_POST") {
-      prefix = "indiapost";
-    } else if (courierFilter === "ALL") {
-      prefix = "sms";
+      headers = ["Mobile no", "Tracking id", "Transport", "Website"];
+      rows = targetOrders.map((order) => [
+        normalizePhoneDigits(order.customer.mobile),
+        order.dispatch.llrNumber || "",
+        "India Post",
+        "indiapost.gov.in",
+      ]);
+      filename = `indiapost${dd}${mm}.xlsx`;
+    } else {
+      // "ALL" couriers export:
+      headers = ["Mobile no", "Tracking id", "Transport", "Website"];
+      rows = targetOrders.map((order) => {
+        const code = getOrderCourierCode(order);
+        let transport = "ST courier";
+        let website = "stcourier.com";
+        if (code === "DTDC") {
+          transport = "DTDC courier";
+          website = "dtdc.com";
+        } else if (code === "INDIA_POST") {
+          transport = "India Post";
+          website = "indiapost.gov.in";
+        }
+        return [
+          normalizePhoneDigits(order.customer.mobile),
+          order.dispatch.llrNumber || "",
+          transport,
+          website,
+        ];
+      });
+      filename = `sms ${dd}${mm}.xlsx`;
     }
 
-    const filename = `${prefix} ${dd}${mm}.xlsx`;
     exportToXlsx(filename, headers, rows);
-    triggerToast(`Exported ${rows.length} records in SMS format (${filename})`);
+    triggerToast(`Exported ${rows.length} records in ${currentPartnerName} format (${filename})`);
   };
 
   const handleExportPdf = () => {
