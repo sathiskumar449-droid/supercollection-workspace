@@ -369,7 +369,7 @@ async function handleSync(body: any) {
 
         if (existingCustomer?.id) {
           customerId = existingCustomer.id;
-          customerCache.set(mobile, customerId);
+          if (mobile && customerId) customerCache.set(mobile, customerId);
           await db
             .from("customers")
             .update({
@@ -401,7 +401,7 @@ async function handleSync(body: any) {
 
         if (!newCustErr && newCust) {
           customerId = newCust.id;
-          if (mobile) customerCache.set(mobile, customerId);
+          if (mobile && customerId) customerCache.set(mobile, customerId);
         } else {
           console.error("Failed to insert customer:", newCustErr);
         }

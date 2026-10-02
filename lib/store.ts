@@ -34,7 +34,8 @@ import {
   isSupabaseConfigured, 
   fetchSupabaseOrders, 
   updateSupabaseOrderStatus, 
-  updateSupabaseCourierDetails, 
+  updateSupabaseCourierDetails,
+  resetSupabaseCourierPickup, 
   updateSupabaseSmsStatus,
   subscribeToSupabaseRealtime 
 } from "./supabase";
@@ -1622,6 +1623,20 @@ export const orderflowStore = {
 
     // 11. Invalid Customer Phone
     if (eligibleOrders.length === 0) {
+      const alreadyPicked = globalOrders.find((o) => {
+        return (
+          normalizePhoneDigits(o.customer.mobile) === cleanMobile &&
+          (o.dispatch?.courierStatus === "PICKED_UP" || o.dispatch?.courierStatus === "SHIPPED")
+        );
+      });
+      if (alreadyPicked) {
+        const existingPartner = alreadyPicked.dispatch?.courierName || alreadyPicked.dispatch?.courierPartnerId || "another courier";
+        return {
+          success: false,
+          error: `Order ${alreadyPicked.orderNumber} is already picked up under ${existingPartner}. Please click Delete on that order to release it before entering under ${selectedCourier.name}.`,
+        };
+      }
+
       return {
         success: false,
         error: "No eligible dispatched order found.",
@@ -1724,6 +1739,82 @@ export const orderflowStore = {
       order: updatedOrder,
       matchingOrders: [updatedOrder],
     };
+  },
+
+  // 5c. Reset / Delete Courier Pickup (Removes courier assignment so order can be re-entered in any courier)
+  resetCourierPickup(orderId: string): { success: boolean; order?: Order } {
+    const orderIndex = globalOrders.findIndex((o) => o.id === orderId);
+    if (orderIndex === -1) return { success: false };
+
+    const order = globalOrders[orderIndex];
+    const now = new Date().toISOString();
+    const oldCourierName = order.dispatch?.courierName || "Courier";
+    const oldCourierStatus = order.dispatch?.courierStatus;
+
+    const timelineEntry: ActivityLog = {
+      id: `tl-${Date.now()}-pickup-reset`,
+      orderId: order.id,
+      timestamp: now,
+      user: globalUser.name || "Dispatch Staff",
+      role: globalUser.role || "DISPATCH_STAFF",
+      action: "Courier Pickup Removed",
+      details: `Pickup entry deleted from ${oldCourierName}. Parcel released and ready for re-entry under another courier.`,
+      oldValue: oldCourierStatus,
+      newValue: "WAITING_FOR_PICKUP",
+    };
+
+    const updatedOrder: Order = {
+      ...order,
+      orderStatus: "DISPATCHED",
+      pickedUpAt: undefined,
+      shippedAt: undefined,
+      updatedAt: now,
+      dispatch: {
+        ...order.dispatch,
+        courierId: undefined,
+        courierName: undefined,
+        courierPartnerId: undefined,
+        llrNumber: undefined,
+        trackingNumber: undefined,
+        trackingUrl: undefined,
+        pickupPhone: undefined,
+        verifiedCustomerPhone: undefined,
+        pickedUpBy: undefined,
+        pickedUpAt: undefined,
+        shippedAt: undefined,
+        courierStatus: "WAITING_FOR_PICKUP",
+      },
+      sms: {
+        ...order.sms,
+        status: "PENDING",
+        sentAt: undefined,
+        deliveredAt: undefined,
+        providerMessageId: undefined,
+      },
+      timeline: [timelineEntry, ...order.timeline],
+    };
+
+    const newOrders = [...globalOrders];
+    newOrders[orderIndex] = updatedOrder;
+    persistOrders(newOrders);
+
+    if (isSupabaseConfigured()) {
+      resetSupabaseCourierPickup(orderId, timelineEntry);
+    }
+
+    notifyListeners();
+    return { success: true, order: updatedOrder };
+  },
+
+  bulkResetCourierPickup(orderIds: string[]): { successCount: number } {
+    let successCount = 0;
+    for (const id of orderIds) {
+      const res = this.resetCourierPickup(id);
+      if (res.success) {
+        successCount++;
+      }
+    }
+    return { successCount };
   },
 
   // 6. Refresh / Sync Ping4SMS status (Read-only status sync)

@@ -14,8 +14,10 @@ import {
   Clock,
   CheckCheck,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useOrderFlow } from "@/lib/hooks";
 import { Order, CourierStatus } from "@/types/orderflow";
 import { OrderDetailsDrawer } from "@/components/orders/order-details-drawer";
@@ -156,6 +158,8 @@ function CourierHubContent() {
     user, 
     verifyCourierPickupByCustomerMobile,
     updateCourierDetails, 
+    resetCourierPickup,
+    bulkResetCourierPickup,
     courierPartners,
   } = useOrderFlow();
 
@@ -491,6 +495,39 @@ function CourierHubContent() {
     );
   };
 
+  // Delete / Reset pickup states & handlers
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+  const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
+
+  const handleDeletePickup = async () => {
+    if (!orderToDelete) return;
+    const ordId = orderToDelete.id;
+    const ordNum = orderToDelete.orderNumber;
+    setOrderToDelete(null);
+
+    // Remove from local selection & session cache immediately
+    setSelectedIds((prev) => prev.filter((id) => id !== ordId));
+    setSessionPickedUpIds((prev) => prev.filter((id) => id !== ordId));
+
+    const ok = await resetCourierPickup(ordId);
+    if (ok) {
+      triggerToast(`Order ${ordNum} removed from ${currentPartner.name}. Ready for re-entry!`);
+    } else {
+      triggerToast(`Failed to release Order ${ordNum}`);
+    }
+  };
+
+  const handleBulkDeletePickup = async () => {
+    if (selectedIds.length === 0) return;
+    const ids = [...selectedIds];
+    setIsBulkDeleteConfirmOpen(false);
+    setSelectedIds([]);
+    setSessionPickedUpIds((prev) => prev.filter((id) => !ids.includes(id)));
+
+    const count = await bulkResetCourierPickup(ids);
+    triggerToast(`${count} orders removed from ${currentPartner.name}. Ready for re-entry!`);
+  };
+
   // Export handlers (Admin only)
   const handleExportExcel = () => {
     const headers = [
@@ -727,6 +764,37 @@ function CourierHubContent() {
         </div>
       </div>
 
+      {/* Bulk Selection Actions Bar */}
+      {selectedIds.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-2.5 flex items-center justify-between text-xs animate-in fade-in duration-150">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-orange-900 bg-orange-200/70 px-2 py-0.5 rounded-full text-[11px]">
+              {selectedIds.length} selected
+            </span>
+            <span className="text-orange-800 hidden sm:inline">
+              Selected orders can be released back to the waiting queue for re-entry under another courier.
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsBulkDeleteConfirmOpen(true)}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-md transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete / Release Selected</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="px-2.5 py-1 text-slate-600 hover:text-slate-800 font-semibold cursor-pointer"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table Section (Compact Full-Width Spreadsheet Grid) */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
         <div className="overflow-x-auto w-full">
@@ -750,14 +818,15 @@ function CourierHubContent() {
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Customer</th>
                 <th className="py-2.5 px-3 border-r border-b-2 border-slate-300 bg-slate-100">Courier</th>
                 <th className="py-2.5 px-3 min-w-[150px] border-r border-b-2 border-slate-300 bg-slate-100">LLR / Tracking</th>
-                <th className="py-2.5 px-3 min-w-[130px] border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
+                <th className="py-2.5 px-3 min-w-[130px] border-r border-b-2 border-slate-300 bg-slate-100">Courier Status</th>
+                <th className="py-2.5 px-2 w-14 text-center border-b-2 border-slate-300 bg-slate-100">Action</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-200">
               {paginatedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-16 text-center text-slate-400 border-b border-slate-300">
+                  <td colSpan={11} className="py-16 text-center text-slate-400 border-b border-slate-300">
                     <Package className="w-9 h-9 mx-auto mb-2 text-slate-300" />
                     <p className="text-sm font-bold text-slate-700">No picked up orders in this queue</p>
                     <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
@@ -870,7 +939,7 @@ function CourierHubContent() {
                       </td>
 
                       {/* 9. Courier Status: "Picked Up" or "Shipped" */}
-                      <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2 px-3 border-r border-slate-200" onClick={(e) => e.stopPropagation()}>
                         <select
                           value={cStatus === "SHIPPED" ? "SHIPPED" : "PICKED_UP"}
                           onChange={(e) => {
@@ -893,6 +962,18 @@ function CourierHubContent() {
                           <option value="PICKED_UP">Picked Up</option>
                           <option value="SHIPPED">Shipped</option>
                         </select>
+                      </td>
+
+                      {/* 10. Action: Delete / Release Pickup */}
+                      <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setOrderToDelete(order)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center"
+                          title="Delete / Release order to re-enter under another courier"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -1036,6 +1117,34 @@ function CourierHubContent() {
           </div>
         </div>
       )}
+
+      {/* Delete / Release Pickup Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(orderToDelete)}
+        title="Delete Courier Pickup?"
+        description={
+          orderToDelete
+            ? `Are you sure you want to remove Order ${orderToDelete.orderNumber} (${orderToDelete.customer.mobile}) from ${currentPartner.name}? It will be released back to the waiting queue so you can enter it under DTDC or any other courier.`
+            : ""
+        }
+        confirmLabel="Yes, Delete & Release"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDeletePickup}
+        onCancel={() => setOrderToDelete(null)}
+      />
+
+      {/* Bulk Delete / Release Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isBulkDeleteConfirmOpen}
+        title={`Delete ${selectedIds.length} Picked Up Orders?`}
+        description={`Are you sure you want to remove ${selectedIds.length} orders from ${currentPartner.name}? They will be released back to the waiting queue so you can re-enter them under any courier partner.`}
+        confirmLabel="Yes, Delete Selected"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleBulkDeletePickup}
+        onCancel={() => setIsBulkDeleteConfirmOpen(false)}
+      />
 
       {/* Inspect Order Drawer */}
       <OrderDetailsDrawer

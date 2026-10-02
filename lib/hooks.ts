@@ -75,6 +75,8 @@ export function useOrderFlow() {
     markAsPacked: orderflowStore.markAsPacked.bind(orderflowStore),
     markAsDispatched: orderflowStore.markAsDispatched.bind(orderflowStore),
     updateCourierDetails: orderflowStore.updateCourierDetails.bind(orderflowStore),
+    resetCourierPickup: orderflowStore.resetCourierPickup.bind(orderflowStore),
+    bulkResetCourierPickup: orderflowStore.bulkResetCourierPickup.bind(orderflowStore),
     verifyCourierPickupByCustomerMobile: orderflowStore.verifyCourierPickupByCustomerMobile.bind(orderflowStore),
     bulkUpdateCourierStatus: orderflowStore.bulkUpdateCourierStatus.bind(orderflowStore),
     syncPing4SmsStatus: orderflowStore.syncPing4SmsStatus.bind(orderflowStore),

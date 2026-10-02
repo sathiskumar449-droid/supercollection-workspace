@@ -493,6 +493,63 @@ export async function updateSupabaseCourierDetails(
 }
 
 /**
+ * Delete / Reset Courier Pickup in Supabase
+ */
+export async function resetSupabaseCourierPickup(
+  orderId: string,
+  activity?: ActivityLog
+): Promise<boolean> {
+  const db = supabaseAdmin || supabase;
+  if (!db) return false;
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
+  if (!isUuid) return true;
+
+  try {
+    const nowIso = new Date().toISOString();
+    // 1. Delete record from dispatches table
+    await db.from('dispatches').delete().eq('order_id', orderId);
+
+    // 2. Clean courier metadata from orders notes & reset courier_id
+    const { data: existingOrd } = await db.from('orders').select('notes').eq('id', orderId).maybeSingle();
+    let cleanedNotes = null;
+    if (existingOrd && existingOrd.notes) {
+      const parts = String(existingOrd.notes).split(';');
+      const filtered = parts.filter((p) => {
+        const k = (p.split(':')[0] || '').trim();
+        return !['assigned_courier', 'partner_code', 'verified_phone', 'picked_up_at', 'courier_status'].includes(k);
+      });
+      cleanedNotes = filtered.join(';').trim() || null;
+    }
+
+    await db.from('orders').update({
+      notes: cleanedNotes,
+      courier_id: null,
+      updated_at: nowIso,
+    }).eq('id', orderId);
+
+    // 3. Activity log
+    if (activity) {
+      await db.from('activity_logs').insert({
+        order_id: orderId,
+        user_name: activity.user,
+        user_role: activity.role,
+        action: activity.action,
+        details: activity.details || null,
+        old_value: activity.oldValue || null,
+        new_value: activity.newValue || null,
+        created_at: activity.timestamp || nowIso,
+      });
+    }
+
+    return true;
+  } catch (err) {
+    console.warn('Supabase resetSupabaseCourierPickup error:', err);
+    return false;
+  }
+}
+
+/**
  * Update SMS Status in Supabase
  */
 export async function updateSupabaseSmsStatus(orderId: string, status: SmsStatus, mobile?: string) {
