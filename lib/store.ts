@@ -2618,7 +2618,7 @@ export const orderflowStore = {
       ? (params.returnDate.includes("T") ? params.returnDate : new Date(params.returnDate).toISOString())
       : new Date().toISOString();
 
-    let initialStatus: ReturnStatus = "Return Requested";
+    let initialStatus: ReturnStatus = "Waiting for Confirmation";
     let refundRecord: ReturnRefund | undefined = undefined;
     let replacementRecord: ReturnReplacement | undefined = undefined;
     const finalRefundAmount = params.refundAmount !== undefined ? params.refundAmount : (params.returnType === "Refund" ? expectedAmount : 0);
@@ -2690,6 +2690,9 @@ export const orderflowStore = {
       reason: params.reason,
       customerNote: params.customerNote,
       status: initialStatus,
+      approvalStatus: "PENDING",
+      submittedForApprovalBy: globalUser.name,
+      submittedForApprovalAt: now,
       requestedQuantity: totalRequestedQty,
       receivedQuantity: 0,
       approvedQuantity: 0,
@@ -2751,6 +2754,63 @@ export const orderflowStore = {
     });
 
     return { success: true, returnCase: newReturnCase };
+  },
+
+  approveReturnCase(
+    returnId: string,
+    approvalNotes?: string,
+    approverName?: string
+  ): { success: boolean; returnCase?: ReturnCase; error?: string } {
+    const index = globalReturns.findIndex((r) => r.id === returnId || r.returnId === returnId);
+    if (index === -1) return { success: false, error: "Return case not found" };
+
+    const target = globalReturns[index];
+    const now = new Date().toISOString();
+    const actionUser = approverName || globalUser.name;
+
+    // Target status when approved
+    let targetStatus: ReturnStatus = "Return Approved";
+    if (target.returnType === "Refund") {
+      targetStatus = target.refund?.refundStatus === "Refunded" ? "Refunded" : "Refund Pending";
+    } else if (target.returnType === "Exchange" || target.returnType === "Replacement") {
+      targetStatus = "Exchanged";
+    }
+
+    const updatedTimeline: ReturnTimelineEvent[] = [
+      ...target.timeline,
+      {
+        id: `tl-${Date.now()}-appr`,
+        returnId: target.returnId,
+        action: "Return Approved",
+        user: actionUser,
+        role: "ADMIN",
+        notes: approvalNotes || `Return confirmed and approved by Owner/Admin (${actionUser})`,
+        timestamp: now,
+      },
+    ];
+
+    const updatedCase: ReturnCase = {
+      ...target,
+      status: targetStatus,
+      approvalStatus: "APPROVED",
+      approvedBy: actionUser,
+      approvedAt: now,
+      updatedAt: now,
+      timeline: updatedTimeline,
+    };
+
+    const newReturns = [...globalReturns];
+    newReturns[index] = updatedCase;
+    persistReturns(newReturns);
+
+    // Update order status/timeline if applicable
+    const ord = globalOrders.find((o) => o.id === target.orderId || o.orderNumber === target.orderNumber);
+    if (ord) {
+      this.updateOrderStatus(ord.id, "RETURN", `Return confirmed & approved by ${actionUser}`);
+    }
+
+    notifyListeners();
+    return { success: true, returnCase: updatedCase };
   },
 
   updateReturnStatus(

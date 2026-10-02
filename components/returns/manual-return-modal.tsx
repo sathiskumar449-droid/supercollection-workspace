@@ -7,7 +7,8 @@ import { formatINR, formatDate, cn } from "@/lib/utils";
 import { 
   X, 
   Search, 
-  RotateCcw, 
+  RotateCcw,
+  Send, 
   AlertCircle, 
   CheckCircle2, 
   IndianRupee,
@@ -1542,13 +1543,11 @@ export function ManualReturnModal({
             onClick={handleSubmit}
             className="px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-lg transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
           >
-            <CheckCircle2 className="w-4 h-4" />
+            <Send className="w-4 h-4" />
             <span>
               {isSubmitting 
-                ? "Creating Return..." 
-                : selectedOrder 
-                ? `Confirm Return (${formatINR(activeTotalReturnedValue)})` 
-                : "Add Return"}
+                ? "Sending for Approval..." 
+                : `Send for Approval (${formatINR(activeTotalReturnedValue)})`}
             </span>
           </button>
         </div>

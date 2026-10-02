@@ -1129,36 +1129,6 @@ function OrdersContent() {
                   </div>
                 </th>
 
-                {/* RETURN */}
-                <th className="sticky top-0 z-20 py-2 px-1 w-[6%] border-r border-b-2 border-slate-300 bg-slate-100">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="truncate">RETURN</span>
-                    <ExcelColumnFilter
-                      title="Return"
-                      columnKey="return"
-                      isOpen={openFilterColumn === "return"}
-                      onToggle={() => toggleFilterColumn("return")}
-                      onClose={() => setOpenFilterColumn(null)}
-                      isActive={returnFilter !== "ALL"}
-                      options={[
-                        { value: "HAS_RETURN", label: "Has Return", count: returnCounts.HAS_RETURN },
-                        { value: "NO_RETURN", label: "No Return", count: returnCounts.NO_RETURN },
-                      ]}
-                      selectedValues={returnFilter === "ALL" ? [] : [returnFilter]}
-                      onApplyFilter={(vals) => {
-                        if (vals.length === 1) setReturnFilter(vals[0]);
-                        else setReturnFilter("ALL");
-                        setPage(1);
-                      }}
-                      onClearFilter={() => {
-                        setReturnFilter("ALL");
-                        setPage(1);
-                      }}
-                      align="right"
-                    />
-                  </div>
-                </th>
-
                 {/* COURIER */}
                 <th className="sticky top-0 z-20 py-2 px-1 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100">
                   <div className="flex items-center justify-between gap-1">
@@ -1284,6 +1254,36 @@ function OrdersContent() {
                   </div>
                 </th>
 
+{/* RETURN */}
+                <th className="sticky top-0 z-20 py-2 px-1 w-[6%] border-r border-b-2 border-slate-300 bg-slate-100">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">RETURN</span>
+                    <ExcelColumnFilter
+                      title="Return"
+                      columnKey="return"
+                      isOpen={openFilterColumn === "return"}
+                      onToggle={() => toggleFilterColumn("return")}
+                      onClose={() => setOpenFilterColumn(null)}
+                      isActive={returnFilter !== "ALL"}
+                      options={[
+                        { value: "HAS_RETURN", label: "Has Return", count: returnCounts.HAS_RETURN },
+                        { value: "NO_RETURN", label: "No Return", count: returnCounts.NO_RETURN },
+                      ]}
+                      selectedValues={returnFilter === "ALL" ? [] : [returnFilter]}
+                      onApplyFilter={(vals) => {
+                        if (vals.length === 1) setReturnFilter(vals[0]);
+                        else setReturnFilter("ALL");
+                        setPage(1);
+                      }}
+                      onClearFilter={() => {
+                        setReturnFilter("ALL");
+                        setPage(1);
+                      }}
+                      align="right"
+                    />
+                  </div>
+                </th>
+
                 {/* TRACKING */}
                 <th className="sticky top-0 z-20 py-2 px-1 w-[5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">
                   TRACKING
@@ -1390,24 +1390,6 @@ function OrdersContent() {
                         <OrderStatusBadge status={order.orderStatus} className="justify-center text-[11px]" />
                       </td>
 
-                      {/* Return Column */}
-                      <td className="py-2 px-1 text-center truncate border-r border-b border-slate-300" onClick={(e) => e.stopPropagation()}>
-                        {(() => {
-                          const orderReturns = returns.filter((r) => r.orderId === order.id || r.orderNumber === order.orderNumber);
-                          if (orderReturns.length === 0) {
-                            return <span className="text-slate-400 text-[10.5px]">No Return</span>;
-                          }
-                          const latestReturn = orderReturns[0];
-                          return (
-                            <ReturnCompactIndicator
-                              status={latestReturn.status}
-                              returnId={latestReturn.returnId}
-                              onClick={() => setSelectedReturn(latestReturn)}
-                            />
-                          );
-                        })()}
-                      </td>
-
                       {/* Courier */}
                       <td className="py-2 px-1 text-center text-slate-700 font-medium truncate border-r border-b border-slate-300 text-[11px]" title={order.dispatch.courierName || "Unassigned"}>
                         {order.dispatch.courierName ? (
@@ -1438,6 +1420,24 @@ function OrdersContent() {
                       {/* SMS Status */}
                       <td className="py-2 px-1 text-center whitespace-nowrap border-r border-b border-slate-300">
                         <SmsStatusBadge status={order.sms.status} className="justify-center" />
+                      </td>
+
+{/* Return Column */}
+                      <td className="py-2 px-1 text-center truncate border-r border-b border-slate-300" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const orderReturns = returns.filter((r) => r.orderId === order.id || r.orderNumber === order.orderNumber);
+                          if (orderReturns.length === 0) {
+                            return <span className="text-slate-400 text-[10.5px]">No Return</span>;
+                          }
+                          const latestReturn = orderReturns[0];
+                          return (
+                            <ReturnCompactIndicator
+                              status={latestReturn.status}
+                              returnId={latestReturn.returnId}
+                              onClick={() => setSelectedReturn(latestReturn)}
+                            />
+                          );
+                        })()}
                       </td>
 
                       {/* Order Tracking */}

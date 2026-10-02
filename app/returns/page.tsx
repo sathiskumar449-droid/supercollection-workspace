@@ -30,6 +30,7 @@ import {
   FileSpreadsheet, 
   FileText,
   CheckCheck,
+  Check,
   Clock,
   ArrowUpDown,
   ChevronLeft,
@@ -51,7 +52,8 @@ function ReturnsContent() {
     user,
     updateOrderStatus,
     updateCourierDetails,
-    setDispatchNumber
+    setDispatchNumber,
+    approveReturnCase
   } = useOrderFlow();
 
   // Dispatch number inline inputs state
@@ -88,6 +90,7 @@ function ReturnsContent() {
   const tabs = useMemo(() => {
     const counts: Record<string, number> = {
       ALL: dateFilteredReturns.length,
+      "Waiting for Confirmation": 0,
       "Return Requested": 0,
       Refund: 0,
       Exchange: 0,
@@ -96,6 +99,7 @@ function ReturnsContent() {
     };
 
     dateFilteredReturns.forEach((r) => {
+      if (r.status === "Waiting for Confirmation" || r.approvalStatus === "PENDING") counts["Waiting for Confirmation"]++;
       if (r.status === "Return Requested" || r.status === "Return Approved") counts["Return Requested"]++;
       if (r.returnType === "Refund") counts["Refund"]++;
       if (r.returnType === "Replacement" || r.returnType === "Exchange") counts["Exchange"]++;
@@ -105,6 +109,7 @@ function ReturnsContent() {
 
     return [
       { id: "ALL", label: "All Returns", count: counts.ALL },
+      { id: "Waiting for Confirmation", label: "⏳ Waiting for Confirmation", count: counts["Waiting for Confirmation"] },
       { id: "Return Requested", label: "Return Requested", count: counts["Return Requested"] },
       { id: "Refund", label: "Refunds", count: counts["Refund"] },
       { id: "Exchange", label: "Exchanges", count: counts["Exchange"] },
@@ -118,7 +123,9 @@ function ReturnsContent() {
     return dateFilteredReturns.filter((r) => {
       // Tab filter
       if (activeTab !== "ALL") {
-        if (activeTab === "Return Requested") {
+        if (activeTab === "Waiting for Confirmation") {
+          if (r.status !== "Waiting for Confirmation" && r.approvalStatus !== "PENDING") return false;
+        } else if (activeTab === "Return Requested") {
           if (r.status !== "Return Requested" && r.status !== "Return Approved") return false;
         } else if (activeTab === "Refund") {
           if (r.returnType !== "Refund") return false;
@@ -740,14 +747,27 @@ function ReturnsContent() {
 
                     {/* ACTION */}
                     <td className="py-1 px-1 text-center border-b border-slate-300 bg-slate-50/50" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => setSelectedReturn(rtn)}
-                        className="px-2 py-0.5 text-[10.5px] font-semibold text-orange-700 hover:bg-orange-100/70 border border-orange-200 rounded transition-colors inline-flex items-center gap-1 shadow-2xs whitespace-nowrap cursor-pointer"
-                        title="View return details"
-                      >
-                        <Eye className="w-3 h-3 shrink-0" />
-                        <span>View</span>
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        {(rtn.status === "Waiting for Confirmation" || rtn.approvalStatus === "PENDING") && (
+                          <button
+                            type="button"
+                            onClick={() => approveReturnCase(rtn.id)}
+                            className="px-2 py-0.5 text-[10.5px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap cursor-pointer"
+                            title="Approve Return Confirmation"
+                          >
+                            <Check className="w-3 h-3 shrink-0" />
+                            <span>Approve</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setSelectedReturn(rtn)}
+                          className="px-2 py-0.5 text-[10.5px] font-semibold text-orange-700 hover:bg-orange-100/70 border border-orange-200 rounded transition-colors inline-flex items-center gap-1 shadow-2xs whitespace-nowrap cursor-pointer"
+                          title="View return details"
+                        >
+                          <Eye className="w-3 h-3 shrink-0" />
+                          <span>View</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

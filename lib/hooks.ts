@@ -96,6 +96,7 @@ export function useOrderFlow() {
     getReturnsByOrderId: orderflowStore.getReturnsByOrderId.bind(orderflowStore),
     getReturnMetrics: orderflowStore.getReturnMetrics.bind(orderflowStore),
     createReturnCase: orderflowStore.createReturnCase.bind(orderflowStore),
+    approveReturnCase: orderflowStore.approveReturnCase.bind(orderflowStore),
     updateReturnStatus: orderflowStore.updateReturnStatus.bind(orderflowStore),
     recordReturnReceived: orderflowStore.recordReturnReceived.bind(orderflowStore),
     performQcCheck: orderflowStore.performQcCheck.bind(orderflowStore),

@@ -39,7 +39,8 @@ export function ReturnDetailsDrawer({
   const { 
     orders,
     user, 
-    updateReturnStatus, 
+    updateReturnStatus,
+    approveReturnCase,
     processRefund, 
     createReplacementTask 
   } = useOrderFlow();
@@ -136,7 +137,11 @@ export function ReturnDetailsDrawer({
   };
 
   const handleApprove = () => {
-    updateReturnStatus(returnCase.returnId, "Return Approved", "Return request approved by staff");
+    if (approveReturnCase) {
+      approveReturnCase(returnCase.id);
+    } else {
+      updateReturnStatus(returnCase.returnId, "Return Approved", "Return request approved by staff");
+    }
   };
 
   const handleMarkCompleted = () => {
@@ -195,6 +200,29 @@ export function ReturnDetailsDrawer({
           </button>
         </div>
 
+        {/* Waiting for Confirmation Banner */}
+        {(returnCase.status === "Waiting for Confirmation" || returnCase.approvalStatus === "PENDING") && (
+          <div className="mx-6 mt-3 p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-center justify-between gap-3 text-xs shrink-0 animate-in fade-in">
+            <div className="flex items-center gap-2.5 text-amber-900">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
+              <div>
+                <p className="font-bold">Waiting for Return Confirmation</p>
+                <p className="text-[11px] text-amber-700">
+                  Submitted by <strong className="text-slate-800">{returnCase.submittedForApprovalBy || returnCase.createdBy || "Staff"}</strong>. Owner/Admin confirmation required.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleApprove}
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs flex items-center gap-1 cursor-pointer shrink-0"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Approve Return</span>
+            </button>
+          </div>
+        )}
+
         {/* Quick Action Bar */}
         <div className="px-6 py-2.5 bg-rose-50/60 border-b border-rose-100 flex items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
@@ -203,7 +231,7 @@ export function ReturnDetailsDrawer({
           </div>
 
           <div className="flex items-center gap-2">
-            {returnCase.status === "Return Requested" && (
+            {(returnCase.status === "Waiting for Confirmation" || returnCase.status === "Return Requested") && (
               <>
                 <button
                   type="button"

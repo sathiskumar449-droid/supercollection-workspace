@@ -218,6 +218,7 @@ export type ReturnReason =
   | "Other";
 
 export type ReturnStatus =
+  | "Waiting for Confirmation"
   | "Return Requested"
   | "Return Approved"
   | "Awaiting Return"
@@ -382,4 +383,9 @@ export interface ReturnCase {
   exchangeReferenceNumber?: string;
   replacementDispatchNumber?: string;
   replacementStatus?: ReplacementStatus;
+  approvalStatus?: "PENDING" | "APPROVED" | "REJECTED";
+  approvedBy?: string;
+  approvedAt?: string;
+  submittedForApprovalBy?: string;
+  submittedForApprovalAt?: string;
 }

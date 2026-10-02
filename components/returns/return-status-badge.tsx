@@ -17,6 +17,13 @@ import {
 
 export function ReturnStatusBadge({ status, className }: { status: ReturnStatus; className?: string }) {
   const configs: Record<ReturnStatus, { label: string; textClass: string; bgClass: string; borderClass: string; icon: React.ReactNode }> = {
+    "Waiting for Confirmation": {
+      label: "Waiting for Confirmation",
+      textClass: "text-amber-900 font-bold",
+      bgClass: "bg-amber-100/90",
+      borderClass: "border-amber-300",
+      icon: <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />,
+    },
     "Return Requested": {
       label: "Return Requested",
       textClass: "text-amber-800",
@@ -214,7 +221,10 @@ export function ReturnCompactIndicator({
   let label = status;
   let colorClass = "text-slate-600 bg-slate-50 border-slate-200";
 
-  if (status.includes("Requested")) {
+  if (status.includes("Waiting") || status.includes("Confirmation")) {
+    label = "⏳ Awaiting Approval";
+    colorClass = "text-amber-900 bg-amber-100 border-amber-300 hover:bg-amber-200 animate-pulse";
+  } else if (status.includes("Requested")) {
     label = "↩ Requested";
     colorClass = "text-amber-800 bg-amber-50 border-amber-200 hover:bg-amber-100";
   } else if (status.includes("Awaiting")) {
