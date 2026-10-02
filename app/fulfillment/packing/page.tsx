@@ -776,19 +776,8 @@ export default function PackingPage() {
             <span>Mark as Return{selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}</span>
           </button>
 
-          {/* Export Actions (Excel & PDF) & Add Return */}
+          {/* Export Actions (Excel & PDF) */}
           <div className="flex items-center gap-2 pl-1 border-l border-slate-200">
-            <button
-              onClick={() => {
-                setReturnModalOrder(null);
-                setIsMarkAsReturnOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs transition-colors shadow-2xs cursor-pointer shrink-0"
-              title="Add Return"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Return</span>
-            </button>
             <button
               onClick={handleExportExcel}
               title="Export Excel"
