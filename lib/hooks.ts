@@ -1,5 +1,7 @@
 "use client";
 
+import { usePathname } from "next/navigation";
+
 import { useState, useEffect } from "react";
 import { orderflowStore } from "./store";
 import { Order, UserSession, DashboardMetrics, ReturnCase, ReturnMetrics } from "@/types/orderflow";
@@ -20,6 +22,9 @@ export const INITIAL_METRICS: DashboardMetrics = {
 };
 
 export function useOrderFlow() {
+  const pathname = usePathname();
+  const pagePath = pathname || undefined;
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [returns, setReturns] = useState<ReturnCase[]>([]);
   const [user, setUser] = useState<UserSession>(CURRENT_USER);
@@ -35,8 +40,8 @@ export function useOrderFlow() {
     setUser({ ...orderflowStore.getCurrentUser() });
     setMetrics({ ...orderflowStore.getMetrics() });
     setSearchQueryState(orderflowStore.getSearchQuery());
-    setDateFilterState(orderflowStore.getDateFilter());
-    setCustomDateState(orderflowStore.getCustomDate());
+    setDateFilterState(orderflowStore.getDateFilter(pagePath));
+    setCustomDateState(orderflowStore.getCustomDate(pagePath));
     setIsLoaded(true);
 
     const unsubscribe = orderflowStore.subscribe(() => {
@@ -45,12 +50,12 @@ export function useOrderFlow() {
       setUser({ ...orderflowStore.getCurrentUser() });
       setMetrics({ ...orderflowStore.getMetrics() });
       setSearchQueryState(orderflowStore.getSearchQuery());
-      setDateFilterState(orderflowStore.getDateFilter());
-      setCustomDateState(orderflowStore.getCustomDate());
+      setDateFilterState(orderflowStore.getDateFilter(pagePath));
+      setCustomDateState(orderflowStore.getCustomDate(pagePath));
     });
 
     return unsubscribe;
-  }, []);
+  }, [pagePath]);
 
   const activeReturnsCount = orderflowStore.getActiveReturnsCount();
 
@@ -64,9 +69,9 @@ export function useOrderFlow() {
     searchQuery,
     setSearchQuery: (query: string) => orderflowStore.setSearchQuery(query),
     dateFilter,
-    setDateFilter: (filter: string) => orderflowStore.setDateFilter(filter),
+    setDateFilter: (filter: string) => orderflowStore.setDateFilter(filter, pagePath),
     customDate,
-    setCustomDate: (date: string) => orderflowStore.setCustomDate(date),
+    setCustomDate: (date: string) => orderflowStore.setCustomDate(date, pagePath),
     updateOrderStatus: orderflowStore.updateOrderStatus.bind(orderflowStore),
     setOrderPending: orderflowStore.setOrderPending.bind(orderflowStore),
     resolveOrderPending: orderflowStore.resolveOrderPending.bind(orderflowStore),

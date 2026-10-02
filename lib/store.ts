@@ -53,6 +53,34 @@ let globalCouriers: Courier[] = [...INITIAL_COURIERS];
 let globalSearchQuery: string = "";
 let globalDateFilter: string = "All";
 let globalCustomDate: string = "";
+const STORAGE_KEY_PAGE_FILTERS = "orderflow_page_date_filters";
+let globalPageDateFilters: Record<string, { dateFilter: string; customDate: string }> = {};
+
+function normalizePageKey(path?: string): string {
+  if (!path) return "global";
+  const clean = path.split("?")[0].replace(/\/+$/, "") || "/";
+  return clean;
+}
+
+function loadPageDateFilters() {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = sessionStorage.getItem(STORAGE_KEY_PAGE_FILTERS) || localStorage.getItem(STORAGE_KEY_PAGE_FILTERS);
+      if (stored) {
+        globalPageDateFilters = JSON.parse(stored);
+      }
+    } catch {}
+  }
+}
+
+function persistPageDateFilters() {
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.setItem(STORAGE_KEY_PAGE_FILTERS, JSON.stringify(globalPageDateFilters));
+      localStorage.setItem(STORAGE_KEY_PAGE_FILTERS, JSON.stringify(globalPageDateFilters));
+    } catch {}
+  }
+}
 let listeners: Array<() => void> = [];
 let supabaseInitialized = false;
 
@@ -2325,21 +2353,53 @@ export const orderflowStore = {
     notifyListeners();
   },
 
-  getDateFilter(): string {
+  getDateFilter(path?: string): string {
+    if (Object.keys(globalPageDateFilters).length === 0) {
+      loadPageDateFilters();
+    }
+    if (path) {
+      const key = normalizePageKey(path);
+      if (globalPageDateFilters[key]?.dateFilter !== undefined) {
+        return globalPageDateFilters[key].dateFilter;
+      }
+      return "All";
+    }
     return globalDateFilter;
   },
 
-  setDateFilter(filter: string) {
+  setDateFilter(filter: string, path?: string) {
     globalDateFilter = filter;
+    const key = normalizePageKey(path);
+    if (!globalPageDateFilters[key]) {
+      globalPageDateFilters[key] = { dateFilter: "All", customDate: "" };
+    }
+    globalPageDateFilters[key].dateFilter = filter;
+    persistPageDateFilters();
     notifyListeners();
   },
 
-  getCustomDate(): string {
+  getCustomDate(path?: string): string {
+    if (Object.keys(globalPageDateFilters).length === 0) {
+      loadPageDateFilters();
+    }
+    if (path) {
+      const key = normalizePageKey(path);
+      if (globalPageDateFilters[key]?.customDate !== undefined) {
+        return globalPageDateFilters[key].customDate;
+      }
+      return "";
+    }
     return globalCustomDate;
   },
 
-  setCustomDate(date: string) {
+  setCustomDate(date: string, path?: string) {
     globalCustomDate = date;
+    const key = normalizePageKey(path);
+    if (!globalPageDateFilters[key]) {
+      globalPageDateFilters[key] = { dateFilter: "All", customDate: "" };
+    }
+    globalPageDateFilters[key].customDate = date;
+    persistPageDateFilters();
     notifyListeners();
   },
 
