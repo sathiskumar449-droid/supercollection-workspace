@@ -44,6 +44,15 @@ const STORAGE_KEY_ACCOUNTS = "sc_user_accounts_v2";
 
 export const DEFAULT_ACCOUNTS: UserAccount[] = [
   {
+    id: "usr-siva-default",
+    username: "siva",
+    password: "1234",
+    name: "Siva",
+    role: "PACKING_STAFF",
+    isActive: true,
+    createdAt: "2026-09-01T00:00:00.000Z",
+  },
+  {
     id: "usr-admin-default",
     username: "admin",
     password: "1234",
@@ -169,7 +178,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             };
             setUser(session);
             setIsAuthenticated(true);
-            orderflowStore.switchRole(session.role, session.courierPartnerId);
+            orderflowStore.setUserSession({
+              name: session.name,
+              username: session.username,
+              role: session.role,
+              courierPartnerId: session.courierPartnerId,
+            });
+            orderflowStore.switchRole(session.role, session.courierPartnerId, session.name);
           } else {
             localStorage.removeItem(STORAGE_KEY_AUTH);
             setUser(null);
@@ -243,7 +258,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setUser(session);
     setIsAuthenticated(true);
-    orderflowStore.switchRole(account.role, account.courierPartnerId);
+    orderflowStore.setUserSession({
+      name: session.name,
+      username: session.username,
+      role: session.role,
+      courierPartnerId: session.courierPartnerId,
+    });
+    orderflowStore.switchRole(account.role, account.courierPartnerId, session.name);
 
     return { success: true, role: account.role, courierPartnerId: account.courierPartnerId };
   };
@@ -341,6 +362,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           courierPartnerId: updatedAcc.courierPartnerId,
         };
         setUser(newSession);
+        orderflowStore.setUserSession({
+          name: newSession.name,
+          username: newSession.username,
+          role: newSession.role,
+          courierPartnerId: newSession.courierPartnerId,
+        });
         try {
           localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(newSession));
         } catch {}

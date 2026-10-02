@@ -255,13 +255,17 @@ export function normalizeOrderTimeline(ord: Order): ActivityLog[] {
     const packTimestamp = dispatchedTime ? new Date(new Date(dispatchedTime).getTime() - 60 * 1000).toISOString() : new Date(new Date(confirmedTime).getTime() + 5 * 60 * 1000).toISOString();
 
     if (eventsMap.has("order packed")) {
-      entries.push(eventsMap.get("order packed")!);
+      const existingPacked = eventsMap.get("order packed")!;
+      if ((!existingPacked.user || existingPacked.user === "Packing Staff") && ord.packingStaff) {
+        existingPacked.user = ord.packingStaff;
+      }
+      entries.push(existingPacked);
     } else {
       entries.push({
         id: `tl-gen-${ord.id}-packed`,
         orderId: ord.id,
         timestamp: packTimestamp,
-        user: "Packing Staff",
+        user: ord.packingStaff || "Packing Staff",
         role: "PACKING_STAFF",
         action: "Order Packed",
         details: "Items verified, folded and securely packed",
@@ -270,13 +274,17 @@ export function normalizeOrderTimeline(ord: Order): ActivityLog[] {
     }
 
     if (eventsMap.has("order dispatched")) {
-      entries.push(eventsMap.get("order dispatched")!);
+      const existingDisp = eventsMap.get("order dispatched")!;
+      if ((!existingDisp.user || existingDisp.user === "Admin" || existingDisp.user === "Dispatch Staff") && (ord.dispatch?.dispatchedBy || ord.dispatchedBy || ord.packingStaff)) {
+        existingDisp.user = ord.dispatch?.dispatchedBy || ord.dispatchedBy || ord.packingStaff!;
+      }
+      entries.push(existingDisp);
     } else {
       entries.push({
         id: `tl-gen-${ord.id}-disp`,
         orderId: ord.id,
         timestamp: dispatchedTime || new Date(new Date(packTimestamp).getTime() + 60 * 1000).toISOString(),
-        user: "Admin",
+        user: ord.dispatch?.dispatchedBy || ord.dispatchedBy || ord.packingStaff || "Dispatch Staff",
         role: "DISPATCH_STAFF",
         action: "Order Dispatched",
         details: ord.dispatch?.dispatchId ? `Dispatch No: ${ord.dispatch.dispatchId}` : "Order dispatched from packing station",
@@ -895,8 +903,29 @@ export const orderflowStore = {
     return globalUser;
   },
 
-  switchRole(role: Role, courierPartnerId?: string) {
-    const matched = STAFF_USERS.find((u) => {
+  setUserSession(session: { name: string; username?: string; role: Role; courierPartnerId?: string }) {
+    const userObj: UserSession = {
+      id: `usr-${(session.username || session.name || "user").toLowerCase().replace(/\s+/g, "-")}`,
+      name: session.name || "Staff",
+      email: session.username ? `${session.username}@supercollection.in` : "staff@supercollection.in",
+      role: session.role,
+      courierPartnerId: session.courierPartnerId,
+      avatarUrl: "/avatars/avatar.svg",
+      online: true,
+    };
+    persistUser(userObj);
+  },
+
+  switchRole(role: Role, courierPartnerId?: string, userName?: string) {
+    const currentName = userName || (globalUser.name && !STAFF_USERS.some((s) => s.name === globalUser.name) ? globalUser.name : undefined);
+    const matched = (currentName ? {
+      id: `usr-${currentName.toLowerCase().replace(/\s+/g, "-")}`,
+      name: currentName,
+      email: `${currentName.toLowerCase().replace(/\s+/g, "")}@supercollection.in`,
+      role,
+      courierPartnerId: role === "COURIER" ? (courierPartnerId || "ST_COURIER") : undefined,
+      online: true,
+    } : undefined) || STAFF_USERS.find((u) => {
       if (role === "COURIER") {
         return u.role === "COURIER" && (!courierPartnerId || u.courierPartnerId === courierPartnerId);
       }
@@ -1107,7 +1136,18 @@ export const orderflowStore = {
       }
 
       // 6. When a valid Dispatch Number is entered: Order Packed -> Order Dispatched
-      if (!order.timeline.some((t) => t.action === "Order Packed" || t.action === "Order packed")) {
+      const existingPackedIdx = order.timeline.findIndex(
+        (t) => (t.action || "").toLowerCase() === "order packed"
+      );
+      if (existingPackedIdx !== -1) {
+        if (!order.timeline[existingPackedIdx].user || order.timeline[existingPackedIdx].user === "Packing Staff") {
+          order.timeline[existingPackedIdx] = {
+            ...order.timeline[existingPackedIdx],
+            user: globalUser.name,
+            role: globalUser.role,
+          };
+        }
+      } else {
         newEntries.push({
           id: `tl-${Date.now()}-packed`,
           orderId: order.id,
@@ -1121,7 +1161,17 @@ export const orderflowStore = {
         });
       }
 
-      if (!order.timeline.some((t) => t.action === "Order Dispatched" || t.action === "Order dispatched")) {
+      const existingDispIdx = order.timeline.findIndex(
+        (t) => (t.action || "").toLowerCase() === "order dispatched"
+      );
+      if (existingDispIdx !== -1) {
+        order.timeline[existingDispIdx] = {
+          ...order.timeline[existingDispIdx],
+          user: globalUser.name,
+          role: globalUser.role,
+          details: nextDispatchId ? `Dispatch No: ${nextDispatchId}` : order.timeline[existingDispIdx].details,
+        };
+      } else {
         newEntries.push({
           id: `tl-${Date.now() + 100}-disp`,
           orderId: order.id,
@@ -1202,10 +1252,12 @@ export const orderflowStore = {
       completedAt: newStatus === "COMPLETED" && !order.completedAt ? now : order.completedAt,
       pickedUpAt: wasAlreadyPickedUp ? order.pickedUpAt : undefined,
       shippedAt: order.dispatch?.llrNumber ? order.shippedAt : undefined,
-      packingStaff: newStatus === "PACKING" ? globalUser.name : order.packingStaff,
+      packingStaff: (newStatus === "PACKING" || newStatus === "PACKED") ? globalUser.name : (order.packingStaff || (isDispatched ? globalUser.name : undefined)),
+      dispatchedBy: isDispatched ? globalUser.name : (order.dispatchedBy || (dispatchDetails?.dispatchId ? globalUser.name : undefined)),
       dispatch: {
         ...order.dispatch,
         dispatchId: dispatchDetails?.dispatchId !== undefined ? dispatchDetails.dispatchId : (order.dispatch.dispatchId || undefined),
+        dispatchedBy: isDispatched ? globalUser.name : (order.dispatch.dispatchedBy || (dispatchDetails?.dispatchId ? globalUser.name : undefined)),
         llrNumber: dispatchDetails?.llrNumber !== undefined
           ? dispatchDetails.llrNumber
           : (order.dispatch.llrNumber && order.dispatch.llrNumber !== (dispatchDetails?.dispatchId || order.dispatch.dispatchId) && !order.dispatch.llrNumber.toLowerCase().startsWith("dsp")

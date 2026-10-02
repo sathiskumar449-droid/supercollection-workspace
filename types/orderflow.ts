@@ -60,6 +60,7 @@ export interface DispatchInfo {
   pickupPhone?: string; // Courier pickup person's phone number (separate from customer mobile)
   verifiedCustomerPhone?: string; // Customer phone verified at pickup
   pickedUpBy?: string;
+  dispatchedBy?: string;
   courierStatus: CourierStatus;
   dispatchedAt?: string;
   pickedUpAt?: string;
@@ -119,6 +120,7 @@ export interface Order {
   shippedAt?: string;
   completedAt?: string;
   packingStaff?: string;
+  dispatchedBy?: string;
   orderTakenBy?: string;
   returnStatus?: string;
   linkedReturnId?: string;

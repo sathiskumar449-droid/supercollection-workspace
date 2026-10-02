@@ -187,7 +187,7 @@ export function OrderDetailsDrawer({
 
     const filtered: typeof sorted = [];
     for (const entry of sorted) {
-      const key = `${(entry.action || "").toLowerCase()}__${(entry.details || "").toLowerCase()}`;
+      const key = `${(entry.action || "").toLowerCase()}__${(entry.details || "").toLowerCase()}__${(entry.user || "").toLowerCase()}`;
       if (!seen.has(key)) {
         seen.add(key);
         filtered.push(entry);
@@ -456,6 +456,62 @@ export function OrderDetailsDrawer({
                             </span>
                           )}
                         </div>
+
+                        {/* Actor / User Subtext (e.g. "Dispatched by Siva") */}
+                        {(() => {
+                          const actor = (item.user || "").trim();
+                          if (!actor) return null;
+                          const act = (item.action || "").toLowerCase();
+                          let subtext = "";
+
+                          if (act.includes("dispatched")) {
+                            subtext = `Dispatched by ${actor}`;
+                          } else if (act.includes("pack start") || act.includes("packing started")) {
+                            subtext = `Packing started by ${actor}`;
+                          } else if (act.includes("packed")) {
+                            subtext = `Packed by ${actor}`;
+                          } else if (act.includes("dispatch number") || act.includes("dispatch no")) {
+                            subtext = `Updated by ${actor}`;
+                          } else if (act.includes("llr") || act.includes("tracking")) {
+                            subtext = `LLR entered by ${actor}`;
+                          } else if (act.includes("picked up") || act.includes("pickup")) {
+                            subtext = `Picked up by ${actor}`;
+                          } else if (act.includes("shipped")) {
+                            subtext = `Shipped by ${actor}`;
+                          } else if (act.includes("sms sent")) {
+                            subtext = `SMS sent via ${actor}`;
+                          } else if (act.includes("waiting for")) {
+                            subtext = `Handled by ${actor}`;
+                          } else if (act.includes("pending")) {
+                            subtext = `Marked pending by ${actor}`;
+                          } else if (act.includes("return")) {
+                            subtext = `Return updated by ${actor}`;
+                          } else if (act.includes("created") || act.includes("placed")) {
+                            subtext = `Created via ${actor}`;
+                          } else if (act.includes("completed")) {
+                            subtext = `Completed via ${actor}`;
+                          } else if (act.includes("processing")) {
+                            subtext = `Processed by ${actor}`;
+                          } else {
+                            subtext = `by ${actor}`;
+                          }
+
+                          return (
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] leading-tight">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200">
+                                <svg className="w-2.5 h-2.5 text-slate-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                {subtext}
+                              </span>
+                              {item.details && !item.details.toLowerCase().includes(subtext.toLowerCase()) && item.details !== item.action && (
+                                <span className="text-[11px] text-slate-500 font-normal">
+                                  · {item.details}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* Dispatch number change transparency (Rule 20) */}
                         {item.oldDispatchNo && item.newDispatchNo && (

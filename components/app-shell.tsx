@@ -7,6 +7,7 @@ import { TopBar } from "./top-bar";
 import { GlobalSearchDialog } from "./global-search-dialog";
 import { OrderDetailsDrawer } from "./orders/order-details-drawer";
 import { useOrderFlow } from "@/lib/hooks";
+import { orderflowStore } from "@/lib/store";
 import { Order } from "@/types/orderflow";
 import { useAuth } from "@/lib/auth-context";
 import { LoginScreen } from "./auth/login-screen";
@@ -51,6 +52,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Strict route protection:
   useEffect(() => {
     if (isAuthenticated && authUser) {
+      orderflowStore.setUserSession({
+        name: authUser.name,
+        username: authUser.username,
+        role: authUser.role,
+        courierPartnerId: authUser.courierPartnerId,
+      });
       if (authUser.role === "COURIER") {
         if (pathname && !pathname.startsWith("/couriers")) {
           const partnerParam = authUser.courierPartnerId ? `?partner=${authUser.courierPartnerId}` : "";
