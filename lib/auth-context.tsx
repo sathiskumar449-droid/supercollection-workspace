@@ -41,32 +41,15 @@ interface AuthContextType {
 
 const STORAGE_KEY_AUTH = "sc_auth_session_v1";
 const STORAGE_KEY_ACCOUNTS = "sc_user_accounts_v2";
+const STORAGE_KEY_DELETED_USERS = "sc_deleted_usernames_v2";
 
 export const DEFAULT_ACCOUNTS: UserAccount[] = [
-  {
-    id: "usr-siva-default",
-    username: "siva",
-    password: "1234",
-    name: "Siva",
-    role: "PACKING_STAFF",
-    isActive: true,
-    createdAt: "2026-09-01T00:00:00.000Z",
-  },
   {
     id: "usr-admin-default",
     username: "admin",
     password: "1234",
     name: "Super Admin",
     role: "ADMIN",
-    isActive: true,
-    createdAt: "2026-09-01T00:00:00.000Z",
-  },
-  {
-    id: "usr-staff-default",
-    username: "staff",
-    password: "1234",
-    name: "Operations Staff",
-    role: "ORDER_STAFF",
     isActive: true,
     createdAt: "2026-09-01T00:00:00.000Z",
   },
@@ -139,26 +122,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       if (typeof window !== "undefined") {
-        // 1. Load accounts
-        let loadedAccounts: UserAccount[] = DEFAULT_ACCOUNTS;
+        // Read deleted usernames blacklist
+        let deletedUsernames: string[] = ["siva", "staff"];
+        try {
+          const storedDeleted = localStorage.getItem(STORAGE_KEY_DELETED_USERS);
+          if (storedDeleted) {
+            const parsedDeleted = JSON.parse(storedDeleted);
+            if (Array.isArray(parsedDeleted)) {
+              deletedUsernames = Array.from(new Set([...deletedUsernames, ...parsedDeleted]));
+            }
+          }
+        } catch (e) {}
+
+        const deletedSet = new Set(deletedUsernames.map((u) => u.toLowerCase()));
+
+        // 1. Load accounts from storage
+        let loadedAccounts: UserAccount[] = [];
         const storedAccounts = localStorage.getItem(STORAGE_KEY_ACCOUNTS);
         if (storedAccounts) {
           try {
             const parsed: UserAccount[] = JSON.parse(storedAccounts);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              // Ensure default essential accounts exist in loaded accounts
-              const existingUsernames = new Set(parsed.map((a) => (a.username || "").toLowerCase()));
-              const missingDefaults = DEFAULT_ACCOUNTS.filter(
-                (d) => !existingUsernames.has(d.username.toLowerCase())
-              );
-              loadedAccounts = [...parsed, ...missingDefaults];
+              loadedAccounts = parsed;
             }
           } catch (e) {
             console.warn("Failed to parse stored accounts, using defaults", e);
           }
         }
+
+        // If no stored accounts exist at all (first-ever fresh browser visit), use defaults
+        if (loadedAccounts.length === 0) {
+          loadedAccounts = DEFAULT_ACCOUNTS;
+        }
+
+        // Strictly filter out any accounts that were deleted by admin (or legacy demo accounts siva/staff)
+        loadedAccounts = loadedAccounts.filter(
+          (a) => !deletedSet.has((a.username || "").toLowerCase())
+        );
+
+        // Ensure primary admin account ALWAYS exists so owner can never be locked out
+        const hasAdmin = loadedAccounts.some(
+          (a) => (a.username || "").toLowerCase() === "admin"
+        );
+        if (!hasAdmin) {
+          const defaultAdmin = DEFAULT_ACCOUNTS.find((d) => d.username === "admin");
+          if (defaultAdmin) {
+            loadedAccounts.unshift(defaultAdmin);
+          }
+        }
+
         setAccounts(loadedAccounts);
         localStorage.setItem(STORAGE_KEY_ACCOUNTS, JSON.stringify(loadedAccounts));
+        localStorage.setItem(STORAGE_KEY_DELETED_USERS, JSON.stringify(Array.from(deletedSet)));
 
         // 2. Load auth session
         const storedSession = localStorage.getItem(STORAGE_KEY_AUTH);
@@ -317,6 +332,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
     };
 
+    // If username was previously in deleted blacklist, remove it
+    try {
+      if (typeof window !== "undefined") {
+        const storedDeleted = localStorage.getItem(STORAGE_KEY_DELETED_USERS);
+        if (storedDeleted) {
+          const list: string[] = JSON.parse(storedDeleted);
+          const updated = list.filter((u) => u.toLowerCase() !== cleanUser);
+          localStorage.setItem(STORAGE_KEY_DELETED_USERS, JSON.stringify(updated));
+        }
+      }
+    } catch (e) {}
+
     persistAccounts([...accounts, newAcc]);
     return { success: true };
   };
@@ -414,7 +441,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: "Primary Admin account cannot be deleted." };
     }
 
-    const updated = accounts.filter((a) => a.id !== id);
+    const cleanUname = existing.username.toLowerCase();
+
+    // Persist to deleted users blacklist so it can NEVER be resurrected
+    try {
+      if (typeof window !== "undefined") {
+        const storedDeleted = localStorage.getItem(STORAGE_KEY_DELETED_USERS);
+        const deletedList: string[] = storedDeleted ? JSON.parse(storedDeleted) : [];
+        if (!deletedList.includes(cleanUname)) {
+          deletedList.push(cleanUname);
+          localStorage.setItem(STORAGE_KEY_DELETED_USERS, JSON.stringify(deletedList));
+        }
+      }
+    } catch (e) {
+      console.error("Error storing deleted username:", e);
+    }
+
+    const updated = accounts.filter((a) => a.id !== id && a.username.toLowerCase() !== cleanUname);
     persistAccounts(updated);
     return { success: true };
   };

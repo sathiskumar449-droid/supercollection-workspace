@@ -33,6 +33,7 @@ import { useOrderFlow } from "@/lib/hooks";
 import { useAuth, UserAccount } from "@/lib/auth-context";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
+import { showToast } from "@/components/ui/toast";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"business" | "users" | "couriers" | "ping4sms" | "woocommerce" | "whatsapp">("business");
@@ -84,6 +85,7 @@ export default function SettingsPage() {
 
   const triggerUserToast = (msg: string) => {
     setUserToast(msg);
+    showToast(msg, "success");
     setTimeout(() => setUserToast(null), 3000);
   };
 
