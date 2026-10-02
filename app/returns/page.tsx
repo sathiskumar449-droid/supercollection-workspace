@@ -36,9 +36,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  CheckSquare
+  CheckSquare,
+  Trash2
 } from "lucide-react";
 import { exportToExcel, exportToPdf } from "@/lib/export-utils";
+import { useAuth } from "@/lib/auth-context";
 
 function ReturnsContent() {
   const searchParams = useSearchParams();
@@ -53,8 +55,57 @@ function ReturnsContent() {
     updateOrderStatus,
     updateCourierDetails,
     setDispatchNumber,
-    approveReturnCase
+    approveReturnCase,
+    deleteReturnCase,
+    deleteReturnCases
   } = useOrderFlow();
+
+  const { user: authUser } = useAuth();
+  const isAdmin = authUser?.role === "ADMIN" || user?.role === "ADMIN";
+
+  const handleDeleteReturn = (rtn: ReturnCase) => {
+    if (!isAdmin) {
+      alert("Only Administrators have permission to delete return cases.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete return case ${rtn.returnId} (${rtn.customerName || "Customer"})?\n\nThis will remove the return record and restore the order status.`
+    );
+    if (!confirmed) return;
+
+    const res = deleteReturnCase(rtn.id);
+    if (res.success) {
+      setSelectedIds((prev) => prev.filter((id) => id !== rtn.id));
+      if (selectedReturn?.id === rtn.id) {
+        setSelectedReturn(null);
+      }
+    } else {
+      alert(res.error || "Failed to delete return case.");
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (!isAdmin) {
+      alert("Only Administrators have permission to delete return cases.");
+      return;
+    }
+    if (selectedIds.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete the ${selectedIds.length} selected return case(s)?\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    const res = deleteReturnCases(selectedIds);
+    if (res.success) {
+      setSelectedIds([]);
+      if (selectedReturn && selectedIds.includes(selectedReturn.id)) {
+        setSelectedReturn(null);
+      }
+    } else {
+      alert(res.error || "Failed to delete selected return cases.");
+    }
+  };
 
   // Dispatch number inline inputs state
   const [dispatchInputs, setDispatchInputs] = useState<Record<string, string>>({});
@@ -466,6 +517,17 @@ function ReturnsContent() {
             <div className="flex items-center gap-1.5 font-bold text-orange-900 bg-orange-100/90 px-2 py-1 rounded-lg border border-orange-200 animate-in fade-in">
               <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
               <span>{selectedIds.length} selected</span>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleDeleteSelected}
+                  className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded transition-colors shadow-2xs cursor-pointer"
+                  title="Delete selected return cases (Admin only)"
+                >
+                  <Trash2 className="w-3 h-3 shrink-0" />
+                  <span>Delete</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedIds([])}
@@ -561,7 +623,7 @@ function ReturnsContent() {
               <th className="sticky top-0 z-20 py-2 px-1 w-[125px] text-center border-r border-b-2 border-slate-300 bg-slate-100">RETURN STATUS</th>
               <th className="sticky top-0 z-20 py-2 px-1 w-[120px] text-center border-r border-b-2 border-slate-300 bg-slate-100">REPLACEMENT STATUS</th>
               <th className="sticky top-0 z-20 py-2 px-1 w-[105px] text-center border-r border-b-2 border-slate-300 bg-slate-100">DISPATCH NO.</th>
-              <th className="sticky top-0 z-20 py-2 px-1 w-[70px] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">ACTION</th>
+              <th className={cn("sticky top-0 z-20 py-2 px-1 text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800", isAdmin ? "w-[105px]" : "w-[70px]")}>ACTION</th>
             </tr>
           </thead>
 
@@ -767,6 +829,16 @@ function ReturnsContent() {
                           <Eye className="w-3 h-3 shrink-0" />
                           <span>View</span>
                         </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteReturn(rtn)}
+                            className="p-1 text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded transition-all inline-flex items-center justify-center shadow-2xs cursor-pointer"
+                            title="Delete return case (Admin only)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

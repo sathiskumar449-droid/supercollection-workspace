@@ -2813,6 +2813,88 @@ export const orderflowStore = {
     return { success: true, returnCase: updatedCase };
   },
 
+  deleteReturnCase(
+    returnId: string,
+    deletedByName?: string,
+    deletedByRole?: Role
+  ): { success: boolean; error?: string } {
+    const index = globalReturns.findIndex((r) => r.id === returnId || r.returnId === returnId);
+    if (index === -1) return { success: false, error: "Return case not found" };
+
+    const target = globalReturns[index];
+    const now = new Date().toISOString();
+    const actionUser = deletedByName || globalUser.name;
+    const actionRole = deletedByRole || globalUser.role;
+
+    // Filter out the return case
+    const updatedReturns = globalReturns.filter((r) => r.id !== target.id && r.returnId !== target.returnId);
+    persistReturns(updatedReturns);
+
+    // If order is linked, check if any other returns exist for this order
+    const orderIndex = globalOrders.findIndex(
+      (o) => o.id === target.orderId || o.orderNumber === target.orderNumber
+    );
+
+    if (orderIndex !== -1) {
+      const order = globalOrders[orderIndex];
+      const remainingReturns = updatedReturns.filter(
+        (r) => r.orderId === order.id || r.orderNumber === order.orderNumber
+      );
+
+      let revertedStatus: OrderStatus = order.orderStatus;
+      if (remainingReturns.length === 0) {
+        if (order.dispatch?.courierStatus === "DELIVERED") {
+          revertedStatus = "COMPLETED";
+        } else if (order.dispatch?.courierStatus === "SHIPPED" || order.dispatch?.courierStatus === "DISPATCHED" || order.dispatch?.trackingNumber) {
+          revertedStatus = "DISPATCHED";
+        } else if (order.packedAt) {
+          revertedStatus = "PACKED";
+        } else {
+          revertedStatus = "CONFIRMED";
+        }
+      }
+
+      const updatedOrder: Order = {
+        ...order,
+        orderStatus: revertedStatus,
+        linkedReturnId: remainingReturns.length > 0 ? remainingReturns[0].returnId : undefined,
+        returnStatus: remainingReturns.length > 0 ? remainingReturns[0].status : undefined,
+        updatedAt: now,
+      };
+
+      globalOrders[orderIndex] = updatedOrder;
+      persistOrders(globalOrders);
+
+      // Add timeline event to order
+      this.appendOrderTimelineEvent(order.id, {
+        id: `tl-${Date.now()}-ret-del`,
+        orderId: order.id,
+        timestamp: now,
+        user: actionUser,
+        role: actionRole || "ADMIN",
+        action: "Return Deleted",
+        details: `Return case ${target.returnId} (${target.returnType}, Qty: ${target.requestedQuantity}) was deleted by Admin (${actionUser}). Order status restored to ${revertedStatus}.`,
+        eventType: "RETURN",
+      });
+    }
+
+    notifyListeners();
+    return { success: true };
+  },
+
+  deleteReturnCases(
+    returnIds: string[],
+    deletedByName?: string,
+    deletedByRole?: Role
+  ): { success: boolean; deletedCount: number; error?: string } {
+    let deletedCount = 0;
+    for (const id of returnIds) {
+      const res = this.deleteReturnCase(id, deletedByName, deletedByRole);
+      if (res.success) deletedCount++;
+    }
+    return { success: true, deletedCount };
+  },
+
   updateReturnStatus(
     returnId: string,
     newStatus: ReturnStatus,

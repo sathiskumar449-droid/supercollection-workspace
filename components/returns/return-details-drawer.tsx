@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { ReturnCase, ReturnStatus, RefundStatus, RefundMethod } from "@/types/orderflow";
 import { useOrderFlow } from "@/lib/hooks";
+import { useAuth } from "@/lib/auth-context";
 import { formatINR, formatDate, cn } from "@/lib/utils";
 import { ReturnStatusBadge, RefundStatusBadge } from "./return-status-badge";
 import { 
@@ -20,7 +21,8 @@ import {
   Check,
   Calendar,
   AlertCircle,
-  Truck
+  Truck,
+  Trash2
 } from "lucide-react";
 
 interface ReturnDetailsDrawerProps {
@@ -36,14 +38,18 @@ export function ReturnDetailsDrawer({
   onClose,
   onOpenOrder,
 }: ReturnDetailsDrawerProps) {
+  const { user: authUser } = useAuth();
   const { 
     orders,
     user, 
     updateReturnStatus,
     approveReturnCase,
+    deleteReturnCase,
     processRefund, 
     createReplacementTask 
   } = useOrderFlow();
+
+  const isAdmin = authUser?.role === "ADMIN" || user?.role === "ADMIN";
 
   // Refund Form State
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
@@ -926,12 +932,33 @@ export function ReturnDetailsDrawer({
         {/* Footer */}
         <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
           <span>Case: <code className="font-mono font-semibold text-slate-700">{returnCase.returnId}</code></span>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-md transition-colors cursor-pointer"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    `Are you sure you want to permanently delete return case ${returnCase.returnId}?\n\nThis will remove the return record and restore the order status.`
+                  );
+                  if (confirmed) {
+                    deleteReturnCase(returnCase.id);
+                    onClose();
+                  }
+                }}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-700 border border-rose-200 hover:border-rose-600 font-semibold rounded-md transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="Delete Return (Admin only)"
+              >
+                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Delete Return</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-md transition-colors cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
         </div>
 
       </aside>
