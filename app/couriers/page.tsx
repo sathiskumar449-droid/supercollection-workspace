@@ -843,9 +843,8 @@ function CourierHubContent() {
                   return (
                     <tr
                       key={order.id}
-                      onClick={() => setInspectOrder(order)}
                       className={cn(
-                        "hover:bg-orange-50/40 transition-colors cursor-pointer border-b border-slate-200",
+                        "hover:bg-orange-50/40 transition-colors border-b border-slate-200",
                         isSelected && "bg-orange-50/60",
                         isHighlighted && "bg-emerald-50 ring-2 ring-emerald-400 font-semibold"
                       )}

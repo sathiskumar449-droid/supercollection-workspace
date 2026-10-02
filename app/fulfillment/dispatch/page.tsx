@@ -113,8 +113,7 @@ export default function DispatchPage() {
                   return (
                     <tr
                       key={order.id}
-                      onClick={() => setInspectOrder(order)}
-                      className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                      className="hover:bg-slate-50/80 transition-colors group"
                     >
                       <td className="py-3 px-4 font-mono font-semibold text-slate-900">
                         <div className="flex items-center gap-1.5">

@@ -696,9 +696,8 @@ function SmsMonitoringContent() {
                   return (
                     <tr
                       key={order.id}
-                      onClick={() => setInspectOrder(order)}
                       className={cn(
-                        "hover:bg-orange-50/40 transition-colors cursor-pointer group",
+                        "hover:bg-orange-50/40 transition-colors group",
                         selectedIds.includes(order.id) && "bg-orange-50/60"
                       )}
                     >

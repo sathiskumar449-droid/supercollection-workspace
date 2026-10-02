@@ -653,9 +653,8 @@ function ReturnsContent() {
                 return (
                   <tr
                     key={rtn.id}
-                    onClick={() => setSelectedReturn(rtn)}
                     className={cn(
-                      "hover:bg-orange-50/40 transition-colors cursor-pointer group",
+                      "hover:bg-orange-50/40 transition-colors group",
                       isChecked && "bg-orange-50/60"
                     )}
                   >

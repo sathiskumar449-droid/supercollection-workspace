@@ -1330,9 +1330,8 @@ function OrdersContent() {
                   return (
                     <tr
                       key={order.id}
-                      onClick={() => setSelectedOrder(order)}
                       className={cn(
-                        "hover:bg-orange-50/40 transition-colors cursor-pointer group",
+                        "hover:bg-orange-50/40 transition-colors group",
                         isSelected && "bg-orange-50/70"
                       )}
                     >
@@ -1463,8 +1462,7 @@ function OrdersContent() {
           {paginatedOrders.map((order) => (
             <div
               key={order.id}
-              onClick={() => setSelectedOrder(order)}
-              className="p-4 hover:bg-slate-50 cursor-pointer space-y-2.5"
+              className="p-4 hover:bg-slate-50 space-y-2.5"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -1473,7 +1471,17 @@ function OrdersContent() {
                   </span>
                   <SourceBadge source={order.source} />
                 </div>
-                <OrderStatusBadge status={order.orderStatus} />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrder(order)}
+                    className="p-1 text-orange-700 hover:bg-orange-100/70 border border-orange-200 rounded transition-colors inline-flex items-center justify-center shadow-2xs cursor-pointer"
+                    title="View order tracking details"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                  <OrderStatusBadge status={order.orderStatus} />
+                </div>
               </div>
 
               <div className="flex items-center justify-between text-xs">
