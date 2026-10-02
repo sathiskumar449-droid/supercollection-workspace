@@ -180,19 +180,32 @@ export function formatStageDuration(startIso?: string, endIso?: string): string 
  * Example: Order "01" on 23rd Sept -> "DTP012309"
  * Order "SC-WC-18066" on 28th Sept -> "DTP180662809"
  */
-export function formatDispatchNumber(orderNumber: string, dateInput: Date | string = new Date()): string {
-  let clean = orderNumber.replace(/^(SC-WC-|WA-|OF-|ORD-)/i, "").trim();
-  clean = clean.replace(/[^a-zA-Z0-9]/g, "");
-  if (!clean) clean = orderNumber.replace(/[^a-zA-Z0-9]/g, "") || "1";
-  if (/^\d+$/.test(clean) && clean.length === 1) {
-    clean = clean.padStart(2, "0");
-  }
-
+/**
+ * Formats a Dispatch Number following the convention:
+ * DTP [Order Count]-[Date (DD)][Month (MM)]
+ * Example: Order count 55 on 2nd October -> "DTP 55-0210"
+ * Example: Order count 1 on 2nd October -> "DTP 1-0210"
+ */
+export function formatDispatchNumber(
+  orderCountOrNumber: string | number,
+  dateInput: Date | string = new Date()
+): string {
   const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
   const validDate = isNaN(d.getTime()) ? new Date() : d;
 
   const dd = String(validDate.getDate()).padStart(2, "0");
   const mm = String(validDate.getMonth() + 1).padStart(2, "0");
 
-  return `DTP${clean}${dd}${mm}`;
+  let raw = String(orderCountOrNumber ?? "").trim();
+  raw = raw.replace(/^(SC-WC-|WA-|OF-|ORD-|DTP|\s|-)+/i, "").trim();
+
+  // If already contains hyphen like "55-0210", isolate the count
+  if (raw.includes("-")) {
+    const parts = raw.split("-");
+    raw = parts[0].trim();
+  }
+
+  const clean = raw.replace(/[^a-zA-Z0-9]/g, "") || "1";
+
+  return `DTP ${clean}-${dd}${mm}`;
 }

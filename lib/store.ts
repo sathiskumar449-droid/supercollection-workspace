@@ -58,24 +58,24 @@ let supabaseInitialized = false;
 
 export function generateDispatchId(existingOrders: Order[] = globalOrders): string {
   const now = new Date();
-  const yy = String(now.getFullYear()).slice(-2);
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
-  const prefix = `DSP-${yy}${mm}${dd}-`;
 
   let maxSeq = 0;
   existingOrders.forEach((o) => {
     const dispId = o.dispatch?.dispatchId;
-    if (dispId && dispId.startsWith(prefix)) {
-      const seqStr = dispId.slice(prefix.length);
-      const seq = parseInt(seqStr, 10);
-      if (!isNaN(seq) && seq > maxSeq) {
-        maxSeq = seq;
+    if (dispId) {
+      const match = dispId.match(/DTP\s*(\d+)/i) || dispId.match(/DSP-\d+-(\d+)/i);
+      if (match && match[1]) {
+        const seq = parseInt(match[1], 10);
+        if (!isNaN(seq) && seq > maxSeq) {
+          maxSeq = seq;
+        }
       }
     }
   });
 
-  return `${prefix}${String(maxSeq + 1).padStart(3, "0")}`;
+  return `DTP ${maxSeq + 1}-${dd}${mm}`;
 }
 
 export function generateReturnId(existingReturns: ReturnCase[] = globalReturns): string {

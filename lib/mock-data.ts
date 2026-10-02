@@ -225,7 +225,7 @@ export function generateMockOrders(): Order[] {
       // Assign LLR, Pickup Phone, and Courier Status
       let pickupPhone: string | undefined = undefined;
       const dispSeq = String(i - 31).padStart(3, "0");
-      const dispatchId = `DSP-260922-${dispSeq}`;
+      const dispatchId = `DTP ${i + 1}-0210`;
 
       if (i >= 32 && i <= 36) {
         // Missing LLR, Waiting for Pickup
@@ -370,7 +370,7 @@ export function generateMockOrders(): Order[] {
     }
 
     const dispSeq = String(Math.max(1, i - 31)).padStart(3, "0");
-    const dispatchId = orderStatus === "DISPATCHED" ? `DSP-260922-${dispSeq}` : undefined;
+    const dispatchId = orderStatus === "DISPATCHED" ? `DTP ${i + 1}-0210` : undefined;
     const courierPartnerId = 
       courierName === "India Post" ? "INDIA_POST" :
       courierName === "DTDC" ? "DTDC" :

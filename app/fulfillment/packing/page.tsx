@@ -52,11 +52,15 @@ const STATUS_OPTIONS: { key: OrderStatus; label: string; badgeColor: string }[] 
 function InlineDispatchInput({
   orderId,
   orderNumber,
+  orderIndex,
+  orderDate,
   initialValue,
   onSave,
 }: {
   orderId: string;
   orderNumber: string;
+  orderIndex?: number;
+  orderDate?: string;
   initialValue?: string;
   onSave: (orderId: string, orderNumber: string, val: string) => void;
 }) {
@@ -67,8 +71,30 @@ function InlineDispatchInput({
     setVal(initialValue || "");
   }, [initialValue]);
 
+  const count = orderIndex !== undefined ? orderIndex : orderNumber;
+  const sampleDispatchNo = formatDispatchNumber(count, orderDate || new Date());
+
   const commitSave = () => {
-    const trimmed = val.trim();
+    let trimmed = val.trim();
+    if (!trimmed) {
+      if (initialValue) {
+        onSave(orderId, orderNumber, "");
+      }
+      return;
+    }
+
+    // If staff enters pure count e.g. "55", or "DTP 55", auto-format to "DTP 55-0210"
+    if (/^\d+$/.test(trimmed)) {
+      trimmed = formatDispatchNumber(trimmed, orderDate || new Date());
+      setVal(trimmed);
+    } else if (/^DTP\s*[-]?\s*(\d+)$/i.test(trimmed)) {
+      const match = trimmed.match(/^DTP\s*[-]?\s*(\d+)$/i);
+      if (match && match[1]) {
+        trimmed = formatDispatchNumber(match[1], orderDate || new Date());
+        setVal(trimmed);
+      }
+    }
+
     if (trimmed !== (initialValue || "")) {
       onSave(orderId, orderNumber, trimmed);
       setSavedSuccess(true);
@@ -78,7 +104,7 @@ function InlineDispatchInput({
 
   const handleQuickGenerate = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const generated = formatDispatchNumber(orderNumber);
+    const generated = formatDispatchNumber(count, orderDate || new Date());
     setVal(generated);
     onSave(orderId, orderNumber, generated);
     setSavedSuccess(true);
@@ -100,7 +126,7 @@ function InlineDispatchInput({
           }
         }}
         onBlur={commitSave}
-        placeholder="Enter LLR / No..."
+        placeholder={sampleDispatchNo}
         className={cn(
           "w-full text-[10px] font-mono py-1 pl-1.5 pr-6 rounded border transition-all outline-none",
           savedSuccess
@@ -426,7 +452,9 @@ export default function PackingPage() {
     let sampleNumber = "";
 
     targetOrders.forEach((ord) => {
-      const dispatchNo = formatDispatchNumber(ord.orderNumber);
+      const orderIdx = filteredOrders.findIndex((o) => o.id === ord.id);
+      const count = orderIdx !== -1 ? orderIdx + 1 : ord.orderNumber;
+      const dispatchNo = formatDispatchNumber(count, ord.createdAt);
       if (!sampleNumber) sampleNumber = dispatchNo;
       updateOrderStatus(
         ord.id,
@@ -945,6 +973,8 @@ export default function PackingPage() {
                         <InlineDispatchInput
                           orderId={order.id}
                           orderNumber={order.orderNumber}
+                          orderIndex={index + 1}
+                          orderDate={order.createdAt}
                           initialValue={order.dispatch.dispatchId || ""}
                           onSave={handleDispatchNoChange}
                         />
