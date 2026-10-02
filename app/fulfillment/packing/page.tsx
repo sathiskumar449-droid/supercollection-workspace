@@ -38,7 +38,7 @@ import { StatusOption } from "@/components/bulk-actions/bulk-toolbar";
 
 // Status definitions mapping to workflow requirements:
 // WooCommerce Processing -> Processing
-// WooCommerce Completed -> Completed (Ready)
+// WooCommerce Completed -> Completed
 // Dispatch Number entered -> Dispatched
 // Pending -> Pending + Reason/Note
 const STATUS_OPTIONS: { key: OrderStatus; label: string; badgeColor: string }[] = [
@@ -47,7 +47,7 @@ const STATUS_OPTIONS: { key: OrderStatus; label: string; badgeColor: string }[] 
   { key: "PACKING", label: "Packaging", badgeColor: "bg-orange-50 text-orange-700 border-orange-200" },
   { key: "PACKED", label: "Packed", badgeColor: "bg-purple-50 text-purple-700 border-purple-200" },
   { key: "DISPATCHED", label: "Dispatched", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  { key: "COMPLETED", label: "Completed (Ready)", badgeColor: "bg-blue-50 text-blue-800 border-blue-300" },
+  { key: "COMPLETED", label: "Completed", badgeColor: "bg-blue-50 text-blue-800 border-blue-300" },
   { key: "RETURN", label: "↩ Return", badgeColor: "bg-rose-50 text-rose-700 border-rose-300" },
 ];
 
@@ -673,7 +673,7 @@ export default function PackingPage() {
               : "border-blue-300 hover:border-blue-400"
           )}
         >
-          <span className="text-[11px] text-blue-800 font-medium block">Completed (Ready)</span>
+          <span className="text-[11px] text-blue-800 font-medium block">Completed</span>
           <span className="text-base font-bold text-blue-800 font-mono mt-0.5 block">{completedCount}</span>
         </button>
       </div>
@@ -1053,7 +1053,7 @@ export default function PackingPage() {
                               return (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-800 border border-blue-300 shadow-2xs">
                                   <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                                  Completed (Ready)
+                                  Completed
                                 </span>
                               );
                             }
