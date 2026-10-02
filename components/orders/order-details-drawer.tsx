@@ -504,11 +504,6 @@ export function OrderDetailsDrawer({
                                 </svg>
                                 {subtext}
                               </span>
-                              {item.details && !item.details.toLowerCase().includes(subtext.toLowerCase()) && item.details !== item.action && (
-                                <span className="text-[11px] text-slate-500 font-normal">
-                                  · {item.details}
-                                </span>
-                              )}
                             </div>
                           );
                         })()}
