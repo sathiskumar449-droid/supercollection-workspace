@@ -908,12 +908,12 @@ function OrdersContent() {
 
       {/* Orders Table (Excel Spreadsheet Grid Style with S.No & Column Header Filters) */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full min-h-[460px]">
-        <div className="overflow-x-auto hidden md:block w-full">
+        <div className="table-scroll-container overflow-x-auto overflow-y-auto max-h-[calc(100vh-250px)] min-h-[380px] hidden md:block w-full relative">
           <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300 min-w-[1200px]">
-            <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight">
+            <thead className="sticky top-0 z-20 bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight shadow-xs">
               <tr>
                 {/* Checkbox */}
-                <th className="py-2 px-1 w-[2.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1 w-[2.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
                   <input
                     type="checkbox"
                     onChange={handleSelectAll}
@@ -924,12 +924,12 @@ function OrdersContent() {
                 </th>
 
                 {/* S.No */}
-                <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
                   S.No
                 </th>
 
                 {/* ORDER ID */}
-                <th className="py-2 px-1.5 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1.5 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">ORDER ID</span>
                     <ExcelColumnFilter
@@ -957,7 +957,7 @@ function OrdersContent() {
 
                 {/* DATE */}
                 <th 
-                  className="py-2 px-1.5 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:bg-slate-200/80 transition-colors select-none"
+                  className="sticky top-0 z-20 py-2 px-1.5 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:bg-slate-200/80 transition-colors select-none"
                   onClick={() => {
                     if (sortField === "createdAt") {
                       setSortAsc(!sortAsc);
@@ -983,7 +983,7 @@ function OrdersContent() {
                 </th>
 
                 {/* CUSTOMER NAME */}
-                <th className="py-2 px-1.5 w-[11.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1.5 w-[11.5%] border-r border-b-2 border-slate-300 bg-slate-100">
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">CUSTOMER NAME</span>
                     <ExcelColumnFilter
@@ -1010,7 +1010,7 @@ function OrdersContent() {
                 </th>
 
                 {/* SOURCE */}
-                <th className="py-2 px-1 w-[6.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1 w-[6.5%] border-r border-b-2 border-slate-300 bg-slate-100">
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">SOURCE</span>
                     <ExcelColumnFilter
@@ -1040,7 +1040,7 @@ function OrdersContent() {
 
                 {/* ITEMS */}
                 <th 
-                  className="py-2 px-1 w-[5%] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:bg-slate-200/80 transition-colors select-none"
+                  className="sticky top-0 z-20 py-2 px-1 w-[5%] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:bg-slate-200/80 transition-colors select-none"
                   onClick={() => {
                     if (sortField === "itemsCount") {
                       setSortAsc(!sortAsc);
@@ -1066,7 +1066,7 @@ function OrdersContent() {
                 </th>
 
                 {/* AMOUNT */}
-                <th className="py-2 px-1.5 w-[6.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1.5 w-[6.5%] border-r border-b-2 border-slate-300 bg-slate-100">
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">AMOUNT</span>
                     <ExcelColumnFilter
@@ -1097,7 +1097,7 @@ function OrdersContent() {
                 </th>
 
                 {/* ORDER STATUS */}
-                <th className="py-2 px-1 w-[8.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1 w-[8.5%] border-r border-b-2 border-slate-300 bg-slate-100">
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">ORDER STATUS</span>
                     <ExcelColumnFilter
@@ -1130,7 +1130,7 @@ function OrdersContent() {
                 </th>
 
                 {/* RETURN */}
-                <th className="py-2 px-1 w-[6%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1 w-[6%] border-r border-b-2 border-slate-300 bg-slate-100">
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">RETURN</span>
                     <ExcelColumnFilter
@@ -1160,7 +1160,7 @@ function OrdersContent() {
                 </th>
 
                 {/* COURIER */}
-                <th className="py-2 px-1 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1 w-[7.5%] border-r border-b-2 border-slate-300 bg-slate-100">
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">COURIER</span>
                     <ExcelColumnFilter
@@ -1193,7 +1193,7 @@ function OrdersContent() {
                 </th>
 
                 {/* LLR */}
-                <th className="py-2 px-1 w-[6.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1 w-[6.5%] border-r border-b-2 border-slate-300 bg-slate-100">
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">LLR</span>
                     <ExcelColumnFilter
@@ -1223,7 +1223,7 @@ function OrdersContent() {
                 </th>
 
                 {/* COURIER STATUS */}
-                <th className="py-2 px-1 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">COURIER STATUS</span>
                     <ExcelColumnFilter
@@ -1255,7 +1255,7 @@ function OrdersContent() {
                 </th>
 
                 {/* SMS STATUS */}
-                <th className="py-2 px-1 w-[8.5%] border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1 w-[8.5%] border-r border-b-2 border-slate-300 bg-slate-100">
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">SMS STATUS</span>
                     <ExcelColumnFilter
@@ -1285,7 +1285,7 @@ function OrdersContent() {
                 </th>
 
                 {/* TRACKING */}
-                <th className="py-2 px-1 w-[5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">
+                <th className="sticky top-0 z-20 py-2 px-1 w-[5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800 whitespace-nowrap">
                   TRACKING
                 </th>
               </tr>

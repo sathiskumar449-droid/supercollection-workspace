@@ -759,10 +759,11 @@ export default function PackingPage() {
 
       {/* EXCEL SPREADSHEET TABLE VIEW */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
+        <div className="table-scroll-container overflow-x-auto overflow-y-auto max-h-[calc(100vh-250px)] min-h-[380px] w-full relative">
           <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300">
-            <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight">
+            <thead className="sticky top-0 z-20 bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight shadow-xs">
               <tr>
-                <th className="py-2 px-1 w-[2.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
+                <th className="sticky top-0 z-20 py-2 px-1 w-[2.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">
                   <input
                     type="checkbox"
                     checked={isAllFilteredSelected}
@@ -771,16 +772,16 @@ export default function PackingPage() {
                     title={isAllFilteredSelected ? "Deselect all" : "Select all filtered orders"}
                   />
                 </th>
-                <th className="py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
-                <th className="py-2 px-1.5 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">Date</th>
-                <th className="py-2 px-1.5 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
-                <th className="py-2 px-1.5 w-[9%] border-r border-b-2 border-slate-300 bg-slate-100">Phone Number</th>
-                <th className="py-2 px-1.5 w-[12%] border-r border-b-2 border-slate-300 bg-slate-100">Name</th>
-                <th className="py-2 px-1.5 w-[20%] border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
-                <th className="py-2 px-1 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Size</th>
-                <th className="py-2 px-1 w-[3.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Qty</th>
-                <th className="py-2 px-1.5 w-[13%] border-r border-b-2 border-slate-300 bg-slate-100">Dispatch No</th>
-                <th className="py-2 px-1 w-[14.5%] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">Status</th>
+                <th className="sticky top-0 z-20 py-2 px-1 w-[3%] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
+                <th className="sticky top-0 z-20 py-2 px-1.5 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">Date</th>
+                <th className="sticky top-0 z-20 py-2 px-1.5 w-[8%] border-r border-b-2 border-slate-300 bg-slate-100">Order ID</th>
+                <th className="sticky top-0 z-20 py-2 px-1.5 w-[9%] border-r border-b-2 border-slate-300 bg-slate-100">Phone Number</th>
+                <th className="sticky top-0 z-20 py-2 px-1.5 w-[12%] border-r border-b-2 border-slate-300 bg-slate-100">Name</th>
+                <th className="sticky top-0 z-20 py-2 px-1.5 w-[20%] border-r border-b-2 border-slate-300 bg-slate-100">Items</th>
+                <th className="sticky top-0 z-20 py-2 px-1 w-[6%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Size</th>
+                <th className="sticky top-0 z-20 py-2 px-1 w-[3.5%] text-center border-r border-b-2 border-slate-300 bg-slate-100">Qty</th>
+                <th className="sticky top-0 z-20 py-2 px-1.5 w-[13%] border-r border-b-2 border-slate-300 bg-slate-100">Dispatch No</th>
+                <th className="sticky top-0 z-20 py-2 px-1 w-[14.5%] text-center border-b-2 border-slate-300 bg-slate-200/90 text-slate-800">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -1038,6 +1039,7 @@ export default function PackingPage() {
             </tbody>
           </table>
         </div>
+      </div>
 
       {/* Inspect Order Drawer */}
       <OrderDetailsDrawer

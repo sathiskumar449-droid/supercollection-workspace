@@ -89,18 +89,18 @@ export default function DispatchPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="table-scroll-container overflow-x-auto overflow-y-auto max-h-[calc(100vh-250px)] min-h-[380px] relative">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-medium">
+              <thead className="sticky top-0 z-20 bg-slate-100 text-slate-700 border-b border-slate-300 font-bold uppercase tracking-tight shadow-xs">
                 <tr>
-                  <th className="py-3 px-4">Order #</th>
-                  <th className="py-3 px-4">Customer</th>
-                  <th className="py-3 px-4">Items</th>
-                  <th className="py-3 px-4">Amount</th>
-                  <th className="py-3 px-4">Courier Partner</th>
-                  <th className="py-3 px-4">LLR Number</th>
-                  <th className="py-3 px-4">SMS Status</th>
-                  <th className="py-3 px-4 text-right">Dispatch Action</th>
+                  <th className="sticky top-0 z-20 py-3 px-4 bg-slate-100">Order #</th>
+                  <th className="sticky top-0 z-20 py-3 px-4 bg-slate-100">Customer</th>
+                  <th className="sticky top-0 z-20 py-3 px-4 bg-slate-100">Items</th>
+                  <th className="sticky top-0 z-20 py-3 px-4 bg-slate-100">Amount</th>
+                  <th className="sticky top-0 z-20 py-3 px-4 bg-slate-100">Courier Partner</th>
+                  <th className="sticky top-0 z-20 py-3 px-4 bg-slate-100">LLR Number</th>
+                  <th className="sticky top-0 z-20 py-3 px-4 bg-slate-100">SMS Status</th>
+                  <th className="sticky top-0 z-20 py-3 px-4 text-right bg-slate-100">Dispatch Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

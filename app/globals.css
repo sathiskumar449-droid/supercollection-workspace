@@ -72,3 +72,26 @@ body {
 .transition-standard {
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Table fixed header with scrollable content */
+.table-scroll-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 250px);
+  min-height: 380px;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll-container thead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.table-scroll-container thead th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-clip: padding-box;
+}

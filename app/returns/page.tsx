@@ -494,11 +494,12 @@ function ReturnsContent() {
       </div>
 
       {/* SPREADSHEET TABLE VIEW */}
-      <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-x-auto w-full">
-        <table className="w-full min-w-[1380px] text-left text-xs border-collapse border border-slate-300">
-          <thead className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight">
+      <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
+        <div className="table-scroll-container overflow-x-auto overflow-y-auto max-h-[calc(100vh-250px)] min-h-[380px] w-full relative">
+          <table className="w-full min-w-[1380px] text-left text-xs border-collapse border border-slate-300">
+            <thead className="sticky top-0 z-20 bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight shadow-xs">
             <tr>
-              <th className="py-2 px-1 w-[32px] text-center border-r border-b-2 border-slate-300 bg-slate-100">
+              <th className="sticky top-0 z-20 py-2 px-1 w-[32px] text-center border-r border-b-2 border-slate-300 bg-slate-100">
                 <input
                   type="checkbox"
                   checked={isAllPageSelected}
@@ -506,9 +507,9 @@ function ReturnsContent() {
                   className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
                 />
               </th>
-              <th className="py-2 px-1 w-[38px] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
+              <th className="sticky top-0 z-20 py-2 px-1 w-[38px] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
               <th 
-                className="py-2 px-1.5 w-[110px] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
+                className="sticky top-0 z-20 py-2 px-1.5 w-[110px] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
                 onClick={() => {
                   setSortField("returnId");
                   setSortAsc(!sortAsc);
@@ -519,9 +520,9 @@ function ReturnsContent() {
                   <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                 </div>
               </th>
-              <th className="py-2 px-1.5 w-[100px] border-r border-b-2 border-slate-300 bg-slate-100 truncate">ORDER ID</th>
+              <th className="sticky top-0 z-20 py-2 px-1.5 w-[100px] border-r border-b-2 border-slate-300 bg-slate-100 truncate">ORDER ID</th>
               <th 
-                className="py-2 px-1 w-[85px] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
+                className="sticky top-0 z-20 py-2 px-1 w-[85px] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
                 onClick={() => {
                   setSortField("createdAt");
                   setSortAsc(!sortAsc);
@@ -532,12 +533,12 @@ function ReturnsContent() {
                   <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                 </div>
               </th>
-              <th className="py-2 px-1.5 w-[130px] border-r border-b-2 border-slate-300 bg-slate-100 truncate">CUSTOMER</th>
-              <th className="py-2 px-1.5 w-[150px] border-r border-b-2 border-slate-300 bg-slate-100 truncate">RETURNED PRODUCT</th>
-              <th className="py-2 px-1 w-[90px] border-r border-b-2 border-slate-300 bg-slate-100 text-center">RETURN TYPE</th>
-              <th className="py-2 px-1 w-[45px] text-center border-r border-b-2 border-slate-300 bg-slate-100">QTY</th>
+              <th className="sticky top-0 z-20 py-2 px-1.5 w-[130px] border-r border-b-2 border-slate-300 bg-slate-100 truncate">CUSTOMER</th>
+              <th className="sticky top-0 z-20 py-2 px-1.5 w-[150px] border-r border-b-2 border-slate-300 bg-slate-100 truncate">RETURNED PRODUCT</th>
+              <th className="sticky top-0 z-20 py-2 px-1 w-[90px] border-r border-b-2 border-slate-300 bg-slate-100 text-center">RETURN TYPE</th>
+              <th className="sticky top-0 z-20 py-2 px-1 w-[45px] text-center border-r border-b-2 border-slate-300 bg-slate-100">QTY</th>
               <th 
-                className="py-2 px-1.5 w-[95px] text-right border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
+                className="sticky top-0 z-20 py-2 px-1.5 w-[95px] text-right border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
                 onClick={() => {
                   setSortField("expectedAmount");
                   setSortAsc(!sortAsc);
@@ -548,12 +549,12 @@ function ReturnsContent() {
                   <ArrowUpDown className="w-3 h-3 text-slate-400 shrink-0" />
                 </div>
               </th>
-              <th className="py-2 px-1.5 w-[115px] text-right border-r border-b-2 border-slate-300 bg-slate-100">REFUND / EXCH. AMT</th>
-              <th className="py-2 px-1 w-[145px] text-center border-r border-b-2 border-slate-300 bg-slate-100">EXTRA PAID / REFUND DIFF.</th>
-              <th className="py-2 px-1 w-[125px] text-center border-r border-b-2 border-slate-300 bg-slate-100">RETURN STATUS</th>
-              <th className="py-2 px-1 w-[120px] text-center border-r border-b-2 border-slate-300 bg-slate-100">REPLACEMENT STATUS</th>
-              <th className="py-2 px-1 w-[105px] text-center border-r border-b-2 border-slate-300 bg-slate-100">DISPATCH NO.</th>
-              <th className="py-2 px-1 w-[70px] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">ACTION</th>
+              <th className="sticky top-0 z-20 py-2 px-1.5 w-[115px] text-right border-r border-b-2 border-slate-300 bg-slate-100">REFUND / EXCH. AMT</th>
+              <th className="sticky top-0 z-20 py-2 px-1 w-[145px] text-center border-r border-b-2 border-slate-300 bg-slate-100">EXTRA PAID / REFUND DIFF.</th>
+              <th className="sticky top-0 z-20 py-2 px-1 w-[125px] text-center border-r border-b-2 border-slate-300 bg-slate-100">RETURN STATUS</th>
+              <th className="sticky top-0 z-20 py-2 px-1 w-[120px] text-center border-r border-b-2 border-slate-300 bg-slate-100">REPLACEMENT STATUS</th>
+              <th className="sticky top-0 z-20 py-2 px-1 w-[105px] text-center border-r border-b-2 border-slate-300 bg-slate-100">DISPATCH NO.</th>
+              <th className="sticky top-0 z-20 py-2 px-1 w-[70px] text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800">ACTION</th>
             </tr>
           </thead>
 
@@ -754,6 +755,7 @@ function ReturnsContent() {
             )}
           </tbody>
         </table>
+        </div>
 
         {/* Pagination Bar */}
         {filteredReturns.length > 0 && (
