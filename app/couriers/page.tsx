@@ -151,7 +151,15 @@ function InlineLlrInput({
 
 function CourierHubContent() {
   const searchParams = useSearchParams();
-  const initialStatusTab = searchParams.get("status") || "ALL";
+  const normalizeStatusTab = (val: string | null) => {
+    if (!val || val === "ALL") return "ALL";
+    const u = val.toUpperCase().replace(/-/g, "_");
+    if (u === "SHIPPED" || u === "DELIVERED") return "SHIPPED";
+    if (u === "MISSING_LLR") return "MISSING_LLR";
+    if (u === "PENDING" || u === "PENDING_STATUS" || u === "PICKED_UP") return "PICKED_UP";
+    return val;
+  };
+  const initialStatusTab = normalizeStatusTab(searchParams.get("status") || searchParams.get("tab"));
 
   const { 
     orders, 
@@ -188,6 +196,11 @@ function CourierHubContent() {
       setAdminPartnerFilter(p);
     } else if ((!adminPartnerFilter || adminPartnerFilter === "PROFESSIONAL") && activeCourierPartners.length > 0) {
       setAdminPartnerFilter(activeCourierPartners[0].code);
+    }
+
+    const rawTab = searchParams.get("status") || searchParams.get("tab");
+    if (rawTab) {
+      setStatusFilter(normalizeStatusTab(rawTab));
     }
   }, [searchParams, activeCourierPartners, adminPartnerFilter]);
 

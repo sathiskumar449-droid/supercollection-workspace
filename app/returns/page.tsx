@@ -123,6 +123,13 @@ function ReturnsContent() {
   const [replacementStatusFilter, setReplacementStatusFilter] = useState<string>("ALL");
   const [courierFilter, setCourierFilter] = useState<string>("ALL");
 
+  React.useEffect(() => {
+    const s = searchParams.get("status");
+    if (s) {
+      setActiveTab(s);
+    }
+  }, [searchParams]);
+
   // Sorting & Pagination
   const [sortField, setSortField] = useState<"createdAt" | "expectedAmount" | "returnId">("createdAt");
   const [sortAsc, setSortAsc] = useState(false);

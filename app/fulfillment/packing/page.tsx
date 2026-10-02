@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { 
   Box, 
   Package, 
@@ -173,7 +175,10 @@ function InlineDispatchInput({
   );
 }
 
-export default function PackingPage() {
+function PackingContent() {
+  const searchParams = useSearchParams();
+  const statusParam = searchParams?.get("status");
+
   const { 
     orders, 
     returns,
@@ -191,7 +196,13 @@ export default function PackingPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>(statusParam || "ALL");
+
+  React.useEffect(() => {
+    if (statusParam) {
+      setStatusFilter(statusParam);
+    }
+  }, [statusParam]);
 
   React.useEffect(() => {
     setPage(1);
@@ -1280,6 +1291,14 @@ export default function PackingPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PackingPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <PackingContent />
+    </Suspense>
   );
 }
 

@@ -62,13 +62,18 @@ function SmsMonitoringContent() {
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Sync courier filter with URL params
+  // Sync courier filter and status with URL params
   React.useEffect(() => {
     const p = searchParams.get("partner");
     if (isCourierUser && userCourierPartnerId && userCourierPartnerId !== "PROFESSIONAL") {
       setCourierFilter(userCourierPartnerId);
     } else if (p) {
       setCourierFilter(p);
+    }
+
+    const s = searchParams.get("status");
+    if (s) {
+      setStatusFilter(s);
     }
   }, [searchParams, isCourierUser, userCourierPartnerId]);
 
