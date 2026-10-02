@@ -308,7 +308,12 @@ export async function updateSupabaseOrderStatus(
     if (newStatus === "PACKING") updates.packing_started_at = updates.updated_at;
     if (newStatus === "PACKED") updates.packed_at = updates.updated_at;
     if (newStatus === "DISPATCHED") updates.dispatched_at = updates.updated_at;
-    if (newStatus === "COMPLETED") updates.completed_at = updates.updated_at;
+    if (newStatus === "COMPLETED") {
+      updates.completed_at = updates.updated_at;
+      if (!dispatchId) {
+        updates.dispatched_at = null;
+      }
+    }
 
     if (dispatchId !== undefined) {
       const { data: existingOrd } = await db.from("orders").select("notes").eq("id", orderId).maybeSingle();
@@ -318,6 +323,7 @@ export async function updateSupabaseOrderStatus(
         updates.notes = currentNotes ? `${currentNotes} | dispatch_id:${dispatchId}` : `dispatch_id:${dispatchId}`;
       } else {
         updates.notes = currentNotes || null;
+        updates.dispatched_at = null;
       }
     }
 

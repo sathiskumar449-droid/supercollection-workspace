@@ -160,23 +160,23 @@ export function Sidebar({
 
   return (
     <aside
-      className="relative flex flex-col w-[92px] sm:w-[100px] border-r border-slate-200 bg-white transition-all select-none z-40 shrink-0 shadow-subtle"
+      className="relative flex flex-col h-full w-[84px] sm:w-[90px] border-r border-slate-200 bg-white transition-all select-none z-40 shrink-0 shadow-subtle overflow-hidden"
     >
       {/* Brand Header */}
-      <div className="py-3.5 px-2 flex flex-col items-center justify-center border-b border-slate-100 bg-white text-center">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white flex items-center justify-center font-black text-sm shadow-sm ring-2 ring-orange-100 mb-1">
+      <div className="py-2.5 px-1.5 flex flex-col items-center justify-center border-b border-slate-100 bg-white text-center shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 text-white flex items-center justify-center font-black text-xs shadow-xs ring-2 ring-orange-100 mb-0.5">
           SC
         </div>
-        <span className="font-bold text-slate-900 text-[11px] tracking-tight leading-none block">
+        <span className="font-bold text-slate-900 text-[10px] tracking-tight leading-none block">
           SuperCollection
         </span>
-        <span className="text-[9px] font-bold text-orange-600 tracking-wider uppercase block mt-0.5">
+        <span className="text-[8px] font-bold text-orange-600 tracking-wider uppercase block mt-0.5">
           Work Desk
         </span>
       </div>
 
-      {/* Navigation Links: Stacked Icon on Top, Name Below */}
-      <div className="flex-1 overflow-y-auto py-3 px-2 space-y-2">
+      {/* Navigation Links: Stacked Icon on Top, Name Below - Fixed, Non-scrolling */}
+      <div className="flex-1 overflow-hidden py-1.5 px-1.5 space-y-1 flex flex-col justify-start">
         {navItems.map((item) => {
           if (!canAccess(item.id)) return null;
           const active = isActive(item.href, item.exact);
@@ -186,7 +186,7 @@ export function Sidebar({
               key={item.id}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center text-center py-2.5 px-1 rounded-xl transition-all relative group",
+                "flex flex-col items-center justify-center text-center py-1.5 px-1 rounded-lg transition-all relative group",
                 active
                   ? "bg-orange-500 text-white font-semibold shadow-xs ring-1 ring-orange-400"
                   : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
@@ -196,7 +196,7 @@ export function Sidebar({
               <div className="relative">
                 <item.icon
                   className={cn(
-                    "w-5 h-5 transition-transform duration-150 group-hover:scale-110",
+                    "w-4 h-4 transition-transform duration-150 group-hover:scale-110",
                     active ? "text-white" : "text-slate-500 group-hover:text-orange-600"
                   )}
                 />
@@ -204,7 +204,7 @@ export function Sidebar({
                   <span
                     suppressHydrationWarning
                     className={cn(
-                      "absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center leading-none shadow-xs",
+                      "absolute -top-1 -right-2 min-w-[15px] h-3.5 px-1 rounded-full text-[8.5px] font-bold flex items-center justify-center leading-none shadow-xs",
                       active
                         ? "bg-white text-orange-600 ring-1 ring-orange-200"
                         : item.badgeType === "danger"
@@ -218,7 +218,7 @@ export function Sidebar({
               </div>
               <span
                 className={cn(
-                  "text-[10px] font-medium mt-1 leading-tight tracking-tight text-center w-full block truncate",
+                  "text-[9.5px] font-medium mt-0.5 leading-tight tracking-tight text-center w-full block truncate",
                   active ? "text-white font-semibold" : "text-slate-600 group-hover:text-orange-700"
                 )}
               >
@@ -230,25 +230,25 @@ export function Sidebar({
       </div>
 
       {/* Footer User Avatar */}
-      <div className="p-2 border-t border-slate-100 bg-slate-50/70 flex flex-col items-center text-center">
-        <div className="relative mb-1">
-          <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-800 font-bold text-xs flex items-center justify-center border border-orange-200 shadow-xs">
+      <div className="p-1.5 border-t border-slate-100 bg-slate-50/70 flex flex-col items-center text-center shrink-0">
+        <div className="relative mb-0.5">
+          <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-800 font-bold text-[10px] flex items-center justify-center border border-orange-200 shadow-xs">
             {user.role === "ADMIN" ? "AD" : user.role === "COURIER" ? (user.courierPartnerId === "ST_COURIER" ? "ST" : user.courierPartnerId === "DTDC" ? "DT" : user.courierPartnerId === "INDIA_POST" ? "IP" : "CR") : (user.name ? user.name.split(" ").map((n) => n[0]).join("").slice(0, 2) : "ST")}
           </div>
           {user.online && (
             <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-white" />
           )}
         </div>
-        <span className="text-[8px] font-bold text-orange-700 px-1 py-0.5 bg-orange-50 rounded border border-orange-200/60 inline-block uppercase tracking-wide">
+        <span className="text-[7.5px] font-bold text-orange-700 px-1 py-0.5 bg-orange-50 rounded border border-orange-200/60 inline-block uppercase tracking-wide">
           {user.role === "ADMIN" ? "Admin" : user.role === "COURIER" ? (user.courierPartnerId === "ST_COURIER" ? "ST Courier" : user.courierPartnerId === "DTDC" ? "DTDC" : user.courierPartnerId === "INDIA_POST" ? "India Post" : "Courier") : "Staff"}
         </span>
         {onLogout && (
           <button
             onClick={onLogout}
             title="Sign Out / Exit"
-            className="mt-2 w-full flex items-center justify-center gap-1 py-1 px-1 rounded-lg text-[10px] font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200/80 hover:border-rose-200 transition-colors cursor-pointer"
+            className="mt-1 w-full flex items-center justify-center gap-1 py-0.5 px-1 rounded text-[9px] font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200/80 hover:border-rose-200 transition-colors cursor-pointer"
           >
-            <LogOut className="w-3 h-3 text-slate-400 group-hover:text-rose-600" />
+            <LogOut className="w-2.5 h-2.5 text-slate-400 group-hover:text-rose-600" />
             <span>Exit</span>
           </button>
         )}

@@ -134,6 +134,14 @@ function InlineDispatchInput({
     setTimeout(() => setSavedSuccess(false), 2000);
   };
 
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setVal("");
+    onSave(orderId, orderNumber, "");
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 2000);
+  };
+
   return (
     <div 
       className="relative flex items-center w-full"
@@ -151,25 +159,37 @@ function InlineDispatchInput({
         onBlur={commitSave}
         placeholder={sampleDispatchNo}
         className={cn(
-          "w-full text-[10px] font-mono py-1 pl-1.5 pr-6 rounded border transition-all outline-none",
+          "w-full text-[10px] font-mono py-1 pl-1.5 pr-11 rounded border transition-all outline-none",
           savedSuccess
             ? "bg-emerald-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-300 font-semibold"
             : "bg-white text-slate-800 border-slate-200 hover:border-slate-300 focus:bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20",
           !val && "placeholder:text-slate-300 text-slate-500"
         )}
-        title={val ? `Dispatch No: ${val} (Press Enter or click away to save)` : "Enter Dispatch / LLR Number manually or click sparkle to auto-generate"}
+        title={val ? `Dispatch No: ${val} (Press Enter or click away to save, or click ✕ to remove)` : "Enter Dispatch / LLR Number manually or click sparkle to auto-generate"}
       />
       {savedSuccess ? (
         <Check className="w-3 h-3 text-emerald-600 absolute right-1.5 pointer-events-none" />
       ) : (
-        <button
-          type="button"
-          onClick={handleQuickGenerate}
-          title={`Generate Dispatch No (${formatDispatchNumber(orderNumber)})`}
-          className="absolute right-1 text-slate-400 hover:text-emerald-600 p-0.5 rounded hover:bg-slate-100 transition-colors cursor-pointer"
-        >
-          <Sparkles className="w-3 h-3" />
-        </button>
+        <div className="absolute right-1 flex items-center gap-0.5">
+          {val ? (
+            <button
+              type="button"
+              onClick={handleClear}
+              title="Remove dispatch number & revert to Completed"
+              className="text-slate-400 hover:text-rose-600 p-0.5 rounded hover:bg-rose-50 transition-colors cursor-pointer"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={handleQuickGenerate}
+            title={`Generate Dispatch No (${formatDispatchNumber(orderNumber)})`}
+            className="text-slate-400 hover:text-emerald-600 p-0.5 rounded hover:bg-slate-100 transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-3 h-3" />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -308,7 +328,16 @@ function PackingContent() {
       return;
     }
     const targetLabel = STATUS_OPTIONS.find((s) => s.key === newStatus)?.label || newStatus;
-    updateOrderStatus(order.id, newStatus, `Status updated to ${targetLabel} from Packing Station Table`);
+    if (newStatus === "COMPLETED") {
+      updateOrderStatus(
+        order.id, 
+        newStatus, 
+        `Status updated to Completed from Packing Station Table`,
+        { dispatchId: "" }
+      );
+    } else {
+      updateOrderStatus(order.id, newStatus, `Status updated to ${targetLabel} from Packing Station Table`);
+    }
     triggerToast(`Order ${order.orderNumber} status updated to ${targetLabel}`);
   };
 
@@ -325,16 +354,14 @@ function PackingContent() {
       );
       triggerToast(`Order ${orderNumber} dispatch no set to ${trimmed} & status changed to Dispatched!`);
     } else {
-      // Revert status to WooCommerce status (COMPLETED if previously completed, or CONFIRMED if processing)
-      const order = orders.find((o) => o.id === orderId);
-      const fallbackStatus: OrderStatus = order?.packedAt ? "PACKED" : (order?.completedAt ? "COMPLETED" : "CONFIRMED");
+      // Revert status to COMPLETED and clear all dispatch information
       updateOrderStatus(
         orderId, 
-        fallbackStatus, 
-        `Dispatch number cleared, reverted to ${fallbackStatus}`,
-        { dispatchId: undefined }
+        "COMPLETED", 
+        `Dispatch number removed, reverted to Completed`,
+        { dispatchId: "" }
       );
-      triggerToast(`Order ${orderNumber} dispatch no cleared`);
+      triggerToast(`Order ${orderNumber} dispatch no removed & reverted to Completed`);
     }
   };
 
@@ -349,6 +376,7 @@ function PackingContent() {
     { value: "PACKING", label: "Packaging" },
     { value: "PACKED", label: "Packed" },
     { value: "DISPATCHED", label: "Dispatched" },
+    { value: "COMPLETED", label: "Completed" },
   ];
 
   // Helper to determine if an order is in Return state
@@ -473,7 +501,11 @@ function PackingContent() {
     const targetLabel = STATUS_OPTIONS.find((s) => s.key === targetStatus)?.label || targetStatus;
 
     validOrders.forEach((order) => {
-      updateOrderStatus(order.id, targetStatus, `Bulk status updated to ${targetLabel}`);
+      if (targetStatus === "COMPLETED") {
+        updateOrderStatus(order.id, "COMPLETED", `Bulk status updated to Completed`, { dispatchId: "" });
+      } else {
+        updateOrderStatus(order.id, targetStatus, `Bulk status updated to ${targetLabel}`);
+      }
     });
 
     setIsBulkUpdating(false);

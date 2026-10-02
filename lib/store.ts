@@ -769,13 +769,22 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
     const localDisp = local.dispatch || {};
     const remoteDisp = remote.dispatch || {};
 
-    // Preserve local manual dispatchId and llrNumber if remote hasn't updated yet
-    let finalDispatchId = remoteDisp.dispatchId || localDisp.dispatchId;
+    const localIsNewer = Boolean(
+      local.updatedAt && remote.updatedAt && new Date(local.updatedAt).getTime() >= new Date(remote.updatedAt).getTime()
+    );
+
+    // Preserve local manual dispatchId and llrNumber if remote hasn't updated yet or local is newer
+    let finalDispatchId: string | undefined;
+    if (localIsNewer) {
+      finalDispatchId = localDisp.dispatchId;
+    } else {
+      finalDispatchId = remoteDisp.dispatchId || localDisp.dispatchId;
+    }
     if (finalDispatchId && /^DTP\s*$/i.test(finalDispatchId.trim())) {
       const cleanCount = local.orderNumber.replace(/^(SC-WC-|WA-|OF-|ORD-|\s|-)+/i, "") || "1";
       finalDispatchId = formatDispatchNumber(cleanCount, local.createdAt || remote.createdAt);
     }
-    let finalLlr = remoteDisp.llrNumber || localDisp.llrNumber;
+    let finalLlr = localIsNewer ? localDisp.llrNumber : (remoteDisp.llrNumber || localDisp.llrNumber);
     if (finalLlr && (finalLlr === finalDispatchId || finalLlr.toLowerCase().startsWith("dsp"))) {
       finalLlr = undefined;
     }
@@ -816,6 +825,10 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
 
     const isDispatched = local.orderStatus === "DISPATCHED" || remote.orderStatus === "DISPATCHED" || finalCourierStatus === "SHIPPED" || finalCourierStatus === "PICKED_UP";
 
+    const finalOrderStatus = localIsNewer
+      ? local.orderStatus
+      : (isDispatched && remote.orderStatus !== "COMPLETED" ? "DISPATCHED" : remote.orderStatus);
+
     const localSms = local.sms || {};
     const remoteSms = remote.sms || {};
     let finalSmsStatus: SmsStatus = "PENDING";
@@ -829,14 +842,16 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
 
     return {
       ...remote,
-      orderStatus: isDispatched && remote.orderStatus !== "COMPLETED" ? "DISPATCHED" : remote.orderStatus,
-      dispatchedAt: remote.dispatchedAt || local.dispatchedAt,
+      orderStatus: finalOrderStatus,
+      dispatchedAt: finalOrderStatus === "COMPLETED" && !finalDispatchId ? undefined : (remote.dispatchedAt || local.dispatchedAt),
       pickedUpAt: finalPickedUpAt,
       shippedAt: finalShippedAt,
       dispatch: {
         ...remoteDisp,
         ...localDisp,
         dispatchId: finalDispatchId,
+        dispatchedAt: finalOrderStatus === "COMPLETED" && !finalDispatchId ? undefined : (remoteDisp.dispatchedAt || localDisp.dispatchedAt),
+        dispatchedBy: finalOrderStatus === "COMPLETED" && !finalDispatchId ? undefined : (remoteDisp.dispatchedBy || localDisp.dispatchedBy),
         llrNumber: finalLlr,
         courierStatus: finalCourierStatus,
         courierPartnerId: finalCourierPartnerId,
@@ -1276,6 +1291,30 @@ export const orderflowStore = {
     const isDispatched = newStatus === "DISPATCHED";
     const wasAlreadyPickedUp = Boolean(order.dispatch?.verifiedCustomerPhone || order.dispatch?.llrNumber);
 
+    const isClearingDispatch =
+      dispatchDetails?.dispatchId === "" ||
+      dispatchDetails?.dispatchId === null ||
+      (newStatus === "COMPLETED" && !isDispatched && !dispatchDetails?.dispatchId);
+
+    // If order had a dispatch ID and it is now being cleared, add an explicit audit log entry
+    if (order.dispatch?.dispatchId && isClearingDispatch) {
+      newEntries.push({
+        id: `tl-${Date.now()}-disp-cleared`,
+        orderId: order.id,
+        timestamp: now,
+        user: globalUser.name,
+        role: globalUser.role,
+        action: "Dispatch Number Removed",
+        details: reason || `Dispatch number ${order.dispatch.dispatchId} removed, reverted to Completed`,
+        oldDispatchNo: order.dispatch.dispatchId,
+        newDispatchNo: undefined,
+        oldValue: oldStatus,
+        newValue: newStatus,
+      });
+    }
+
+    const updatedTimeline: ActivityLog[] = [...order.timeline, ...newEntries];
+
     const updatedOrder: Order = {
       ...order,
       orderStatus: newStatus,
@@ -1284,29 +1323,31 @@ export const orderflowStore = {
       confirmedAt: newStatus === "CONFIRMED" && !order.confirmedAt ? now : order.confirmedAt,
       packingStartedAt: newStatus === "PACKING" && !order.packingStartedAt ? now : order.packingStartedAt,
       packedAt: (newStatus === "PACKED" || isDispatched) && !order.packedAt ? now : order.packedAt,
-      dispatchedAt: isDispatched && !order.dispatchedAt ? now : order.dispatchedAt,
-      completedAt: newStatus === "COMPLETED" && !order.completedAt ? now : order.completedAt,
-      pickedUpAt: wasAlreadyPickedUp ? order.pickedUpAt : undefined,
-      shippedAt: order.dispatch?.llrNumber ? order.shippedAt : undefined,
+      dispatchedAt: isClearingDispatch ? undefined : (isDispatched && !order.dispatchedAt ? now : (isDispatched ? order.dispatchedAt : undefined)),
+      completedAt: newStatus === "COMPLETED" ? (order.completedAt || now) : order.completedAt,
+      pickedUpAt: isClearingDispatch ? undefined : (wasAlreadyPickedUp ? order.pickedUpAt : undefined),
+      shippedAt: isClearingDispatch ? undefined : (order.dispatch?.llrNumber ? order.shippedAt : undefined),
       packingStaff: (newStatus === "PACKING" || newStatus === "PACKED") ? globalUser.name : (order.packingStaff || (isDispatched ? globalUser.name : undefined)),
-      dispatchedBy: isDispatched ? globalUser.name : (order.dispatchedBy || (dispatchDetails?.dispatchId ? globalUser.name : undefined)),
+      dispatchedBy: isClearingDispatch ? undefined : (isDispatched ? globalUser.name : (order.dispatchedBy || (dispatchDetails?.dispatchId ? globalUser.name : undefined))),
       dispatch: {
         ...order.dispatch,
-        dispatchId: dispatchDetails?.dispatchId !== undefined ? dispatchDetails.dispatchId : (order.dispatch.dispatchId || undefined),
-        dispatchedBy: isDispatched ? globalUser.name : (order.dispatch.dispatchedBy || (dispatchDetails?.dispatchId ? globalUser.name : undefined)),
-        llrNumber: dispatchDetails?.llrNumber !== undefined
-          ? dispatchDetails.llrNumber
-          : (order.dispatch.llrNumber && order.dispatch.llrNumber !== (dispatchDetails?.dispatchId || order.dispatch.dispatchId) && !order.dispatch.llrNumber.toLowerCase().startsWith("dsp")
-              ? order.dispatch.llrNumber
-              : undefined),
-        dispatchedAt: isDispatched && !order.dispatch.dispatchedAt ? now : order.dispatch.dispatchedAt,
+        dispatchId: isClearingDispatch ? undefined : (dispatchDetails?.dispatchId !== undefined ? dispatchDetails.dispatchId : (order.dispatch.dispatchId || undefined)),
+        dispatchedBy: isClearingDispatch ? undefined : (isDispatched ? globalUser.name : (order.dispatch.dispatchedBy || (dispatchDetails?.dispatchId ? globalUser.name : undefined))),
+        llrNumber: isClearingDispatch
+          ? undefined
+          : (dispatchDetails?.llrNumber !== undefined
+              ? dispatchDetails.llrNumber
+              : (order.dispatch.llrNumber && order.dispatch.llrNumber !== (dispatchDetails?.dispatchId || order.dispatch.dispatchId) && !order.dispatch.llrNumber.toLowerCase().startsWith("dsp")
+                  ? order.dispatch.llrNumber
+                  : undefined)),
+        dispatchedAt: isClearingDispatch ? undefined : (isDispatched && !order.dispatch.dispatchedAt ? now : order.dispatch.dispatchedAt),
         // When becoming Dispatched from Packing, DO NOT assign courier, DO NOT set picked up, DO NOT set shipped
-        courierId: wasAlreadyPickedUp ? order.dispatch.courierId : undefined,
-        courierName: wasAlreadyPickedUp ? order.dispatch.courierName : undefined,
-        courierPartnerId: wasAlreadyPickedUp ? order.dispatch.courierPartnerId : undefined,
-        courierStatus: wasAlreadyPickedUp ? order.dispatch.courierStatus : "PENDING",
-        pickedUpAt: wasAlreadyPickedUp ? order.dispatch.pickedUpAt : undefined,
-        shippedAt: order.dispatch?.llrNumber ? order.dispatch.shippedAt : undefined,
+        courierId: isClearingDispatch ? undefined : (wasAlreadyPickedUp ? order.dispatch.courierId : undefined),
+        courierName: isClearingDispatch ? undefined : (wasAlreadyPickedUp ? order.dispatch.courierName : undefined),
+        courierPartnerId: isClearingDispatch ? undefined : (wasAlreadyPickedUp ? order.dispatch.courierPartnerId : undefined),
+        courierStatus: isClearingDispatch ? "PENDING" : (wasAlreadyPickedUp ? order.dispatch.courierStatus : "PENDING"),
+        pickedUpAt: isClearingDispatch ? undefined : (wasAlreadyPickedUp ? order.dispatch.pickedUpAt : undefined),
+        shippedAt: isClearingDispatch ? undefined : (order.dispatch?.llrNumber ? order.dispatch.shippedAt : undefined),
       },
       sms: {
         ...order.sms,
@@ -1318,10 +1359,13 @@ export const orderflowStore = {
     persistOrders(newOrders);
 
     if (isSupabaseConfigured()) {
+      const dispatchIdToPass = isClearingDispatch ? "" : (updatedOrder.dispatch.dispatchId || "");
       if (newEntries.length > 0) {
         newEntries.forEach((entry) => {
-          updateSupabaseOrderStatus(orderId, newStatus, entry, updatedOrder.dispatch.dispatchId);
+          updateSupabaseOrderStatus(orderId, newStatus, entry, dispatchIdToPass);
         });
+      } else {
+        updateSupabaseOrderStatus(orderId, newStatus, undefined, dispatchIdToPass);
       }
       // DO NOT create or update dispatches (Courier Hub) records on Packing dispatch
     }
