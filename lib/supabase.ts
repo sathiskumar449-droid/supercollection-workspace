@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { formatDispatchNumber } from "@/lib/utils";
 import { Order, OrderStatus, CourierStatus, SmsStatus, Customer, OrderItem, DispatchInfo, SmsInfo, ActivityLog, OrderSource } from "@/types/orderflow";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -102,8 +103,12 @@ export async function fetchSupabaseOrders(): Promise<Order[] | null> {
       const pickedUpAtMatch = notesStr.match(/picked_up_at:([^\s;|]+)/);
       const parsedPickedUpAt = pickedUpAtMatch ? pickedUpAtMatch[1].trim() : undefined;
 
-      const notesMatch = raw.notes ? String(raw.notes).match(/dispatch_id:([^\s;|]+)/) : null;
-      const parsedDispatchId = rawDispatch?.dispatch_id || rawDispatch?.dispatchId || (notesMatch ? notesMatch[1] : undefined);
+      const notesMatch = raw.notes ? String(raw.notes).match(/dispatch_id:\s*([^;|]+)/) : null;
+      let parsedDispatchId = rawDispatch?.dispatch_id || rawDispatch?.dispatchId || (notesMatch ? notesMatch[1].trim() : undefined);
+      if (parsedDispatchId && /^DTP\s*$/i.test(parsedDispatchId.trim())) {
+        const cleanCount = String(raw.order_number || raw.orderNumber || "1").replace(/^(SC-WC-|WA-|OF-|ORD-|\s|-)+/i, "") || "1";
+        parsedDispatchId = formatDispatchNumber(cleanCount, raw.created_at || raw.createdAt);
+      }
 
       const rawLlr = String(rawDispatch?.llr_number || rawDispatch?.llrNumber || "").trim();
       const hasValidLlr = Boolean(
@@ -308,7 +313,7 @@ export async function updateSupabaseOrderStatus(
     if (dispatchId !== undefined) {
       const { data: existingOrd } = await db.from("orders").select("notes").eq("id", orderId).maybeSingle();
       let currentNotes = existingOrd?.notes || "";
-      currentNotes = currentNotes.replace(/(\s*\|\s*)?dispatch_id:[^\s;|]+/g, "").trim();
+      currentNotes = currentNotes.replace(/(\s*\|\s*)?dispatch_id:\s*[^;|]+/g, "").trim();
       if (dispatchId) {
         updates.notes = currentNotes ? `${currentNotes} | dispatch_id:${dispatchId}` : `dispatch_id:${dispatchId}`;
       } else {
@@ -465,7 +470,7 @@ export async function updateSupabaseCourierDetails(
     if (details.dispatchId && details.dispatchId.trim()) {
       const { data: ord } = await db.from("orders").select("notes").eq("id", orderId).maybeSingle();
       let ordNotes = ord?.notes || "";
-      ordNotes = ordNotes.replace(/(\s*\|\s*)?dispatch_id:[^\s;|]+/g, "").trim();
+      ordNotes = ordNotes.replace(/(\s*\|\s*)?dispatch_id:\s*[^;|]+/g, "").trim();
       orderUpdates.notes = ordNotes ? `${ordNotes} | dispatch_id:${details.dispatchId.trim()}` : `dispatch_id:${details.dispatchId.trim()}`;
     }
 

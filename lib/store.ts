@@ -29,7 +29,7 @@ import {
   ReplacementStatus
 } from "@/types/orderflow";
 import { generateMockOrders, generateMockReturns, CURRENT_USER, INITIAL_COURIERS, STAFF_USERS } from "./mock-data";
-import { matchesDateFilter, normalizePhoneDigits } from "./utils";
+import { matchesDateFilter, normalizePhoneDigits, formatDispatchNumber } from "./utils";
 import { 
   isSupabaseConfigured, 
   fetchSupabaseOrders, 
@@ -506,6 +506,10 @@ export function sanitizeOrders(orders: Order[]): Order[] {
       if (dispatchId === "Pending ID" || dispatchId === "pending") {
         dispatchId = undefined;
       }
+      if (dispatchId && /^DTP\s*$/i.test(dispatchId.trim())) {
+        const cleanCount = ord.orderNumber.replace(/^(SC-WC-|WA-|OF-|ORD-|\s|-)+/i, "") || "1";
+        dispatchId = formatDispatchNumber(cleanCount, ord.createdAt);
+      }
 
       let llrNumber = ord.dispatch?.llrNumber;
       if (!hasValidLlrNumber(llrNumber, dispatchId)) {
@@ -738,7 +742,11 @@ function mergeRemoteWithLocalOrders(remoteOrders: Order[], localOrders: Order[])
     const remoteDisp = remote.dispatch || {};
 
     // Preserve local manual dispatchId and llrNumber if remote hasn't updated yet
-    const finalDispatchId = remoteDisp.dispatchId || localDisp.dispatchId;
+    let finalDispatchId = remoteDisp.dispatchId || localDisp.dispatchId;
+    if (finalDispatchId && /^DTP\s*$/i.test(finalDispatchId.trim())) {
+      const cleanCount = local.orderNumber.replace(/^(SC-WC-|WA-|OF-|ORD-|\s|-)+/i, "") || "1";
+      finalDispatchId = formatDispatchNumber(cleanCount, local.createdAt || remote.createdAt);
+    }
     let finalLlr = remoteDisp.llrNumber || localDisp.llrNumber;
     if (finalLlr && (finalLlr === finalDispatchId || finalLlr.toLowerCase().startsWith("dsp"))) {
       finalLlr = undefined;

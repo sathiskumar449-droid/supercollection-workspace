@@ -64,15 +64,28 @@ function InlineDispatchInput({
   initialValue?: string;
   onSave: (orderId: string, orderNumber: string, val: string) => void;
 }) {
-  const [val, setVal] = useState(initialValue || "");
+  const count = orderIndex !== undefined ? orderIndex : orderNumber;
+  const sampleDispatchNo = formatDispatchNumber(count, orderDate || new Date());
+
+  const [val, setVal] = useState(() => {
+    const init = initialValue || "";
+    if (/^DTP\s*$/i.test(init.trim())) {
+      return formatDispatchNumber(count, orderDate || new Date());
+    }
+    return init;
+  });
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   React.useEffect(() => {
-    setVal(initialValue || "");
-  }, [initialValue]);
-
-  const count = orderIndex !== undefined ? orderIndex : orderNumber;
-  const sampleDispatchNo = formatDispatchNumber(count, orderDate || new Date());
+    let init = initialValue || "";
+    if (/^DTP\s*$/i.test(init.trim())) {
+      const repaired = formatDispatchNumber(count, orderDate || new Date());
+      setVal(repaired);
+      onSave(orderId, orderNumber, repaired);
+      return;
+    }
+    setVal(init);
+  }, [initialValue, count, orderDate, orderId, orderNumber, onSave]);
 
   const commitSave = () => {
     let trimmed = val.trim();
@@ -83,8 +96,11 @@ function InlineDispatchInput({
       return;
     }
 
-    // If staff enters pure count e.g. "55", or "DTP 55", auto-format to "DTP 55-0210"
-    if (/^\d+$/.test(trimmed)) {
+    // If staff enters just "DTP", or pure count e.g. "55", or "DTP 55", auto-format to "DTP 55-0210"
+    if (/^DTP\s*$/i.test(trimmed)) {
+      trimmed = formatDispatchNumber(count, orderDate || new Date());
+      setVal(trimmed);
+    } else if (/^\d+$/.test(trimmed)) {
       trimmed = formatDispatchNumber(trimmed, orderDate || new Date());
       setVal(trimmed);
     } else if (/^DTP\s*[-]?\s*(\d+)$/i.test(trimmed)) {
@@ -93,6 +109,9 @@ function InlineDispatchInput({
         trimmed = formatDispatchNumber(match[1], orderDate || new Date());
         setVal(trimmed);
       }
+    } else if (!/^DTP/i.test(trimmed)) {
+      trimmed = formatDispatchNumber(trimmed, orderDate || new Date());
+      setVal(trimmed);
     }
 
     if (trimmed !== (initialValue || "")) {
