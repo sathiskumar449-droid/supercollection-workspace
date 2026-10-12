@@ -574,14 +574,6 @@ function OrdersContent() {
 
   return (
     <div className="space-y-3.5 max-w-full mx-auto">
-      {/* Toast Feedback */}
-      {toastMessage && (
-        <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       {/* Select All Across Pages Banner */}
       {selectedIds.length > 0 && isAllPageSelected && filteredOrders.length > paginatedOrders.length && selectedIds.length < filteredOrders.length && (
         <div className="bg-slate-100 border border-slate-200 px-3.5 py-1.5 rounded-lg text-xs text-slate-700 flex items-center justify-between">
