@@ -5,25 +5,32 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+const inrFormatter = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+
+const istDateTimeFormatter = new Intl.DateTimeFormat("en-IN", {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: "Asia/Kolkata",
+});
+
 export function formatINR(amount: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(amount);
+  return inrFormatter.format(amount);
 }
 
 export function formatDate(dateString: string): string {
   if (!dateString) return "-";
   const date = new Date(dateString);
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Kolkata",
-  }).format(date);
+  if (isNaN(date.getTime())) return "-";
+  return istDateTimeFormatter.format(date);
 }
 
 export function formatTimeAgo(dateString: string): string {
@@ -42,13 +49,9 @@ export function formatTimeAgo(dateString: string): string {
 }
 
 export function getISTDateString(dateInput: Date | string | number): string {
-  try {
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) return "";
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(d);
-  } catch {
-    return "";
-  }
+  const ms = typeof dateInput === "number" ? dateInput : new Date(dateInput).getTime();
+  if (isNaN(ms)) return "";
+  return new Date(ms + IST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
 export function matchesDateFilter(
