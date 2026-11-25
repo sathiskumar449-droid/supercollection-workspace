@@ -88,8 +88,8 @@ function OrdersContent() {
   
   // Sort state
   const [sortField, setSortField] = useState<
-    "createdAt" | "totalAmount" | "orderNumber" | "customerName" | "itemsCount" | "orderStatus" | "courierName" | "courierStatus" | "smsStatus"
-  >("createdAt");
+    "updatedAt" | "createdAt" | "totalAmount" | "orderNumber" | "customerName" | "itemsCount" | "orderStatus" | "courierName" | "courierStatus" | "smsStatus"
+  >("updatedAt");
   const [sortAsc, setSortAsc] = useState(false);
 
   const handleSort = (field: any, asc: boolean) => {
@@ -311,7 +311,11 @@ function OrdersContent() {
       return true;
     }).sort((a, b) => {
       let comparison = 0;
-      if (sortField === "createdAt") {
+      if (sortField === "updatedAt") {
+        const aTime = new Date(a.updatedAt || a.createdAt).getTime();
+        const bTime = new Date(b.updatedAt || b.createdAt).getTime();
+        comparison = aTime - bTime || (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      } else if (sortField === "createdAt") {
         comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       } else if (sortField === "totalAmount") {
         comparison = a.totalAmount - b.totalAmount;
