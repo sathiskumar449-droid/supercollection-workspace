@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, Suspense } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { 
@@ -218,6 +219,13 @@ function PackingContent() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [statusFilter, setStatusFilter] = useState<string>(statusParam || "ALL");
+  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(() =>
+    typeof document !== "undefined" ? document.getElementById("topbar-page-actions") : null
+  );
+
+  useEffect(() => {
+    setTopbarSlot(document.getElementById("topbar-page-actions"));
+  }, []);
 
   React.useEffect(() => {
     if (statusParam) {
@@ -637,86 +645,47 @@ function PackingContent() {
 
   return (
     <div className="space-y-3.5 max-w-full mx-auto">
-      {/* KPI Status Filter Buttons Row (with matching border colors) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        <button
-          onClick={() => setStatusFilter("ALL")}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            statusFilter === "ALL"
-              ? "border-orange-600 ring-2 ring-orange-500/20 bg-orange-50/10" 
-              : "border-slate-300 hover:border-orange-400"
-          )}
-        >
-          <span className="text-[11px] text-slate-500 block font-medium">All Packing Orders</span>
-          <span className="text-base font-bold text-slate-900 font-mono mt-0.5 block">{packingEligibleOrders.length}</span>
-        </button>
+      {/* KPI Status Filter Pills (Portaled into TopBar) */}
+      {(() => {
+        const statusTabsBar = (
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+            {[
+              { key: "ALL", label: "All", count: packingEligibleOrders.length, activeCls: "border-orange-500 bg-orange-600 text-white", badgeCls: "bg-white/20 text-white", idleBadgeCls: "bg-slate-100 text-slate-700" },
+              { key: "CONFIRMED", label: "Processing", count: processingCount, activeCls: "border-sky-600 bg-sky-600 text-white", badgeCls: "bg-white/20 text-white", idleBadgeCls: "bg-sky-50 text-sky-700" },
+              { key: "PACKING", label: "Packaging", count: packagingCount, activeCls: "border-orange-500 bg-orange-500 text-white", badgeCls: "bg-white/20 text-white", idleBadgeCls: "bg-orange-50 text-orange-700" },
+              { key: "PACKED", label: "Packed", count: packedCount, activeCls: "border-purple-600 bg-purple-600 text-white", badgeCls: "bg-white/20 text-white", idleBadgeCls: "bg-purple-50 text-purple-700" },
+              { key: "DISPATCHED", label: "Dispatched", count: dispatchedCount, activeCls: "border-emerald-600 bg-emerald-600 text-white", badgeCls: "bg-white/20 text-white", idleBadgeCls: "bg-emerald-50 text-emerald-700" },
+              { key: "COMPLETED", label: "Completed", count: completedCount, activeCls: "border-blue-600 bg-blue-600 text-white", badgeCls: "bg-white/20 text-white", idleBadgeCls: "bg-blue-50 text-blue-700" },
+            ].map((item) => {
+              const isSelected = statusFilter === item.key;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => setStatusFilter(item.key)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0",
+                    isSelected
+                      ? `${item.activeCls} shadow-xs`
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  )}
+                >
+                  <span>{item.label}</span>
+                  <span
+                    className={cn(
+                      "px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold",
+                      isSelected ? item.badgeCls : item.idleBadgeCls
+                    )}
+                  >
+                    {item.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        );
 
-        <button
-          onClick={() => setStatusFilter("CONFIRMED")}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            statusFilter === "CONFIRMED"
-              ? "border-sky-600 ring-2 ring-sky-500/20 bg-sky-50/10" 
-              : "border-sky-300 hover:border-sky-400"
-          )}
-        >
-          <span className="text-[11px] text-sky-700 font-medium block">Processing</span>
-          <span className="text-base font-bold text-sky-700 font-mono mt-0.5 block">{processingCount}</span>
-        </button>
-
-        <button
-          onClick={() => setStatusFilter("PACKING")}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            statusFilter === "PACKING"
-              ? "border-orange-600 ring-2 ring-orange-500/20 bg-orange-50/10" 
-              : "border-orange-300 hover:border-orange-400"
-          )}
-        >
-          <span className="text-[11px] text-orange-700 font-medium block">Packaging</span>
-          <span className="text-base font-bold text-orange-600 font-mono mt-0.5 block">{packagingCount}</span>
-        </button>
-
-        <button
-          onClick={() => setStatusFilter("PACKED")}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            statusFilter === "PACKED"
-              ? "border-purple-600 ring-2 ring-purple-500/20 bg-purple-50/10" 
-              : "border-purple-300 hover:border-purple-400"
-          )}
-        >
-          <span className="text-[11px] text-purple-700 font-medium block">Packed</span>
-          <span className="text-base font-bold text-purple-700 font-mono mt-0.5 block">{packedCount}</span>
-        </button>
-
-        <button
-          onClick={() => setStatusFilter("DISPATCHED")}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            statusFilter === "DISPATCHED"
-              ? "border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/10" 
-              : "border-emerald-300 hover:border-emerald-400"
-          )}
-        >
-          <span className="text-[11px] text-emerald-700 font-medium block">Dispatched</span>
-          <span className="text-base font-bold text-emerald-700 font-mono mt-0.5 block">{dispatchedCount}</span>
-        </button>
-
-        <button
-          onClick={() => setStatusFilter("COMPLETED")}
-          className={cn(
-            "p-2 rounded-lg border text-left transition-all bg-white shadow-xs cursor-pointer",
-            statusFilter === "COMPLETED"
-              ? "border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/10" 
-              : "border-blue-300 hover:border-blue-400"
-          )}
-        >
-          <span className="text-[11px] text-blue-800 font-medium block">Completed</span>
-          <span className="text-base font-bold text-blue-800 font-mono mt-0.5 block">{completedCount}</span>
-        </button>
-      </div>
+        return topbarSlot ? createPortal(statusTabsBar, topbarSlot) : null;
+      })()}
 
       {/* Filter, Search & Export Bar */}
       <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-subtle flex flex-col md:flex-row items-center justify-between gap-3">
