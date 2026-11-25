@@ -701,20 +701,6 @@ function PackingContent() {
         </div>
 
         <div className="flex items-center gap-2.5 text-xs flex-wrap justify-end w-full md:w-auto">
-          {/* Showing Count */}
-          <div className="flex items-center gap-1.5 text-slate-500 font-medium whitespace-nowrap">
-            <span>Showing <strong className="text-slate-800">{filteredOrders.length > 0 ? (page - 1) * pageSize + 1 : 0} - {Math.min(page * pageSize, filteredOrders.length)}</strong> of <strong className="text-slate-800">{filteredOrders.length}</strong> orders (Page {page} of {totalPages})</span>
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="text-xs text-red-600 hover:text-red-700 font-medium px-1 cursor-pointer"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-
           {/* Selected Badge with Clear (shown when items are selected) */}
           {selectedIds.length > 0 && (
             <div className="flex items-center gap-1.5 font-bold text-orange-900 bg-orange-100/90 px-2 py-1 rounded-lg border border-orange-200 animate-in fade-in">

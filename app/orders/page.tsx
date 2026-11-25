@@ -663,29 +663,29 @@ function OrdersContent() {
 
               {/* Bulk Selection Actions (Admin Only) */}
               {isAdmin && (
-                <div className="flex items-center gap-1.5 shrink-0 bg-orange-50/95 border border-orange-200 px-2 py-1 rounded-lg">
+                <div className="flex items-center gap-1.5 shrink-0">
                   {selectedIds.length > 0 && (
                     <>
-                      <div className="flex items-center gap-1 font-bold text-orange-900 text-xs animate-in fade-in">
-                        <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
+                      <div className="flex items-center gap-1 font-bold text-slate-800 text-xs animate-in fade-in">
+                        <CheckSquare className="w-3.5 h-3.5 text-orange-600" />
                         <span>{selectedIds.length}</span>
                         <button
                           type="button"
                           onClick={() => setSelectedIds([])}
-                          className="hover:text-red-600 p-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
+                          className="hover:text-red-600 p-0.5 text-slate-400 hover:bg-slate-100 rounded cursor-pointer transition-colors"
                           title="Clear selection"
                         >
                           <X className="w-3 h-3" />
                         </button>
                       </div>
-                      <div className="h-4 w-px bg-orange-200 mx-0.5" />
+                      <div className="h-4 w-px bg-slate-200 mx-0.5" />
                     </>
                   )}
 
                   <select
                     value={bulkStatus}
                     onChange={(e) => setBulkStatus(e.target.value)}
-                    className="text-xs px-2 py-1 bg-white border border-orange-300 hover:border-orange-400 rounded-md font-semibold text-slate-800 outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
+                    className="text-xs px-2.5 py-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-lg font-semibold text-slate-800 outline-none focus:border-orange-500 cursor-pointer"
                   >
                     <option value="" disabled>Change Status ▾</option>
                     {BULK_STATUS_OPTIONS.map((opt) => (
