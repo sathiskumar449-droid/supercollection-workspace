@@ -104,16 +104,11 @@ table thead > tr > th {
   border-color: #475569 !important;
 }
 
-table thead > tr > th svg {
-  color: #cbd5e1;
+table thead > tr > th button svg {
+  color: currentColor;
 }
 
 table thead > tr > th .bg-white,
 table thead > tr > th [class*="bg-white"] {
   color: #1e293b;
-}
-
-table thead > tr > th .bg-white svg,
-table thead > tr > th [class*="bg-white"] svg {
-  color: inherit;
 }
