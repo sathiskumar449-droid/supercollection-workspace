@@ -103,9 +103,6 @@ export default function ReportsPage() {
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">
             Fulfillment Reports & Operations Analytics
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Minimal, executive-level summaries of order pipelines, channel throughput, courier performance, and SMS delivery.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -186,7 +183,6 @@ export default function ReportsPage() {
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <div>
               <h3 className="text-sm font-bold text-slate-900">Hourly Order Volume</h3>
-              <p className="text-xs text-slate-500">Intake velocity across warehouse shift hours</p>
             </div>
             <span className="text-xs font-semibold text-slate-700">Peak: 10:00 (24 orders)</span>
           </div>
@@ -218,7 +214,6 @@ export default function ReportsPage() {
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Channel Distribution</h3>
-                <p className="text-xs text-slate-500">Intake breakdown by origin</p>
               </div>
             </div>
 
@@ -262,10 +257,6 @@ export default function ReportsPage() {
               </div>
             </div>
           </div>
-
-          <p className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">
-            Orders from both channels flow automatically into the unified fulfillment queue.
-          </p>
         </div>
 
         {/* Courier Allocation Breakdown */}
@@ -273,7 +264,6 @@ export default function ReportsPage() {
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <div>
               <h3 className="text-sm font-bold text-slate-900">Courier Partner Allocation</h3>
-              <p className="text-xs text-slate-500">Parcels routed per carrier</p>
             </div>
           </div>
 
@@ -308,7 +298,6 @@ export default function ReportsPage() {
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <div>
               <h3 className="text-sm font-bold text-slate-900">Fulfillment Pipeline Funnel</h3>
-              <p className="text-xs text-slate-500">Orders across each operational step</p>
             </div>
           </div>
 

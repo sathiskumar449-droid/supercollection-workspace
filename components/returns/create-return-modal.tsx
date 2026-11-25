@@ -249,7 +249,6 @@ export function CreateReturnModal({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900 tracking-tight">Create Return Case</h2>
-              <p className="text-xs text-slate-500">Initiate customer return or replacement request</p>
             </div>
           </div>
           <button

@@ -201,9 +201,6 @@ export default function SettingsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-subtle">
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">System Configuration</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Manage store credentials, staff permissions, courier partners, and external API webhooks.
-          </p>
         </div>
 
         {savedSuccess && (
@@ -249,9 +246,6 @@ export default function SettingsPage() {
             <form onSubmit={handleSave} className="space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Business & Dispatch Hub Information</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Appears on parcel shipping manifests, packing slips, and courier pickup requests.
-                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2">
@@ -320,9 +314,6 @@ export default function SettingsPage() {
                       {accounts.length} Total Users
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Complete administrative control: create logins, set/change usernames and passwords, assign roles, and configure partner-isolated courier portals.
-                  </p>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
@@ -476,18 +467,12 @@ export default function SettingsPage() {
                                   <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
                                     Admin (All Access)
                                   </span>
-                                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                                    Full system, operational & user credentials control
-                                  </span>
                                 </div>
                               )}
                               {isStaff && (
                                 <div>
                                   <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     Staff (Operations)
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                                    Orders, Packing, Courier, SMS & Returns
                                   </span>
                                 </div>
                               )}
@@ -502,9 +487,6 @@ export default function SettingsPage() {
                                       : "bg-amber-50 text-amber-700 border-amber-200"
                                   )}>
                                     Courier: {courierName}
-                                  </span>
-                                  <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">
-                                    Strictly restricted to {courierName} Work Desk only
                                   </span>
                                 </div>
                               )}
@@ -602,9 +584,6 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Supported Courier Partners</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Configure courier partners for parcel pickup and automated tracking URL templates.
-                  </p>
                 </div>
                 <button
                   type="button"
@@ -697,9 +676,6 @@ export default function SettingsPage() {
             <form onSubmit={handleSave} className="space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Ping4SMS Gateway Configuration</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Used by OrderFlow strictly to fetch delivery telemetry and sync handset receipts. (No outgoing SMS).
-                </p>
               </div>
 
               <div className="space-y-3 text-xs pt-2">
@@ -772,9 +748,6 @@ export default function SettingsPage() {
             <form onSubmit={handleSave} className="space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">WooCommerce Integration & Webhook</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Configure REST API keys for manual & automated scheduled sync, and webhooks for instant order ingestion.
-                </p>
               </div>
 
               <div className="space-y-3 text-xs pt-2">
@@ -872,9 +845,6 @@ export default function SettingsPage() {
             <form onSubmit={handleSave} className="space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Existing WhatsApp Chat Box Webhook</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Connect your existing WhatsApp Chat Box to push confirmed customer orders directly into OrderFlow.
-                </p>
               </div>
 
               <div className="space-y-3 text-xs pt-2">

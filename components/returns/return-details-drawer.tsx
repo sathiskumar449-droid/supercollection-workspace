@@ -882,9 +882,6 @@ export function ReturnDetailsDrawer({
                 <Clock className="w-3.5 h-3.5 text-slate-500" />
                 <span>Return History & Exact Date/Time Events</span>
               </span>
-              <span className="text-[11px] text-slate-400 font-mono">
-                {returnCase.timeline?.length || 0} events
-              </span>
             </div>
 
             <div className="space-y-2.5">

@@ -65,9 +65,6 @@ export default function DispatchPage() {
               {packedOrders.length} Parcels Packed
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            All packed orders waiting for carrier assignment, LLR generation, and final physical dispatch handoff.
-          </p>
         </div>
 
         <div className="flex items-center gap-2 text-xs">
