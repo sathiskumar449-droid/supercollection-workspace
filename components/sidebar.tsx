@@ -149,98 +149,121 @@ export function Sidebar({
 
   return (
     <aside
-      className="relative flex flex-col h-full w-[84px] sm:w-[90px] border-r border-slate-200 bg-white transition-all select-none z-40 shrink-0 shadow-subtle overflow-hidden"
+      className="relative flex flex-col h-full w-[84px] sm:w-[90px] border-r border-[#1a2b37] bg-[#223746] text-white transition-all select-none z-40 shrink-0 shadow-subtle overflow-hidden"
     >
       {/* Brand Header */}
-      <div className="py-2.5 px-1.5 flex flex-col items-center justify-center border-b border-slate-100 bg-white text-center shrink-0">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 text-white flex items-center justify-center font-black text-xs shadow-xs ring-2 ring-orange-100 mb-0.5">
+      <div className="py-2.5 px-1.5 flex flex-col items-center justify-center border-b border-white/10 text-center shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-[#eef3f7] text-[#223746] flex items-center justify-center font-black text-xs shadow-xs mb-1">
           SC
         </div>
-        <span className="font-bold text-slate-900 text-[10px] tracking-tight leading-none block">
+        <span className="font-bold text-white text-[10px] tracking-tight leading-none block">
           SuperCollection
         </span>
-        <span className="text-[8px] font-bold text-orange-600 tracking-wider uppercase block mt-0.5">
+        <span className="text-[8px] font-bold text-slate-300 tracking-wider uppercase block mt-0.5">
           Work Desk
         </span>
       </div>
 
       {/* Navigation Links: Stacked Icon on Top, Name Below - Stretches to bottom */}
-      <div className="flex-1 min-h-0 overflow-hidden py-1.5 px-1.5 gap-0.5 flex flex-col justify-between">
-        {navItems.map((item) => {
-          if (!canAccess(item.id)) return null;
-          const active = isActive(item.href, item.exact);
+      <div className="flex-1 min-h-0 overflow-hidden py-2 px-1.5 gap-1 flex flex-col justify-between">
+        {navItems
+          .filter((item) => item.id !== "settings")
+          .map((item) => {
+            if (!canAccess(item.id)) return null;
+            const active = isActive(item.href, item.exact);
 
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className={cn(
-                "flex-1 min-h-0 flex flex-col items-center justify-center text-center py-1 px-1 rounded-lg transition-all relative group",
-                active
-                  ? "bg-orange-500 text-white font-bold shadow-xs ring-1 ring-orange-400"
-                  : "text-slate-800 hover:bg-orange-50 hover:text-orange-600"
-              )}
-              title={item.label}
-            >
-              <div className="relative">
-                <item.icon
-                  className={cn(
-                    "w-5 h-5 stroke-[2.25] transition-transform duration-150 group-hover:scale-110",
-                    active ? "text-white" : "text-slate-800 group-hover:text-orange-600"
-                  )}
-                />
-                {mounted && item.badge !== undefined && (
-                  <span
-                    suppressHydrationWarning
-                    className={cn(
-                      "absolute -top-1 -right-2 min-w-[15px] h-3.5 px-1 rounded-full text-[8.5px] font-bold flex items-center justify-center leading-none shadow-xs",
-                      active
-                        ? "bg-white text-orange-600 ring-1 ring-orange-200"
-                        : item.badgeType === "danger"
-                        ? "bg-red-500 text-white"
-                        : "bg-orange-100 text-orange-800 border border-orange-200"
-                    )}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-              <span
+            return (
+              <Link
+                key={item.id}
+                href={item.href}
                 className={cn(
-                  "text-[10px] font-bold mt-0.5 leading-tight tracking-tight text-center w-full block truncate",
-                  active ? "text-white" : "text-slate-800 group-hover:text-orange-700"
+                  "flex-1 min-h-0 flex flex-col items-center justify-center text-center py-1 px-1 rounded-xl transition-all relative group",
+                  active
+                    ? "bg-[#eef3f7] text-[#223746] font-bold shadow-sm"
+                    : "text-slate-200 hover:bg-white/10 hover:text-white"
                 )}
+                title={item.label}
               >
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
+                <div className="relative">
+                  <item.icon
+                    className={cn(
+                      "w-5 h-5 stroke-[2.2] transition-transform duration-150 group-hover:scale-110",
+                      active ? "text-[#223746]" : "text-slate-100 group-hover:text-white"
+                    )}
+                  />
+                  {mounted && item.badge !== undefined && (
+                    <span
+                      suppressHydrationWarning
+                      className={cn(
+                        "absolute -top-1 -right-2.5 min-w-[15px] h-3.5 px-1 rounded-full text-[8.5px] font-bold flex items-center justify-center leading-none shadow-xs",
+                        active
+                          ? "bg-[#223746] text-white"
+                          : item.badgeType === "danger"
+                          ? "bg-rose-500 text-white"
+                          : "bg-white/20 text-white border border-white/25"
+                      )}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    "text-[9.5px] font-bold mt-0.5 leading-tight tracking-tight text-center w-full block truncate",
+                    active ? "text-[#223746]" : "text-slate-200 group-hover:text-white"
+                  )}
+                >
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
       </div>
 
+      {/* Bottom White Utility Card (Settings & Exit) */}
+      {(canAccess("settings") || onLogout) && (
+        <div className="mx-1.5 mb-2 p-1 rounded-xl bg-[#eef3f7] text-[#223746] space-y-0.5 shrink-0 shadow-xs">
+          {canAccess("settings") && (
+            <Link
+              href="/settings"
+              title="Settings"
+              className={cn(
+                "flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all group",
+                isActive("/settings", false)
+                  ? "bg-white text-[#223746] shadow-2xs font-bold"
+                  : "text-[#223746]/80 hover:bg-white/70 hover:text-[#223746]"
+              )}
+            >
+              <Settings className="w-4 h-4 stroke-[2.2] text-[#223746]" />
+              <span className="text-[9.5px] font-bold mt-0.5 leading-tight">Settings</span>
+            </Link>
+          )}
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              title="Sign Out / Exit"
+              className="w-full flex flex-col items-center justify-center py-1.5 px-1 rounded-lg text-[#223746]/80 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4 stroke-[2.2]" />
+              <span className="text-[9.5px] font-bold mt-0.5 leading-tight">Exit</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Footer User Avatar */}
-      <div className="p-1.5 border-t border-slate-100 bg-slate-50/70 flex flex-col items-center text-center shrink-0">
-        <div className="relative mb-0.5">
-          <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-800 font-bold text-[10px] flex items-center justify-center border border-orange-200 shadow-xs">
+      <div className="py-2 px-1.5 border-t border-white/10 flex flex-col items-center text-center shrink-0">
+        <div className="relative mb-1">
+          <div className="w-7 h-7 rounded-full bg-[#eef3f7] text-[#223746] font-bold text-[10px] flex items-center justify-center shadow-xs">
             {user.role === "ADMIN" ? "AD" : user.role === "COURIER" ? (user.courierPartnerId === "ST_COURIER" ? "ST" : user.courierPartnerId === "DTDC" ? "DT" : user.courierPartnerId === "INDIA_POST" ? "IP" : "CR") : (user.name ? user.name.split(" ").map((n) => n[0]).join("").slice(0, 2) : "ST")}
           </div>
           {user.online && (
-            <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-white" />
+            <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-400 rounded-full ring-2 ring-[#223746]" />
           )}
         </div>
-        <span className="text-[7.5px] font-bold text-orange-700 px-1 py-0.5 bg-orange-50 rounded border border-orange-200/60 inline-block uppercase tracking-wide">
+        <span className="text-[7.5px] font-bold text-slate-200 px-1.5 py-0.5 bg-white/10 rounded border border-white/15 inline-block uppercase tracking-wide">
           {user.role === "ADMIN" ? "Admin" : user.role === "COURIER" ? (user.courierPartnerId === "ST_COURIER" ? "ST Courier" : user.courierPartnerId === "DTDC" ? "DTDC" : user.courierPartnerId === "INDIA_POST" ? "India Post" : "Courier") : "Staff"}
         </span>
-        {onLogout && (
-          <button
-            onClick={onLogout}
-            title="Sign Out / Exit"
-            className="mt-1 w-full flex items-center justify-center gap-1 py-0.5 px-1 rounded text-[9px] font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200/80 hover:border-rose-200 transition-colors cursor-pointer"
-          >
-            <LogOut className="w-2.5 h-2.5 text-slate-400 group-hover:text-rose-600" />
-            <span>Exit</span>
-          </button>
-        )}
       </div>
     </aside>
   );
