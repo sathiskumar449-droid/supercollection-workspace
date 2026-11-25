@@ -101,7 +101,9 @@ function OrdersContent() {
   // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
-  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(null);
+  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(() =>
+    typeof document !== "undefined" ? document.getElementById("topbar-page-actions") : null
+  );
 
   useEffect(() => {
     setTopbarSlot(document.getElementById("topbar-page-actions"));
@@ -739,11 +741,7 @@ function OrdersContent() {
           </div>
         );
 
-        return topbarSlot ? createPortal(toolbarControls, topbarSlot) : (
-          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-subtle flex items-center justify-between">
-            {toolbarControls}
-          </div>
-        );
+        return topbarSlot ? createPortal(toolbarControls, topbarSlot) : null;
       })()}
 
       {/* Active Filter Chips (Only shown when any column filter is active) */}

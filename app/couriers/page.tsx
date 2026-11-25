@@ -445,7 +445,9 @@ function CourierHubContent() {
   // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
-  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(null);
+  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(() =>
+    typeof document !== "undefined" ? document.getElementById("topbar-page-actions") : null
+  );
 
   useEffect(() => {
     setTopbarSlot(document.getElementById("topbar-page-actions"));
@@ -710,11 +712,7 @@ function CourierHubContent() {
           </div>
         );
 
-        return topbarSlot ? createPortal(courierTopControls, topbarSlot) : (
-          <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-2xs">
-            {courierTopControls}
-          </div>
-        );
+        return topbarSlot ? createPortal(courierTopControls, topbarSlot) : null;
       })()}
 
       {searchFeedback && (

@@ -63,7 +63,9 @@ function ReturnsContent() {
 
   const { user: authUser } = useAuth();
   const isAdmin = authUser?.role === "ADMIN" || user?.role === "ADMIN";
-  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(null);
+  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(() =>
+    typeof document !== "undefined" ? document.getElementById("topbar-page-actions") : null
+  );
 
   useEffect(() => {
     setTopbarSlot(document.getElementById("topbar-page-actions"));
@@ -456,11 +458,7 @@ function ReturnsContent() {
           </div>
         );
 
-        return topbarSlot ? createPortal(statusTabsBar, topbarSlot) : (
-          <div className="border-b border-slate-200 pb-1">
-            {statusTabsBar}
-          </div>
-        );
+        return topbarSlot ? createPortal(statusTabsBar, topbarSlot) : null;
       })()}
 
       {/* SEARCH, FILTERS & ACTION BAR */}

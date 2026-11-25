@@ -165,7 +165,7 @@ export function Sidebar({
       </div>
 
       {/* Navigation Links: Stacked Icon on Top, Name Below - Stretches to bottom */}
-      <div className="flex-1 overflow-hidden py-2 px-1.5 gap-1 flex flex-col justify-between">
+      <div className="flex-1 min-h-0 overflow-hidden py-1.5 px-1.5 gap-0.5 flex flex-col justify-between">
         {navItems.map((item) => {
           if (!canAccess(item.id)) return null;
           const active = isActive(item.href, item.exact);
@@ -175,18 +175,18 @@ export function Sidebar({
               key={item.id}
               href={item.href}
               className={cn(
-                "flex-1 flex flex-col items-center justify-center text-center py-1.5 px-1 rounded-lg transition-all relative group",
+                "flex-1 min-h-0 flex flex-col items-center justify-center text-center py-1 px-1 rounded-lg transition-all relative group",
                 active
-                  ? "bg-orange-500 text-white font-semibold shadow-xs ring-1 ring-orange-400"
-                  : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                  ? "bg-orange-500 text-white font-bold shadow-xs ring-1 ring-orange-400"
+                  : "text-slate-800 hover:bg-orange-50 hover:text-orange-600"
               )}
               title={item.label}
             >
               <div className="relative">
                 <item.icon
                   className={cn(
-                    "w-4 h-4 transition-transform duration-150 group-hover:scale-110",
-                    active ? "text-white" : "text-slate-500 group-hover:text-orange-600"
+                    "w-5 h-5 stroke-[2.25] transition-transform duration-150 group-hover:scale-110",
+                    active ? "text-white" : "text-slate-800 group-hover:text-orange-600"
                   )}
                 />
                 {mounted && item.badge !== undefined && (
@@ -207,8 +207,8 @@ export function Sidebar({
               </div>
               <span
                 className={cn(
-                  "text-[9.5px] font-medium mt-0.5 leading-tight tracking-tight text-center w-full block truncate",
-                  active ? "text-white font-semibold" : "text-slate-600 group-hover:text-orange-700"
+                  "text-[10px] font-bold mt-0.5 leading-tight tracking-tight text-center w-full block truncate",
+                  active ? "text-white" : "text-slate-800 group-hover:text-orange-700"
                 )}
               >
                 {item.label}

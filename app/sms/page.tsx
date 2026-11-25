@@ -44,7 +44,9 @@ function SmsMonitoringContent() {
 
   const isCourierUser = user.role === "COURIER";
   const userCourierPartnerId = user.courierPartnerId;
-  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(null);
+  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(() =>
+    typeof document !== "undefined" ? document.getElementById("topbar-page-actions") : null
+  );
 
   useEffect(() => {
     setTopbarSlot(document.getElementById("topbar-page-actions"));
@@ -450,11 +452,7 @@ function SmsMonitoringContent() {
           </div>
         );
 
-        return topbarSlot ? createPortal(partnerTabs, topbarSlot) : (
-          <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-2xs flex items-center justify-between gap-3">
-            {partnerTabs}
-          </div>
-        );
+        return topbarSlot ? createPortal(partnerTabs, topbarSlot) : null;
       })()}
 
       {/* Metric Cards (Compact matching Courier page with themed border colors) */}
