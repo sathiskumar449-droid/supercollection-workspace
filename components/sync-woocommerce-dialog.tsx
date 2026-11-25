@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { X, RefreshCw, Globe, CheckCircle2, AlertCircle, KeyRound, ExternalLink, Calendar, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { X, RefreshCw, Globe, CheckCircle2, AlertCircle, Calendar } from "lucide-react";
 import { orderflowStore } from "@/lib/store";
 
 interface SyncWooCommerceDialogProps {
@@ -25,8 +25,6 @@ export function SyncWooCommerceDialog({
   const [endDate, setEndDate] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
-  const [copiedWebhook, setCopiedWebhook] = useState(false);
-  const [showKeyDetails, setShowKeyDetails] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -93,14 +91,6 @@ export function SyncWooCommerceDialog({
   }, [rangeType, startDate, endDate]);
 
   if (!isOpen) return null;
-
-  const handleCopyWebhook = () => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://supercollection-workspace.vercel.app";
-    const webhookUrl = `${origin}/api/webhooks/woocommerce`;
-    navigator.clipboard.writeText(webhookUrl);
-    setCopiedWebhook(true);
-    setTimeout(() => setCopiedWebhook(false), 2000);
-  };
 
   /**
    * Browser-Side WooCommerce Fetcher
@@ -254,10 +244,9 @@ export function SyncWooCommerceDialog({
 
     if (!trimmedKey || !trimmedSecret) {
       setIsLoading(false);
-      setShowKeyDetails(true);
       setStatusMessage({
         type: "error",
-        text: "Please enter both Consumer Key and Consumer Secret to sync orders.",
+        text: "WooCommerce API keys are not configured. Please add them in Settings → WooCommerce Webhook.",
       });
       return;
     }
@@ -291,8 +280,7 @@ export function SyncWooCommerceDialog({
       } catch (browserErr: any) {
         console.warn("Direct browser fetch encountered error, will fallback to server fetch:", browserErr);
         if (browserErr.message && (browserErr.message.includes("401") || browserErr.message.toLowerCase().includes("invalid"))) {
-          setShowKeyDetails(true);
-          throw new Error(`WooCommerce Authentication Failed: ${browserErr.message}. Please verify your API Key & Secret in WordPress.`);
+          throw new Error(`WooCommerce Authentication Failed: ${browserErr.message}. Please verify your API Key & Secret in Settings.`);
         }
       }
 
@@ -451,7 +439,6 @@ export function SyncWooCommerceDialog({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">Sync WooCommerce Orders</h3>
-              <p className="text-xs text-slate-500">Import orders from supercollections.in directly into Work Desk</p>
             </div>
           </div>
           <button
@@ -469,7 +456,7 @@ export function SyncWooCommerceDialog({
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-1.5 text-xs font-bold text-orange-950">
                 <Calendar className="w-4 h-4 text-orange-600" />
-                <span>Select Sync Period (தேர்வு செய்யவும்)</span>
+                <span>Select Sync Period</span>
               </label>
               <span className="text-[11px] font-semibold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full">
                 {rangeType === "last_month" ? "⭐ Recommended for 1st Sync" : "Custom Period"}
@@ -544,117 +531,6 @@ export function SyncWooCommerceDialog({
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Section 2: Store Credentials */}
-          {(() => {
-            const hasBothKeys = Boolean(consumerKey.trim() && consumerSecret.trim());
-            const isOpenAccordion = !hasBothKeys || showKeyDetails;
-            return (
-              <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50">
-                <button
-                  type="button"
-                  onClick={() => setShowKeyDetails(!showKeyDetails)}
-                  className="w-full px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100/70 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-2">
-                    <KeyRound className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Store Connection & API Keys</span>
-                    {hasBothKeys ? (
-                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-mono border border-emerald-200">
-                        Keys Configured
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded font-mono border border-amber-200">
-                        Keys Required
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 text-[11px] text-slate-500">
-                    <span>{isOpenAccordion ? "Collapse" : "Edit / View"}</span>
-                    {isOpenAccordion ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </div>
-                </button>
-
-                {isOpenAccordion && (
-                  <div className="p-4 border-t border-slate-200 space-y-3 bg-white">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Store URL
-                      </label>
-                      <input
-                        type="url"
-                        required
-                        value={storeUrl}
-                        onChange={(e) => setStoreUrl(e.target.value)}
-                        className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 bg-slate-50 font-mono text-slate-700"
-                        placeholder="https://supercollections.in"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-700">
-                          Consumer Key
-                        </label>
-                        <a
-                          href="https://supercollections.in/wp-admin/admin.php?page=wc-settings&tab=advanced&section=keys"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[11px] text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1"
-                        >
-                          <span>Get Keys from WordPress</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        value={consumerKey}
-                        onChange={(e) => setConsumerKey(e.target.value)}
-                        className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono"
-                        placeholder="ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Consumer Secret
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        value={consumerSecret}
-                        onChange={(e) => setConsumerSecret(e.target.value)}
-                        className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono"
-                        placeholder="cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Section 3: Automatic Daily Webhook Setup */}
-          <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200/80 text-xs text-amber-950 space-y-1.5">
-            <div className="font-bold text-amber-900 flex items-center justify-between">
-              <span>⚡ Daily Automatic Orders (Webhook)</span>
-              <button
-                type="button"
-                onClick={handleCopyWebhook}
-                className="text-[10px] text-orange-700 hover:text-orange-900 flex items-center gap-1 font-semibold px-2 py-0.5 bg-orange-100 rounded border border-orange-200 cursor-pointer"
-              >
-                {copiedWebhook ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                <span>{copiedWebhook ? "Copied!" : "Copy Webhook URL"}</span>
-              </button>
-            </div>
-            <p className="text-slate-600 text-[11px] leading-tight">
-              In WordPress: <b>WooCommerce → Settings → Advanced → Webhooks</b>. Add Webhook with topic <b>Order created</b> to receive new daily orders in 2 seconds automatically.
-            </p>
-            <div className="font-mono text-[10px] text-slate-700 bg-white px-2 py-1 rounded border border-amber-200 select-all break-all">
-              https://supercollection-workspace.vercel.app/api/webhooks/woocommerce
-            </div>
           </div>
 
           {/* Feedback Status */}

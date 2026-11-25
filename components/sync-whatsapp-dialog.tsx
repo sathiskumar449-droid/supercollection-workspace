@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, RefreshCw, MessageSquare, CheckCircle2, AlertCircle, KeyRound, ExternalLink } from "lucide-react";
+import { X, RefreshCw, MessageSquare, CheckCircle2, AlertCircle } from "lucide-react";
 import { orderflowStore } from "@/lib/store";
 
 interface SyncWhatsAppDialogProps {
@@ -96,7 +96,6 @@ export function SyncWhatsAppDialog({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">Sync WhatsApp Orders (Last 2 Days)</h3>
-              <p className="text-xs text-slate-500">Import recent orders from WhatsApp Chat Box integration</p>
             </div>
           </div>
           <button
@@ -109,55 +108,6 @@ export function SyncWhatsAppDialog({
 
         {/* Content */}
         <form onSubmit={handleSync} className="p-6 space-y-4">
-          <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200/60 text-xs text-emerald-900 flex items-start gap-2.5">
-            <MessageSquare className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-emerald-950">2-Day Window Direct Integration</p>
-              <p className="text-emerald-800 mt-0.5 leading-relaxed">
-                Connects to <code className="bg-emerald-100/80 px-1 py-0.5 rounded font-mono text-[11px]">GET /api/integrations/workdesk/orders?since=...</code> using your shared <code className="bg-emerald-100/80 px-1 py-0.5 rounded font-mono text-[11px]">WORKDESK_SYNC_SECRET</code>. Future orders arrive automatically via webhook.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                WhatsApp Chat Box App URL
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={apiUrl}
-                  onChange={(e) => setApiUrl(e.target.value)}
-                  placeholder="http://localhost:3001"
-                  required
-                  className="w-full text-xs font-medium px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:bg-white text-slate-800 transition-all"
-                />
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Base URL of your WhatsApp Chat Box app or server
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Sync Secret (WORKDESK_SYNC_SECRET)
-              </label>
-              <div className="relative">
-                <input
-                  type="password"
-                  value={syncSecret}
-                  onChange={(e) => setSyncSecret(e.target.value)}
-                  placeholder="Leave empty to use WORKDESK_SYNC_SECRET from .env.local"
-                  className="w-full text-xs font-medium px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 focus:bg-white text-slate-800 transition-all font-mono"
-                />
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Shared secret key matching WORKDESK_SYNC_SECRET
-              </p>
-            </div>
-          </div>
-
           {/* Status Alert */}
           {statusMessage && (
             <div

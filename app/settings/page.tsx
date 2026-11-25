@@ -141,6 +141,9 @@ export default function SettingsPage() {
   const [wcConsumerSecret, setWcConsumerSecret] = useState("");
   const [showWcKey, setShowWcKey] = useState(false);
   const [waToken, setWaToken] = useState("wa_box_tok_34089ae832b");
+  const [waApiUrl, setWaApiUrl] = useState("http://localhost:3001");
+  const [waSyncSecret, setWaSyncSecret] = useState("");
+  const [showWaSyncSecret, setShowWaSyncSecret] = useState(false);
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -149,9 +152,13 @@ export default function SettingsPage() {
       const savedUrl = localStorage.getItem("sc_wc_store_url") || "";
       const savedKey = localStorage.getItem("sc_wc_consumer_key") || "";
       const savedSecret = localStorage.getItem("sc_wc_consumer_secret") || "";
+      const savedWaUrl = localStorage.getItem("sc_wa_api_url") || "";
+      const savedWaSecret = localStorage.getItem("sc_wa_sync_secret") || "";
       if (savedUrl) setWcStoreUrl(savedUrl);
       if (savedKey) setWcConsumerKey(savedKey);
       if (savedSecret) setWcConsumerSecret(savedSecret);
+      if (savedWaUrl) setWaApiUrl(savedWaUrl);
+      if (savedWaSecret) setWaSyncSecret(savedWaSecret);
     }
   }, []);
 
@@ -167,6 +174,8 @@ export default function SettingsPage() {
       if (wcStoreUrl) localStorage.setItem("sc_wc_store_url", wcStoreUrl.trim());
       if (wcConsumerKey) localStorage.setItem("sc_wc_consumer_key", wcConsumerKey.trim());
       if (wcConsumerSecret) localStorage.setItem("sc_wc_consumer_secret", wcConsumerSecret.trim());
+      if (waApiUrl) localStorage.setItem("sc_wa_api_url", waApiUrl.trim());
+      localStorage.setItem("sc_wa_sync_secret", waSyncSecret.trim());
     }
     if (activeTab === "woocommerce" && wcConsumerKey && wcConsumerSecret) {
       try {
@@ -885,6 +894,40 @@ export default function SettingsPage() {
                     >
                       {copiedKey === "wa-url" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedKey === "wa-url" ? "Copied" : "Copy"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">WhatsApp Chat Box App URL</label>
+                  <input
+                    type="text"
+                    value={waApiUrl}
+                    onChange={(e) => setWaApiUrl(e.target.value)}
+                    placeholder="http://localhost:3001"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none font-mono focus:border-orange-500"
+                  />
+                  <span className="text-[11px] text-slate-400 mt-1 block">
+                    Base URL of your WhatsApp Chat Box app or server
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">Sync Secret (WORKDESK_SYNC_SECRET)</label>
+                  <div className="relative">
+                    <input
+                      type={showWaSyncSecret ? "text" : "password"}
+                      value={waSyncSecret}
+                      onChange={(e) => setWaSyncSecret(e.target.value)}
+                      placeholder="Leave empty to use WORKDESK_SYNC_SECRET from .env.local"
+                      className="w-full px-3 py-2 pr-10 border border-slate-200 rounded-lg outline-none font-mono focus:border-orange-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowWaSyncSecret(!showWaSyncSecret)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                      {showWaSyncSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
