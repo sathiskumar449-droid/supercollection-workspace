@@ -164,8 +164,8 @@ export function Sidebar({
         </span>
       </div>
 
-      {/* Navigation Links: Stacked Icon on Top, Name Below - Stretches to bottom */}
-      <div className="flex-1 min-h-0 overflow-hidden py-2 px-1.5 gap-1 flex flex-col justify-between">
+      {/* Navigation Links: Stacked Icon on Top, Name Below - Cleanly grouped at top */}
+      <div className="flex-1 min-h-0 overflow-hidden py-2 px-1.5 gap-1.5 flex flex-col justify-start">
         {navItems
           .filter((item) => item.id !== "settings")
           .map((item) => {
@@ -177,7 +177,7 @@ export function Sidebar({
                 key={item.id}
                 href={item.href}
                 className={cn(
-                  "flex-1 min-h-0 flex flex-col items-center justify-center text-center py-1 px-1 rounded-xl transition-all relative group",
+                  "flex flex-col items-center justify-center text-center py-2 px-1 rounded-xl transition-all relative group shrink-0",
                   active
                     ? "bg-white text-orange-700 font-bold shadow-sm"
                     : "text-white/90 hover:bg-white/15 hover:text-white"
