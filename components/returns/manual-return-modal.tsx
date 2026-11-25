@@ -85,6 +85,7 @@ export function ManualReturnModal({
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   // 1. Manual Order Fields (MANUAL mode)
+  const [manualDispatchId, setManualDispatchId] = useState("");
   const [manualOrderId, setManualOrderId] = useState("");
   const [manualCustomerName, setManualCustomerName] = useState("");
   const [manualCustomerMobile, setManualCustomerMobile] = useState("");
@@ -444,6 +445,7 @@ export function ManualReturnModal({
       items: itemsToReturn,
       // Rule 8: Manual return - strictly current timestamp, no backdating
       isManual: true,
+      dispatchNumber: selectedOrder ? selectedOrder.dispatch?.dispatchId : manualDispatchId.trim() || undefined,
       originalOrderDate: selectedOrder ? selectedOrder.createdAt : (manualOrderDate || new Date().toISOString()),
       originalOrderTotal: selectedOrder ? selectedOrder.totalAmount : (parseFloat(manualOrderTotal) || activeTotalReturnedValue),
       originalAmountPaid: activeAmountPaid,
@@ -514,11 +516,11 @@ export function ManualReturnModal({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500">
-                {selectedOrder 
-                  ? `${selectedOrder.customer.name} • ${selectedOrder.customer.mobile}` 
-                  : "Record customer walk-in, phone, or direct return entry"}
-              </p>
+              {selectedOrder && (
+                <p className="text-xs text-slate-500">
+                  {selectedOrder.customer.name} • {selectedOrder.customer.mobile}
+                </p>
+              )}
             </div>
           </div>
 
@@ -542,16 +544,13 @@ export function ManualReturnModal({
           )}
 
           {/* ============================================================== */}
-          {/* SECTION 1: ORIGINAL ORDER */}
+          {/* SECTION 1: ORDER */}
           {/* ============================================================== */}
           <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200 space-y-3.5">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
               <span className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-orange-600 text-white flex items-center justify-center text-[10px] font-bold">1</span>
-                <span>Original Order Selection / Entry</span>
-              </span>
-              <span className="text-[11px] text-slate-500 font-medium">
-                {orderMode === "SEARCH" ? "Select order from system database" : "Enter custom Order ID & details directly"}
+                <span>Order Selection / Entry</span>
               </span>
             </div>
 
@@ -779,7 +778,21 @@ export function ManualReturnModal({
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-slate-700 mb-1">
+                      Dispatch ID:
+                    </label>
+                    <input
+                      type="text"
+                      value={manualDispatchId}
+                      onChange={(e) => setManualDispatchId(e.target.value)}
+                      placeholder="e.g. DTP 1-2411"
+                      className="w-full py-1.5 px-2.5 bg-slate-50 border border-slate-300 rounded font-mono font-bold text-xs text-slate-900 outline-none focus:border-orange-500 focus:bg-white"
+                      autoFocus
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-[10.5px] font-bold text-slate-700 mb-1">
                       Order ID / Number: <span className="text-red-500">*</span>
@@ -790,7 +803,6 @@ export function ManualReturnModal({
                       onChange={(e) => setManualOrderId(e.target.value)}
                       placeholder="e.g. SC-WC-17922 or ORD-1029"
                       className="w-full py-1.5 px-2.5 bg-slate-50 border border-slate-300 rounded font-mono font-bold text-xs text-slate-900 outline-none focus:border-orange-500 focus:bg-white"
-                      autoFocus
                     />
                   </div>
 
@@ -819,7 +831,7 @@ export function ManualReturnModal({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                   <div>
-                    <label className="block text-[10.5px] font-bold text-slate-700 mb-1">Original Order Date:</label>
+                    <label className="block text-[10.5px] font-bold text-slate-700 mb-1">Order Date:</label>
                     <input
                       type="date"
                       value={manualOrderDate}
@@ -829,7 +841,7 @@ export function ManualReturnModal({
                   </div>
 
                   <div>
-                    <label className="block text-[10.5px] font-bold text-slate-700 mb-1">Original Order Total (₹):</label>
+                    <label className="block text-[10.5px] font-bold text-slate-700 mb-1">Order Total (₹):</label>
                     <input
                       type="number"
                       min={0}
@@ -864,13 +876,6 @@ export function ManualReturnModal({
               <span className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-orange-600 text-white flex items-center justify-center text-[10px] font-bold">2</span>
                 <span>Returned Product(s)</span>
-              </span>
-              <span className="text-[11px] text-slate-500 font-medium">
-                {selectedOrder 
-                  ? "Select from order items (supports partial qty)" 
-                  : orderMode === "SEARCH" 
-                  ? "Select an order to view products" 
-                  : "Enter product(s) being returned"}
               </span>
             </div>
 
@@ -1075,10 +1080,6 @@ export function ManualReturnModal({
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add Another Returned Product</span>
                   </button>
-
-                  <span className="text-[11px] text-slate-400 italic">
-                    Multiple returned products supported
-                  </span>
                 </div>
               </div>
             )}
@@ -1111,9 +1112,6 @@ export function ManualReturnModal({
                 </div>
                 <div>
                   <span className="font-bold text-slate-900 text-xs block">Refund</span>
-                  <span className="text-[11px] text-slate-500 block mt-0.5">
-                    Return payment back to customer via UPI, Bank, Cash or Gateway
-                  </span>
                 </div>
               </div>
 
@@ -1134,9 +1132,6 @@ export function ManualReturnModal({
                 </div>
                 <div>
                   <span className="font-bold text-slate-900 text-xs block">Exchange</span>
-                  <span className="text-[11px] text-slate-500 block mt-0.5">
-                    Send replacement product or size and calculate price difference
-                  </span>
                 </div>
               </div>
             </div>
@@ -1174,9 +1169,6 @@ export function ManualReturnModal({
                     onChange={(e) => setRefundAmountOverride(e.target.value)}
                     className="w-full py-2 px-3 bg-white border border-rose-300 focus:border-rose-500 rounded-lg font-mono font-bold text-rose-700 text-sm outline-none shadow-2xs"
                   />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Defaults to returned product value; adjust if deducting fees.
-                  </span>
                 </div>
               </div>
 
@@ -1215,19 +1207,6 @@ export function ManualReturnModal({
                     className="w-full py-1.5 px-2 bg-white border border-slate-300 rounded-lg font-medium text-xs text-slate-800 outline-none"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Transaction / UTR Reference Number:
-                </label>
-                <input
-                  type="text"
-                  value={refundReferenceNo}
-                  onChange={(e) => setRefundReferenceNo(e.target.value)}
-                  placeholder="e.g. UPI/123456789012 or IMPS-987654"
-                  className="w-full py-2 px-3 bg-white border border-slate-300 rounded-lg font-mono text-xs text-slate-800 outline-none placeholder:text-slate-400"
-                />
               </div>
             </div>
           )}
@@ -1513,9 +1492,6 @@ export function ManualReturnModal({
               <div className="w-5 h-5 rounded-full bg-orange-600 text-white flex items-center justify-center text-[10px] font-bold">8</div>
               <div>
                 <span className="font-bold text-slate-800 block">Creation Date & Time</span>
-                <span className="text-[11px] text-slate-500">
-                  Exact timestamp recorded automatically upon submit. Backdating is not permitted.
-                </span>
               </div>
             </div>
 

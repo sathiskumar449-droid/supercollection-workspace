@@ -2570,6 +2570,7 @@ export const orderflowStore = {
     returnDate?: string;
     // Manual Return Extended Fields
     isManual?: boolean;
+    dispatchNumber?: string;
     originalOrderDate?: string;
     originalOrderTotal?: number;
     originalAmountPaid?: number;
@@ -2825,7 +2826,7 @@ export const orderflowStore = {
           timestamp: now,
         },
       ],
-      dispatchNumber: params.replacementDispatchNumber || undefined,
+      dispatchNumber: params.replacementDispatchNumber || params.dispatchNumber || order.dispatch?.dispatchId || undefined,
       createdAt: now,
       updatedAt: now,
       createdBy: globalUser.name,
