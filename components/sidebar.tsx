@@ -149,17 +149,17 @@ export function Sidebar({
 
   return (
     <aside
-      className="relative flex flex-col h-full w-[84px] sm:w-[90px] border-r border-[#1a2b37] bg-[#223746] text-white transition-all select-none z-40 shrink-0 shadow-subtle overflow-hidden"
+      className="relative flex flex-col h-full w-[84px] sm:w-[90px] border-r border-orange-700 bg-orange-600 text-white transition-all select-none z-40 shrink-0 shadow-subtle overflow-hidden"
     >
       {/* Brand Header */}
-      <div className="py-2.5 px-1.5 flex flex-col items-center justify-center border-b border-white/10 text-center shrink-0">
-        <div className="w-7 h-7 rounded-lg bg-[#eef3f7] text-[#223746] flex items-center justify-center font-black text-xs shadow-xs mb-1">
+      <div className="py-2.5 px-1.5 flex flex-col items-center justify-center border-b border-white/15 text-center shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-white text-orange-600 flex items-center justify-center font-black text-xs shadow-xs mb-1">
           SC
         </div>
         <span className="font-bold text-white text-[10px] tracking-tight leading-none block">
           SuperCollection
         </span>
-        <span className="text-[8px] font-bold text-slate-300 tracking-wider uppercase block mt-0.5">
+        <span className="text-[8px] font-bold text-orange-100 tracking-wider uppercase block mt-0.5">
           Work Desk
         </span>
       </div>
@@ -179,8 +179,8 @@ export function Sidebar({
                 className={cn(
                   "flex-1 min-h-0 flex flex-col items-center justify-center text-center py-1 px-1 rounded-xl transition-all relative group",
                   active
-                    ? "bg-[#eef3f7] text-[#223746] font-bold shadow-sm"
-                    : "text-slate-200 hover:bg-white/10 hover:text-white"
+                    ? "bg-white text-orange-700 font-bold shadow-sm"
+                    : "text-white/90 hover:bg-white/15 hover:text-white"
                 )}
                 title={item.label}
               >
@@ -188,7 +188,7 @@ export function Sidebar({
                   <item.icon
                     className={cn(
                       "w-5 h-5 stroke-[2.2] transition-transform duration-150 group-hover:scale-110",
-                      active ? "text-[#223746]" : "text-slate-100 group-hover:text-white"
+                      active ? "text-orange-600" : "text-white"
                     )}
                   />
                   {mounted && item.badge !== undefined && (
@@ -197,10 +197,10 @@ export function Sidebar({
                       className={cn(
                         "absolute -top-1 -right-2.5 min-w-[15px] h-3.5 px-1 rounded-full text-[8.5px] font-bold flex items-center justify-center leading-none shadow-xs",
                         active
-                          ? "bg-[#223746] text-white"
+                          ? "bg-orange-600 text-white"
                           : item.badgeType === "danger"
-                          ? "bg-rose-500 text-white"
-                          : "bg-white/20 text-white border border-white/25"
+                          ? "bg-rose-600 text-white"
+                          : "bg-white text-orange-700"
                       )}
                     >
                       {item.badge}
@@ -210,7 +210,7 @@ export function Sidebar({
                 <span
                   className={cn(
                     "text-[9.5px] font-bold mt-0.5 leading-tight tracking-tight text-center w-full block truncate",
-                    active ? "text-[#223746]" : "text-slate-200 group-hover:text-white"
+                    active ? "text-orange-700" : "text-white"
                   )}
                 >
                   {item.label}
@@ -222,7 +222,7 @@ export function Sidebar({
 
       {/* Bottom White Utility Card (Settings & Exit) */}
       {(canAccess("settings") || onLogout) && (
-        <div className="mx-1.5 mb-2 p-1 rounded-xl bg-[#eef3f7] text-[#223746] space-y-0.5 shrink-0 shadow-xs">
+        <div className="mx-1.5 mb-2 p-1 rounded-xl bg-white text-slate-800 space-y-0.5 shrink-0 shadow-xs">
           {canAccess("settings") && (
             <Link
               href="/settings"
@@ -230,11 +230,11 @@ export function Sidebar({
               className={cn(
                 "flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all group",
                 isActive("/settings", false)
-                  ? "bg-white text-[#223746] shadow-2xs font-bold"
-                  : "text-[#223746]/80 hover:bg-white/70 hover:text-[#223746]"
+                  ? "bg-orange-50 text-orange-700 shadow-2xs font-bold"
+                  : "text-slate-700 hover:bg-orange-50/70 hover:text-orange-700"
               )}
             >
-              <Settings className="w-4 h-4 stroke-[2.2] text-[#223746]" />
+              <Settings className={cn("w-4 h-4 stroke-[2.2]", isActive("/settings", false) ? "text-orange-600" : "text-slate-700")} />
               <span className="text-[9.5px] font-bold mt-0.5 leading-tight">Settings</span>
             </Link>
           )}
@@ -242,7 +242,7 @@ export function Sidebar({
             <button
               onClick={onLogout}
               title="Sign Out / Exit"
-              className="w-full flex flex-col items-center justify-center py-1.5 px-1 rounded-lg text-[#223746]/80 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
+              className="w-full flex flex-col items-center justify-center py-1.5 px-1 rounded-lg text-slate-700 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
             >
               <LogOut className="w-4 h-4 stroke-[2.2]" />
               <span className="text-[9.5px] font-bold mt-0.5 leading-tight">Exit</span>
@@ -252,16 +252,16 @@ export function Sidebar({
       )}
 
       {/* Footer User Avatar */}
-      <div className="py-2 px-1.5 border-t border-white/10 flex flex-col items-center text-center shrink-0">
+      <div className="py-2 px-1.5 border-t border-white/15 flex flex-col items-center text-center shrink-0">
         <div className="relative mb-1">
-          <div className="w-7 h-7 rounded-full bg-[#eef3f7] text-[#223746] font-bold text-[10px] flex items-center justify-center shadow-xs">
+          <div className="w-7 h-7 rounded-full bg-white text-orange-700 font-bold text-[10px] flex items-center justify-center shadow-xs">
             {user.role === "ADMIN" ? "AD" : user.role === "COURIER" ? (user.courierPartnerId === "ST_COURIER" ? "ST" : user.courierPartnerId === "DTDC" ? "DT" : user.courierPartnerId === "INDIA_POST" ? "IP" : "CR") : (user.name ? user.name.split(" ").map((n) => n[0]).join("").slice(0, 2) : "ST")}
           </div>
           {user.online && (
-            <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-400 rounded-full ring-2 ring-[#223746]" />
+            <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-400 rounded-full ring-2 ring-orange-600" />
           )}
         </div>
-        <span className="text-[7.5px] font-bold text-slate-200 px-1.5 py-0.5 bg-white/10 rounded border border-white/15 inline-block uppercase tracking-wide">
+        <span className="text-[7.5px] font-bold text-white px-1.5 py-0.5 bg-white/15 rounded border border-white/20 inline-block uppercase tracking-wide">
           {user.role === "ADMIN" ? "Admin" : user.role === "COURIER" ? (user.courierPartnerId === "ST_COURIER" ? "ST Courier" : user.courierPartnerId === "DTDC" ? "DTDC" : user.courierPartnerId === "INDIA_POST" ? "India Post" : "Courier") : "Staff"}
         </span>
       </div>
