@@ -185,16 +185,6 @@ export function ReturnDetailsDrawer({
                 </h2>
                 <ReturnStatusBadge status={returnCase.status} />
               </div>
-              <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                <span>Original Order: <strong className="font-mono text-slate-800">{returnCase.orderNumber}</strong></span>
-                <span>•</span>
-                <span className={cn(
-                  "font-bold px-1.5 py-0.2 rounded text-[10.5px]",
-                  returnCase.returnType === "Refund" ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-blue-50 text-blue-700 border border-blue-200"
-                )}>
-                  {returnCase.returnType}
-                </span>
-              </div>
             </div>
           </div>
 
@@ -460,12 +450,12 @@ export function ReturnDetailsDrawer({
             </div>
           )}
 
-          {/* 1. CUSTOMER & ORIGINAL ORDER SNAPSHOT */}
+          {/* 1. CUSTOMER & ORDER SNAPSHOT */}
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 text-xs">
             <div className="flex items-center justify-between border-b border-slate-200/70 pb-2">
               <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-slate-500" />
-                <span>Customer & Original Order Snapshot</span>
+                <span>Customer & Order Snapshot</span>
               </span>
               {originalOrder && (
                 <button
@@ -488,7 +478,7 @@ export function ReturnDetailsDrawer({
                 <span className="font-mono text-slate-500 text-[10px]">{returnCase.customerPhone}</span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[10.5px]">Original Order ID</span>
+                <span className="text-slate-400 block text-[10.5px]">Order ID</span>
                 <span className="font-mono font-bold text-orange-700 text-xs">
                   {originalOrder?.orderNumber || returnCase.orderNumber}
                 </span>
@@ -499,13 +489,13 @@ export function ReturnDetailsDrawer({
                 )}
               </div>
               <div>
-                <span className="text-slate-400 block text-[10.5px]">Original Order Date</span>
+                <span className="text-slate-400 block text-[10.5px]">Order Date</span>
                 <span className="font-medium text-slate-800 text-[11px]">
                   {formatDate(originalOrder?.createdAt || returnCase.originalOrderDate || returnCase.createdAt)}
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[10.5px]">Original Order Total</span>
+                <span className="text-slate-400 block text-[10.5px]">Order Total</span>
                 <span className="font-mono font-bold text-slate-900 text-xs">
                   {formatINR(originalOrder?.totalAmount ?? returnCase.originalOrderTotal ?? 0)}
                 </span>
@@ -600,10 +590,7 @@ export function ReturnDetailsDrawer({
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                 <Package className="w-3.5 h-3.5 text-slate-500" />
-                <span>Original Order Items & Return Status</span>
-              </span>
-              <span className="text-[11px] text-slate-500 font-medium">
-                Returning <strong className="text-rose-700">{returnCase.requestedQuantity}</strong> of <strong>{totalOrderedItemsCount}</strong> items
+                <span>Order Items & Return Status</span>
               </span>
             </div>
 

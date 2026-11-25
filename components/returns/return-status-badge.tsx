@@ -217,31 +217,30 @@ export function ReturnCompactIndicator({
     );
   }
 
-  // Format compact badge
-  let label = status;
+  // Show exact return status so pending/completed states are immediately clear in Orders table
+  const label = status;
   let colorClass = "text-slate-600 bg-slate-50 border-slate-200";
 
   if (status.includes("Waiting") || status.includes("Confirmation")) {
-    label = "⏳ Awaiting Approval";
-    colorClass = "text-amber-900 bg-amber-100 border-amber-300 hover:bg-amber-200 animate-pulse";
+    colorClass = "text-amber-900 bg-amber-100 border-amber-300 hover:bg-amber-200";
   } else if (status.includes("Requested")) {
-    label = "↩ Requested";
     colorClass = "text-amber-800 bg-amber-50 border-amber-200 hover:bg-amber-100";
   } else if (status.includes("Awaiting")) {
-    label = "↩ Awaiting";
     colorClass = "text-indigo-800 bg-indigo-50 border-indigo-200 hover:bg-indigo-100";
   } else if (status.includes("Received") || status.includes("QC")) {
-    label = "↩ Returned";
     colorClass = "text-orange-800 bg-orange-50 border-orange-200 hover:bg-orange-100";
-  } else if (status.includes("Refund")) {
-    label = "↩ Refund";
+  } else if (status === "Refund Pending") {
     colorClass = "text-rose-800 bg-rose-50 border-rose-200 hover:bg-rose-100";
-  } else if (status.includes("Replacement")) {
-    label = "↩ Replacement";
-    colorClass = "text-purple-800 bg-purple-50 border-purple-200 hover:bg-purple-100";
-  } else if (status.includes("Completed")) {
-    label = "↩ Closed";
+  } else if (status.includes("Refund")) {
     colorClass = "text-emerald-800 bg-emerald-50 border-emerald-200 hover:bg-emerald-100";
+  } else if (status === "Replacement Pending") {
+    colorClass = "text-purple-800 bg-purple-50 border-purple-200 hover:bg-purple-100";
+  } else if (status.includes("Replacement")) {
+    colorClass = "text-teal-800 bg-teal-50 border-teal-200 hover:bg-teal-100";
+  } else if (status.includes("Completed") || status.includes("Approved")) {
+    colorClass = "text-emerald-800 bg-emerald-50 border-emerald-200 hover:bg-emerald-100";
+  } else if (status.includes("Rejected")) {
+    colorClass = "text-red-800 bg-red-50 border-red-200 hover:bg-red-100";
   }
 
   return (

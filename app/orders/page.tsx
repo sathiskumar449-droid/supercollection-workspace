@@ -1444,7 +1444,17 @@ function OrdersContent() {
 {/* Return Column */}
                       <td className="py-2 px-1 text-center truncate border-r border-b border-slate-300" onClick={(e) => e.stopPropagation()}>
                         {(() => {
-                          const orderReturns = returns.filter((r) => r.orderId === order.id || r.orderNumber === order.orderNumber);
+                          const orderReturns = returns
+                            .filter(
+                              (r) =>
+                                r.orderId === order.id ||
+                                r.orderNumber?.toLowerCase() === order.orderNumber?.toLowerCase()
+                            )
+                            .sort(
+                              (a, b) =>
+                                new Date(b.updatedAt || b.createdAt).getTime() -
+                                new Date(a.updatedAt || a.createdAt).getTime()
+                            );
                           if (orderReturns.length === 0) {
                             return <span className="text-slate-400 text-[10.5px]">No Return</span>;
                           }

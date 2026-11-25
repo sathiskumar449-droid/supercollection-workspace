@@ -628,8 +628,7 @@ function ReturnsContent() {
               </th>
               <th className="sticky top-0 z-20 py-2 px-1.5 w-[115px] text-right border-r border-b-2 border-slate-300 bg-slate-100">REFUND / EXCH. AMT</th>
               <th className="sticky top-0 z-20 py-2 px-1 w-[145px] text-center border-r border-b-2 border-slate-300 bg-slate-100">EXTRA PAID / REFUND DIFF.</th>
-              <th className="sticky top-0 z-20 py-2 px-1 w-[125px] text-center border-r border-b-2 border-slate-300 bg-slate-100">RETURN STATUS</th>
-              <th className="sticky top-0 z-20 py-2 px-1 w-[120px] text-center border-r border-b-2 border-slate-300 bg-slate-100">REPLACEMENT STATUS</th>
+              <th className="sticky top-0 z-20 py-2 px-1 w-[135px] text-center border-r border-b-2 border-slate-300 bg-slate-100">RETURN STATUS</th>
               <th className={cn("sticky top-0 z-20 py-2 px-1 text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800", isAdmin ? "w-[105px]" : "w-[70px]")}>ACTION</th>
             </tr>
           </thead>
@@ -637,7 +636,7 @@ function ReturnsContent() {
           <tbody>
             {paginatedReturns.length === 0 ? (
               <tr>
-                <td colSpan={16} className="py-14 text-center text-slate-400 border-b border-slate-300">
+                <td colSpan={15} className="py-14 text-center text-slate-400 border-b border-slate-300">
                   <RotateCcw className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                   <p className="font-semibold text-slate-600 text-xs">No return cases found</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
@@ -796,21 +795,17 @@ function ReturnsContent() {
                       )}
                     </td>
 
-                    {/* RETURN STATUS */}
-                    <td className="py-1 px-1 text-center border-r border-b border-slate-300 truncate">
-                      <ReturnStatusBadge status={rtn.status} className="text-[10px] py-0.5 px-1 justify-center truncate w-full" />
-                    </td>
-
-                    {/* REPLACEMENT STATUS */}
-                    <td className="py-1 px-1 text-center border-r border-b border-slate-300 truncate">
-                      {isExchange ? (
-                        <ReplacementStatusBadge
-                          status={rtn.replacementStatus || rtn.replacement?.status || "Not Dispatched"}
-                          className="text-[10px] py-0.5 px-1 justify-center truncate w-full"
-                        />
-                      ) : (
-                        <span className="text-slate-400 text-xs">—</span>
-                      )}
+                    {/* RETURN STATUS (Common for Return & Replacement) */}
+                    <td className="py-1 px-1 text-center border-r border-b border-slate-300">
+                      <div className="flex flex-col items-center gap-1">
+                        <ReturnStatusBadge status={rtn.status} className="text-[10px] py-0.5 px-1 justify-center truncate w-full" />
+                        {isExchange && (
+                          <ReplacementStatusBadge
+                            status={rtn.replacementStatus || rtn.replacement?.status || "Not Dispatched"}
+                            className="text-[9.5px] py-0.5 px-1 justify-center truncate w-full"
+                          />
+                        )}
+                      </div>
                     </td>
 
                     {/* ACTION */}
