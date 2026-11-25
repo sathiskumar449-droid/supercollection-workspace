@@ -614,12 +614,12 @@ function OrdersContent() {
         isLoading={isBulkUpdating}
       />
 
-      {/* TopBar Actions: Search + Bulk Status + Export Excel/PDF */}
+      {/* TopBar Actions: Search (left) + Bulk Status & Export Excel/PDF (right) */}
       {(() => {
         const toolbarControls = (
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
             {/* Search Input */}
-            <div className="relative flex items-center w-44 sm:w-56">
+            <div className="relative flex items-center w-44 sm:w-64 shrink-0">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
               <input
                 type="text"
@@ -643,101 +643,104 @@ function OrdersContent() {
               )}
             </div>
 
-            {/* If not admin but items are selected, show selection badge only */}
-            {!isAdmin && selectedIds.length > 0 && (
-              <div className="flex items-center gap-1.5 font-bold text-orange-900 text-xs bg-orange-50/95 border border-orange-200 px-2 py-1 rounded-lg animate-in fade-in shrink-0">
-                <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
-                <span>{selectedIds.length} selected</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedIds([])}
-                  className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
-                  title="Clear selection"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
+            {/* Right group: Bulk Selection Actions + Export Actions */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* If not admin but items are selected, show selection badge only */}
+              {!isAdmin && selectedIds.length > 0 && (
+                <div className="flex items-center gap-1.5 font-bold text-orange-900 text-xs bg-orange-50/95 border border-orange-200 px-2 py-1 rounded-lg animate-in fade-in shrink-0">
+                  <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
+                  <span>{selectedIds.length} selected</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds([])}
+                    className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
+                    title="Clear selection"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
 
-            {/* Bulk Selection Actions (Admin Only) */}
-            {isAdmin && (
-              <div className="flex items-center gap-1.5 shrink-0 bg-orange-50/95 border border-orange-200 px-2 py-1 rounded-lg">
-                {selectedIds.length > 0 && (
-                  <>
-                    <div className="flex items-center gap-1 font-bold text-orange-900 text-xs animate-in fade-in">
-                      <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
-                      <span>{selectedIds.length}</span>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedIds([])}
-                        className="hover:text-red-600 p-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
-                        title="Clear selection"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <div className="h-4 w-px bg-orange-200 mx-0.5" />
-                  </>
-                )}
-
-                <select
-                  value={bulkStatus}
-                  onChange={(e) => setBulkStatus(e.target.value)}
-                  className="text-xs px-2 py-1 bg-white border border-orange-300 hover:border-orange-400 rounded-md font-semibold text-slate-800 outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
-                >
-                  <option value="" disabled>Change Status ▾</option>
-                  {BULK_STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (selectedIds.length === 0) {
-                      triggerToast("Please select at least 1 order using checkbox first to update status");
-                      return;
-                    }
-                    if (!bulkStatus) {
-                      triggerToast("Please select a status from the dropdown");
-                      return;
-                    }
-                    if (validOrders.length === 0) {
-                      triggerToast("None of the selected orders can be transitioned to this status");
-                      return;
-                    }
-                    setIsConfirmDialogOpen(true);
-                  }}
-                  disabled={isBulkUpdating}
-                  className={cn(
-                    "px-2.5 py-1 rounded-md font-bold text-xs transition-all shadow-2xs cursor-pointer",
-                    isBulkUpdating
-                      ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                      : "bg-orange-600 hover:bg-orange-700 text-white active:scale-98"
+              {/* Bulk Selection Actions (Admin Only) */}
+              {isAdmin && (
+                <div className="flex items-center gap-1.5 shrink-0 bg-orange-50/95 border border-orange-200 px-2 py-1 rounded-lg">
+                  {selectedIds.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-1 font-bold text-orange-900 text-xs animate-in fade-in">
+                        <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
+                        <span>{selectedIds.length}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedIds([])}
+                          className="hover:text-red-600 p-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
+                          title="Clear selection"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div className="h-4 w-px bg-orange-200 mx-0.5" />
+                    </>
                   )}
-                >
-                  {isBulkUpdating ? "Applying..." : "Apply"}
-                </button>
-              </div>
-            )}
 
-            {/* Export Actions */}
-            <button
-              onClick={handleExportExcel}
-              title="Export Excel"
-              className="inline-flex items-center justify-center p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleExportPdf}
-              title="Export PDF"
-              className="inline-flex items-center justify-center p-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
-            >
-              <FileText className="w-4 h-4" />
-            </button>
+                  <select
+                    value={bulkStatus}
+                    onChange={(e) => setBulkStatus(e.target.value)}
+                    className="text-xs px-2 py-1 bg-white border border-orange-300 hover:border-orange-400 rounded-md font-semibold text-slate-800 outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
+                  >
+                    <option value="" disabled>Change Status ▾</option>
+                    {BULK_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedIds.length === 0) {
+                        triggerToast("Please select at least 1 order using checkbox first to update status");
+                        return;
+                      }
+                      if (!bulkStatus) {
+                        triggerToast("Please select a status from the dropdown");
+                        return;
+                      }
+                      if (validOrders.length === 0) {
+                        triggerToast("None of the selected orders can be transitioned to this status");
+                        return;
+                      }
+                      setIsConfirmDialogOpen(true);
+                    }}
+                    disabled={isBulkUpdating}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md font-bold text-xs transition-all shadow-2xs cursor-pointer",
+                      isBulkUpdating
+                        ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        : "bg-orange-600 hover:bg-orange-700 text-white active:scale-98"
+                    )}
+                  >
+                    {isBulkUpdating ? "Applying..." : "Apply"}
+                  </button>
+                </div>
+              )}
+
+              {/* Export Actions */}
+              <button
+                onClick={handleExportExcel}
+                title="Export Excel"
+                className="inline-flex items-center justify-center p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleExportPdf}
+                title="Export PDF"
+                className="inline-flex items-center justify-center p-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
+              >
+                <FileText className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         );
 
