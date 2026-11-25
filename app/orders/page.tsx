@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, Suspense } from "react";
+import React, { useState, useMemo, useEffect, Suspense } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { 
@@ -100,6 +101,11 @@ function OrdersContent() {
   // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setTopbarSlot(document.getElementById("topbar-page-actions"));
+  }, []);
 
   // All Orders remains the master overview: all orders stay visible across every lifecycle stage
   const baseOrders = orders;
@@ -606,14 +612,13 @@ function OrdersContent() {
         isLoading={isBulkUpdating}
       />
 
-      {/* Filter Toolbar (Streamlined: Search + Active Filter Pills + Bulk Actions + Export) */}
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-subtle space-y-2">
-        {/* Row 1: Global Search + Bulk Actions + Export */}
-        <div className="flex items-center gap-2.5 flex-wrap md:flex-nowrap justify-between">
-          <div className="flex items-center gap-2.5 flex-1 min-w-[280px]">
+      {/* TopBar Actions: Search + Bulk Status + Export Excel/PDF */}
+      {(() => {
+        const toolbarControls = (
+          <div className="flex items-center gap-2 min-w-0">
             {/* Search Input */}
-            <div className="relative flex items-center shrink-0 w-64">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
+            <div className="relative flex items-center w-44 sm:w-56">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
@@ -622,7 +627,7 @@ function OrdersContent() {
                   setPage(1);
                 }}
                 placeholder="Search Order ID, Customer, Phone..."
-                className="text-xs pl-8 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-800 placeholder-slate-400 w-full transition-all"
+                className="text-xs pl-8 pr-6 py-1.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-500 font-medium text-slate-800 placeholder-slate-400 w-full transition-all"
               />
               {searchQuery && (
                 <button
@@ -635,12 +640,10 @@ function OrdersContent() {
                 </button>
               )}
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 shrink-0">
             {/* If not admin but items are selected, show selection badge only */}
             {!isAdmin && selectedIds.length > 0 && (
-              <div className="flex items-center gap-1.5 font-bold text-orange-900 text-xs bg-orange-50/95 border border-orange-200 px-2.5 py-1.5 rounded-lg animate-in fade-in">
+              <div className="flex items-center gap-1.5 font-bold text-orange-900 text-xs bg-orange-50/95 border border-orange-200 px-2 py-1 rounded-lg animate-in fade-in shrink-0">
                 <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
                 <span>{selectedIds.length} selected</span>
                 <button
@@ -656,17 +659,16 @@ function OrdersContent() {
 
             {/* Bulk Selection Actions (Admin Only) */}
             {isAdmin && (
-              <div className="flex items-center gap-2 shrink-0 bg-orange-50/95 border border-orange-200 px-2.5 py-1.5 rounded-lg">
-                {/* Selected Badge with Clear (Only shown when rows selected) */}
+              <div className="flex items-center gap-1.5 shrink-0 bg-orange-50/95 border border-orange-200 px-2 py-1 rounded-lg">
                 {selectedIds.length > 0 && (
                   <>
-                    <div className="flex items-center gap-1.5 font-bold text-orange-900 text-xs animate-in fade-in">
+                    <div className="flex items-center gap-1 font-bold text-orange-900 text-xs animate-in fade-in">
                       <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
-                      <span>{selectedIds.length} selected</span>
+                      <span>{selectedIds.length}</span>
                       <button
                         type="button"
                         onClick={() => setSelectedIds([])}
-                        className="hover:text-red-600 p-0.5 ml-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
+                        className="hover:text-red-600 p-0.5 text-slate-400 hover:bg-orange-200/70 rounded cursor-pointer transition-colors"
                         title="Clear selection"
                       >
                         <X className="w-3 h-3" />
@@ -679,7 +681,7 @@ function OrdersContent() {
                 <select
                   value={bulkStatus}
                   onChange={(e) => setBulkStatus(e.target.value)}
-                  className="text-xs px-2.5 py-1 bg-white border border-orange-300 hover:border-orange-400 rounded-md font-semibold text-slate-800 outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
+                  className="text-xs px-2 py-1 bg-white border border-orange-300 hover:border-orange-400 rounded-md font-semibold text-slate-800 outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer shadow-2xs"
                 >
                   <option value="" disabled>Change Status ▾</option>
                   {BULK_STATUS_OPTIONS.map((opt) => (
@@ -708,7 +710,7 @@ function OrdersContent() {
                   }}
                   disabled={isBulkUpdating}
                   className={cn(
-                    "px-3 py-1 rounded-md font-bold text-xs transition-all shadow-2xs cursor-pointer",
+                    "px-2.5 py-1 rounded-md font-bold text-xs transition-all shadow-2xs cursor-pointer",
                     isBulkUpdating
                       ? "bg-slate-200 text-slate-400 cursor-not-allowed"
                       : "bg-orange-600 hover:bg-orange-700 text-white active:scale-98"
@@ -719,27 +721,34 @@ function OrdersContent() {
               </div>
             )}
 
-            {/* Export Actions (inline, rightmost) */}
+            {/* Export Actions */}
             <button
               onClick={handleExportExcel}
               title="Export Excel"
-              className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
+              className="inline-flex items-center justify-center p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" />
             </button>
             <button
               onClick={handleExportPdf}
               title="Export PDF"
-              className="inline-flex items-center justify-center p-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
+              className="inline-flex items-center justify-center p-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs shrink-0 cursor-pointer"
             >
               <FileText className="w-4 h-4" />
             </button>
           </div>
-        </div>
+        );
 
-        {/* Row 2: Active Filter Chips (Only shown when any column filter is active) */}
-        {activeFilterCount > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-slate-100 text-xs">
+        return topbarSlot ? createPortal(toolbarControls, topbarSlot) : (
+          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-subtle flex items-center justify-between">
+            {toolbarControls}
+          </div>
+        );
+      })()}
+
+      {/* Active Filter Chips (Only shown when any column filter is active) */}
+      {activeFilterCount > 0 && (
+        <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-subtle flex items-center gap-1.5 flex-wrap text-xs">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
               <Filter className="w-3 h-3 text-orange-600" /> Active Filters:
             </span>
@@ -922,9 +931,8 @@ function OrdersContent() {
               <RotateCcw className="w-3 h-3" />
               <span>Clear All ({activeFilterCount})</span>
             </button>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Orders Table (Excel Spreadsheet Grid Style with S.No & Column Header Filters) */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full min-h-[460px]">

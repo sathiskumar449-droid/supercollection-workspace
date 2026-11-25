@@ -34,6 +34,8 @@ import { useAuth, UserAccount } from "@/lib/auth-context";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { showToast } from "@/components/ui/toast";
+import { SyncWooCommerceDialog } from "@/components/sync-woocommerce-dialog";
+import { SyncWhatsAppDialog } from "@/components/sync-whatsapp-dialog";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"business" | "users" | "couriers" | "ping4sms" | "woocommerce" | "whatsapp">("business");
@@ -146,6 +148,8 @@ export default function SettingsPage() {
   const [showWaSyncSecret, setShowWaSyncSecret] = useState(false);
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [whatsappSyncDialogOpen, setWhatsappSyncDialogOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -203,12 +207,30 @@ export default function SettingsPage() {
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">System Configuration</h2>
         </div>
 
-        {savedSuccess && (
-          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5 animate-in fade-in">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Configuration saved successfully
-          </span>
-        )}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {savedSuccess && (
+            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5 animate-in fade-in">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Configuration saved successfully
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setSyncDialogOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+          >
+            <Globe className="w-3.5 h-3.5 text-orange-600" />
+            <span>Sync Website</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setWhatsappSyncDialogOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Sync WhatsApp</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -1526,6 +1548,15 @@ export default function SettingsPage() {
           }
         }}
         onCancel={() => setDeletingUser(null)}
+      />
+      <SyncWooCommerceDialog
+        isOpen={syncDialogOpen}
+        onClose={() => setSyncDialogOpen(false)}
+      />
+
+      <SyncWhatsAppDialog
+        isOpen={whatsappSyncDialogOpen}
+        onClose={() => setWhatsappSyncDialogOpen(false)}
       />
     </div>
   );

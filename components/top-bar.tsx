@@ -5,8 +5,6 @@ import Link from "next/link";
 import { 
   Calendar, 
   X, 
-  Globe, 
-  MessageSquare,
   Bell,
   CheckCircle2,
   Check,
@@ -17,8 +15,6 @@ import { useOrderFlow } from "@/lib/hooks";
 import { formatINR, formatDate } from "@/lib/utils";
 import { Role, UserSession } from "@/types/orderflow";
 import { cn } from "@/lib/utils";
-import { SyncWooCommerceDialog } from "@/components/sync-woocommerce-dialog";
-import { SyncWhatsAppDialog } from "@/components/sync-whatsapp-dialog";
 
 interface TopBarProps {
   title: string;
@@ -38,14 +34,11 @@ interface TopBarProps {
 
 export function TopBar({
   title,
-  user,
   dateFilter = "All",
   onDateFilterChange,
   customDate = "",
   onCustomDateChange,
 }: TopBarProps) {
-  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
-  const [whatsappSyncDialogOpen, setWhatsappSyncDialogOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [approvedNotice, setApprovedNotice] = useState<string | null>(null);
 
@@ -70,40 +63,32 @@ export function TopBar({
         </h1>
       </div>
 
-      {/* Right Controls: Date Filter Presets + Date Picker + Sync Buttons */}
-      <div className="flex items-center gap-2.5 min-w-0 justify-end">
-        {/* Date Filter & Calendar Selector (On all pages) */}
+      {/* Right Controls: Page Actions Slot + Date Filter Dropdown + Date Picker + Bell */}
+      <div className="flex items-center gap-2 min-w-0 justify-end flex-1">
+        <div id="topbar-page-actions" className="flex items-center gap-2 min-w-0" />
+
+        {/* Date Filter Dropdown & Calendar Selector (On all pages) */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Preset Buttons with Vibrant Distinct Colors */}
-          <div className="flex items-center gap-0.5 bg-slate-100 border border-slate-200 rounded-lg p-0.5 text-xs">
-            {[
-              { key: "All", label: "All", activeClass: "bg-slate-900 text-white shadow-xs font-semibold" },
-              { key: "Today", label: "Today", activeClass: "bg-orange-600 text-white shadow-xs font-semibold" },
-              { key: "Yesterday", label: "Yesterday", activeClass: "bg-amber-600 text-white shadow-xs font-semibold" },
-              { key: "Last 7 Days", label: "Last 7 Days", activeClass: "bg-blue-600 text-white shadow-xs font-semibold" },
-              { key: "This Month", label: "This Month", activeClass: "bg-emerald-600 text-white shadow-xs font-semibold" },
-              { key: "Last Month", label: "Last Month", activeClass: "bg-purple-600 text-white shadow-xs font-semibold" },
-            ].map((opt) => {
-              const isSelected = (dateFilter === opt.key || (!dateFilter && opt.key === "All")) && !customDate;
-              return (
-                <button
-                  key={opt.key}
-                  onClick={() => {
-                    onDateFilterChange?.(opt.key);
-                    onCustomDateChange?.("");
-                  }}
-                  className={cn(
-                    "px-2.5 py-1 rounded-md font-medium transition-all text-xs whitespace-nowrap",
-                    isSelected
-                      ? opt.activeClass
-                      : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
-                  )}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
+          <select
+            value={customDate ? "Custom" : dateFilter || "All"}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val !== "Custom") {
+                onCustomDateChange?.("");
+                onDateFilterChange?.(val);
+              }
+            }}
+            aria-label="Date Filter"
+            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 text-xs font-semibold text-slate-700 outline-none focus:border-orange-500 cursor-pointer"
+          >
+            <option value="All">All</option>
+            <option value="Today">Today</option>
+            <option value="Yesterday">Yesterday</option>
+            <option value="Last 7 Days">Last 7 Days</option>
+            <option value="This Month">This Month</option>
+            <option value="Last Month">Last Month</option>
+            {customDate && <option value="Custom">Custom Date</option>}
+          </select>
 
           {/* Calendar Date Picker right next to date filter */}
           <div
@@ -278,41 +263,7 @@ export function TopBar({
             </>
           )}
         </div>
-
-        {user?.role !== "COURIER" && (
-          <>
-            {/* Sync Website Orders Button */}
-            <button
-              onClick={() => setSyncDialogOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs shrink-0 cursor-pointer"
-              title="Sync & Import Orders from supercollections.in"
-            >
-              <Globe className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-              <span className="hidden sm:inline">Sync Website</span>
-            </button>
-
-            {/* Sync WhatsApp Orders Button */}
-            <button
-              onClick={() => setWhatsappSyncDialogOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs shrink-0 cursor-pointer"
-              title="Sync & Import Orders from WhatsApp Chat Box"
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span className="hidden sm:inline">Sync WhatsApp</span>
-            </button>
-          </>
-        )}
       </div>
-
-      <SyncWooCommerceDialog
-        isOpen={syncDialogOpen}
-        onClose={() => setSyncDialogOpen(false)}
-      />
-
-      <SyncWhatsAppDialog
-        isOpen={whatsappSyncDialogOpen}
-        onClose={() => setWhatsappSyncDialogOpen(false)}
-      />
     </header>
   );
 }
