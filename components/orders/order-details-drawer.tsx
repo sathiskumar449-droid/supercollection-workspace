@@ -173,7 +173,7 @@ export function OrderDetailsDrawer({
   };
 
   const canEditCourier = ["ADMIN", "MANAGER", "DISPATCH_STAFF", "COURIER"].includes(userRole);
-  const displayOrderNum = order.externalOrderId || order.orderNumber.replace(/^(SC-WC-|OF-)/, "");
+  const displayOrderNum = order.orderNumber;
 
   // Build strictly deduplicated chronological order history with all unified stages populated
   const chronologicalHistory = (() => {
@@ -220,9 +220,6 @@ export function OrderDetailsDrawer({
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {order.source === "WEBSITE" ? "Website" : "WhatsApp"} · {formatDateTime(order.createdAt)} · <span className="font-semibold text-slate-900">{formatINR(order.totalAmount)}</span>
-            </p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -255,7 +252,6 @@ export function OrderDetailsDrawer({
                 <div className="mt-1 flex items-center gap-1.5 text-slate-600">
                   <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <span className="font-mono font-medium">{order.customer.mobile}</span>
-                  <span className="text-[10px] text-slate-400">(Customer Phone)</span>
                 </div>
               </div>
 
@@ -338,7 +334,6 @@ export function OrderDetailsDrawer({
             {orderReturns.length === 0 ? (
               <div className="py-4 text-center text-xs text-slate-400">
                 <p>No return or replacement cases for this order.</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Returns can be initiated from the Packing station when updating order status.</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden">
@@ -402,9 +397,6 @@ export function OrderDetailsDrawer({
                   Master Order Timeline
                 </h3>
               </div>
-              <span className="text-[11px] text-slate-400">
-                {chronologicalHistory.length} chronological events
-              </span>
             </div>
 
             {chronologicalHistory.length === 0 ? (
