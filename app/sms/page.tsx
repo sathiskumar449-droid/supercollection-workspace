@@ -385,7 +385,7 @@ function SmsMonitoringContent() {
   };
 
   return (
-    <div className="space-y-4 max-w-full pb-16">
+    <div className="space-y-4 max-w-full">
       {/* TOP SECTION: Courier Partner Tabs (left) + Search & Export (right) Portaled into TopBar */}
       {(() => {
         const smsTopControls = (
@@ -648,7 +648,7 @@ function SmsMonitoringContent() {
         )}
 
         {/* SMS Excel Spreadsheet Table */}
-        <div className="table-scroll-container w-full overflow-x-auto overflow-y-auto max-h-[calc(100vh-250px)] min-h-[380px] relative">
+        <div className="table-scroll-container w-full overflow-x-auto overflow-y-auto h-[calc(100vh-250px)] !max-h-none relative">
           <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300">
             <thead className="sticky top-0 z-20 bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[11px] uppercase tracking-tight shadow-xs">
               <tr>

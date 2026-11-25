@@ -622,7 +622,7 @@ function CourierHubContent() {
   };
 
   return (
-    <div className="space-y-4 max-w-full pb-16">
+    <div className="space-y-4 max-w-full">
       {/* TOP SECTION: Customer Mobile Number Input + Courier Partner Selector + Export Buttons (Portaled into TopBar) */}
       {(() => {
         const courierTopControls = (
@@ -803,7 +803,7 @@ function CourierHubContent() {
 
       {/* Table Section (Compact Full-Width Spreadsheet Grid) */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full">
-        <div className="table-scroll-container overflow-x-auto overflow-y-auto max-h-[calc(100vh-250px)] min-h-[380px] w-full relative">
+        <div className="table-scroll-container overflow-x-auto overflow-y-auto h-[calc(100vh-225px)] !max-h-none w-full relative">
           <table className="w-full text-left text-xs border-collapse border border-slate-300">
             <thead className="sticky top-0 z-20 bg-slate-100 shadow-xs">
               <tr className="bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[11px] uppercase tracking-tight">
