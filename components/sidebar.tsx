@@ -149,17 +149,17 @@ export function Sidebar({
 
   return (
     <aside
-      className="relative flex flex-col h-full w-[84px] sm:w-[90px] border-r border-orange-700 bg-orange-600 text-white transition-all select-none z-40 shrink-0 shadow-subtle overflow-hidden"
+      className="relative flex flex-col h-full w-[68px] sm:w-[74px] border-r border-orange-700 bg-orange-600 text-white transition-all select-none z-40 shrink-0 overflow-hidden"
     >
       {/* Brand Header */}
-      <div className="py-2.5 px-1.5 flex flex-col items-center justify-center border-b border-white/15 text-center shrink-0">
-        <div className="w-7 h-7 rounded-lg bg-white text-orange-600 flex items-center justify-center font-black text-xs shadow-xs mb-1">
+      <div className="py-2 px-1 flex flex-col items-center justify-center border-b border-white/15 text-center shrink-0">
+        <div className="w-6 h-6 rounded-lg bg-white text-orange-600 flex items-center justify-center font-black text-[11px] mb-1">
           SC
         </div>
-        <span className="font-bold text-white text-[10px] tracking-tight leading-none block">
+        <span className="font-bold text-white text-[8.5px] tracking-tight leading-none block truncate w-full">
           SuperCollection
         </span>
-        <span className="text-[8px] font-bold text-orange-100 tracking-wider uppercase block mt-0.5">
+        <span className="text-[7px] font-bold text-orange-100 tracking-wider uppercase block mt-0.5">
           Work Desk
         </span>
       </div>
@@ -187,7 +187,7 @@ export function Sidebar({
                 <div className="relative">
                   <item.icon
                     className={cn(
-                      "w-5 h-5 stroke-[2.2] transition-transform duration-150 group-hover:scale-110",
+                      "w-4 h-4 stroke-[2] transition-transform duration-150 group-hover:scale-110",
                       active ? "text-orange-600" : "text-white"
                     )}
                   />
@@ -209,7 +209,7 @@ export function Sidebar({
                 </div>
                 <span
                   className={cn(
-                    "text-[9.5px] font-bold mt-0.5 leading-tight tracking-tight text-center w-full block truncate",
+                    "text-[9px] font-bold mt-0.5 leading-tight tracking-tight text-center w-full block truncate",
                     active ? "text-orange-700" : "text-white"
                   )}
                 >
@@ -222,37 +222,37 @@ export function Sidebar({
 
       {/* Bottom White Utility Card (Settings & Exit) */}
       {(canAccess("settings") || onLogout) && (
-        <div className="mx-1.5 mb-2 p-1 rounded-xl bg-white text-slate-800 space-y-0.5 shrink-0 shadow-xs">
+        <div className="mx-1.5 mb-1.5 p-1 rounded-xl bg-white text-slate-800 space-y-0.5 shrink-0">
           {canAccess("settings") && (
             <Link
               href="/settings"
               title="Settings"
               className={cn(
-                "flex flex-col items-center justify-center py-1.5 px-1 rounded-lg transition-all group",
+                "flex flex-col items-center justify-center py-1 px-1 rounded-lg transition-all group",
                 isActive("/settings", false)
-                  ? "bg-orange-50 text-orange-700 shadow-2xs font-bold"
+                  ? "bg-orange-50 text-orange-700 font-bold"
                   : "text-slate-700 hover:bg-orange-50/70 hover:text-orange-700"
               )}
             >
-              <Settings className={cn("w-4 h-4 stroke-[2.2]", isActive("/settings", false) ? "text-orange-600" : "text-slate-700")} />
-              <span className="text-[9.5px] font-bold mt-0.5 leading-tight">Settings</span>
+              <Settings className={cn("w-3.5 h-3.5 stroke-[2]", isActive("/settings", false) ? "text-orange-600" : "text-slate-700")} />
+              <span className="text-[9px] font-bold mt-0.5 leading-tight">Settings</span>
             </Link>
           )}
           {onLogout && (
             <button
               onClick={onLogout}
               title="Sign Out / Exit"
-              className="w-full flex flex-col items-center justify-center py-1.5 px-1 rounded-lg text-slate-700 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
+              className="w-full flex flex-col items-center justify-center py-1 px-1 rounded-lg text-slate-700 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
             >
-              <LogOut className="w-4 h-4 stroke-[2.2]" />
-              <span className="text-[9.5px] font-bold mt-0.5 leading-tight">Exit</span>
+              <LogOut className="w-3.5 h-3.5 stroke-[2]" />
+              <span className="text-[9px] font-bold mt-0.5 leading-tight">Exit</span>
             </button>
           )}
         </div>
       )}
 
       {/* Footer User Avatar */}
-      <div className="py-2 px-1.5 border-t border-white/15 flex flex-col items-center text-center shrink-0">
+      <div className="py-1.5 px-1.5 border-t border-white/15 flex flex-col items-center text-center shrink-0">
         <div className="relative mb-1">
           <div className="w-7 h-7 rounded-full bg-white text-orange-700 font-bold text-[10px] flex items-center justify-center shadow-xs">
             {user.role === "ADMIN" ? "AD" : user.role === "COURIER" ? (user.courierPartnerId === "ST_COURIER" ? "ST" : user.courierPartnerId === "DTDC" ? "DT" : user.courierPartnerId === "INDIA_POST" ? "IP" : "CR") : (user.name ? user.name.split(" ").map((n) => n[0]).join("").slice(0, 2) : "ST")}

@@ -28,6 +28,8 @@
 * {
   box-sizing: border-box;
   border-color: var(--border);
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
 }
 
 body {
