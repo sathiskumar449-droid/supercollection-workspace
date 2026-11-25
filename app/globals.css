@@ -95,3 +95,25 @@ body {
   z-index: 20;
   background-clip: padding-box;
 }
+
+/* Dark grey table headers across the entire app */
+table thead,
+table thead > tr > th {
+  background-color: #334155 !important;
+  color: #f8fafc !important;
+  border-color: #475569 !important;
+}
+
+table thead > tr > th svg {
+  color: #cbd5e1;
+}
+
+table thead > tr > th .bg-white,
+table thead > tr > th [class*="bg-white"] {
+  color: #1e293b;
+}
+
+table thead > tr > th .bg-white svg,
+table thead > tr > th [class*="bg-white"] svg {
+  color: inherit;
+}
