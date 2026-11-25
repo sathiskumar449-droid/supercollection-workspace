@@ -176,7 +176,7 @@ export default function DispatchPage() {
                         ) : isStCourier && isLlrMissing ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600">
                             <AlertTriangle className="w-3 h-3" />
-                            LLR Required
+                            Pending
                           </span>
                         ) : (
                           <span className="font-mono text-slate-700 font-semibold">

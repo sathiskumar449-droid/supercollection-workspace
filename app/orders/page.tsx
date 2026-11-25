@@ -1433,7 +1433,7 @@ function OrdersContent() {
                           <span className="truncate block" title={order.dispatch.llrNumber}>{order.dispatch.llrNumber}</span>
                         ) : order.dispatch.courierName ? (
                           <span className="text-amber-600 text-[10px] italic font-normal truncate block">
-                            {order.dispatch.courierName === "ST Courier" ? "LLR Required" : "-"}
+                            {order.dispatch.courierName === "ST Courier" ? "Pending" : "-"}
                           </span>
                         ) : (
                           <span className="text-slate-400 font-normal">-</span>
