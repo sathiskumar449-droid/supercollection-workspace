@@ -153,16 +153,40 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedUrl = localStorage.getItem("sc_wc_store_url") || "";
-      const savedKey = localStorage.getItem("sc_wc_consumer_key") || "";
-      const savedSecret = localStorage.getItem("sc_wc_consumer_secret") || "";
-      const savedWaUrl = localStorage.getItem("sc_wa_api_url") || "";
-      const savedWaSecret = localStorage.getItem("sc_wa_sync_secret") || "";
-      if (savedUrl) setWcStoreUrl(savedUrl);
-      if (savedKey) setWcConsumerKey(savedKey);
-      if (savedSecret) setWcConsumerSecret(savedSecret);
-      if (savedWaUrl) setWaApiUrl(savedWaUrl);
-      if (savedWaSecret) setWaSyncSecret(savedWaSecret);
+      try {
+        const savedBiz = localStorage.getItem("sc_business_profile_v1");
+        if (savedBiz) {
+          const parsed = JSON.parse(savedBiz);
+          if (typeof parsed.businessName === "string") setBusinessName(parsed.businessName);
+          if (typeof parsed.gstin === "string") setGstin(parsed.gstin);
+          if (typeof parsed.dispatchHub === "string") setDispatchHub(parsed.dispatchHub);
+          if (typeof parsed.supportPhone === "string") setSupportPhone(parsed.supportPhone);
+        }
+      } catch {}
+
+      try {
+        const savedPing = localStorage.getItem("sc_ping4sms_config_v1");
+        if (savedPing) {
+          const parsed = JSON.parse(savedPing);
+          if (typeof parsed.pingApiKey === "string") setPingApiKey(parsed.pingApiKey);
+          if (typeof parsed.pingUsername === "string") setPingUsername(parsed.pingUsername);
+          if (typeof parsed.pingSenderId === "string") setPingSenderId(parsed.pingSenderId);
+          if (typeof parsed.pingApiUrl === "string") setPingApiUrl(parsed.pingApiUrl);
+        }
+      } catch {}
+
+      const savedUrl = localStorage.getItem("sc_wc_store_url");
+      const savedKey = localStorage.getItem("sc_wc_consumer_key");
+      const savedSecret = localStorage.getItem("sc_wc_consumer_secret");
+      const savedWaUrl = localStorage.getItem("sc_wa_api_url");
+      const savedWaSecret = localStorage.getItem("sc_wa_sync_secret");
+      const savedWaToken = localStorage.getItem("sc_wa_token");
+      if (savedUrl !== null) setWcStoreUrl(savedUrl);
+      if (savedKey !== null) setWcConsumerKey(savedKey);
+      if (savedSecret !== null) setWcConsumerSecret(savedSecret);
+      if (savedWaUrl !== null) setWaApiUrl(savedWaUrl);
+      if (savedWaSecret !== null) setWaSyncSecret(savedWaSecret);
+      if (savedWaToken !== null) setWaToken(savedWaToken);
     }
   }, []);
 
@@ -175,11 +199,30 @@ export default function SettingsPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (typeof window !== "undefined") {
-      if (wcStoreUrl) localStorage.setItem("sc_wc_store_url", wcStoreUrl.trim());
-      if (wcConsumerKey) localStorage.setItem("sc_wc_consumer_key", wcConsumerKey.trim());
-      if (wcConsumerSecret) localStorage.setItem("sc_wc_consumer_secret", wcConsumerSecret.trim());
-      if (waApiUrl) localStorage.setItem("sc_wa_api_url", waApiUrl.trim());
+      localStorage.setItem(
+        "sc_business_profile_v1",
+        JSON.stringify({
+          businessName: businessName.trim(),
+          gstin: gstin.trim(),
+          dispatchHub: dispatchHub.trim(),
+          supportPhone: supportPhone.trim(),
+        })
+      );
+      localStorage.setItem(
+        "sc_ping4sms_config_v1",
+        JSON.stringify({
+          pingApiKey: pingApiKey.trim(),
+          pingUsername: pingUsername.trim(),
+          pingSenderId: pingSenderId.trim(),
+          pingApiUrl: pingApiUrl.trim(),
+        })
+      );
+      localStorage.setItem("sc_wc_store_url", wcStoreUrl.trim());
+      localStorage.setItem("sc_wc_consumer_key", wcConsumerKey.trim());
+      localStorage.setItem("sc_wc_consumer_secret", wcConsumerSecret.trim());
+      localStorage.setItem("sc_wa_api_url", waApiUrl.trim());
       localStorage.setItem("sc_wa_sync_secret", waSyncSecret.trim());
+      localStorage.setItem("sc_wa_token", waToken.trim());
     }
     if (activeTab === "woocommerce" && wcConsumerKey && wcConsumerSecret) {
       try {
