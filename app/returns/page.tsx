@@ -584,6 +584,7 @@ function ReturnsContent() {
                 />
               </th>
               <th className="sticky top-0 z-20 py-2 px-1 w-[38px] text-center border-r border-b-2 border-slate-300 bg-slate-100">S.No</th>
+              <th className="sticky top-0 z-20 py-2 px-1 w-[105px] text-center border-r border-b-2 border-slate-300 bg-slate-100">DISPATCH NO.</th>
               <th 
                 className="sticky top-0 z-20 py-2 px-1.5 w-[110px] border-r border-b-2 border-slate-300 bg-slate-100 cursor-pointer hover:text-slate-900"
                 onClick={() => {
@@ -629,7 +630,6 @@ function ReturnsContent() {
               <th className="sticky top-0 z-20 py-2 px-1 w-[145px] text-center border-r border-b-2 border-slate-300 bg-slate-100">EXTRA PAID / REFUND DIFF.</th>
               <th className="sticky top-0 z-20 py-2 px-1 w-[125px] text-center border-r border-b-2 border-slate-300 bg-slate-100">RETURN STATUS</th>
               <th className="sticky top-0 z-20 py-2 px-1 w-[120px] text-center border-r border-b-2 border-slate-300 bg-slate-100">REPLACEMENT STATUS</th>
-              <th className="sticky top-0 z-20 py-2 px-1 w-[105px] text-center border-r border-b-2 border-slate-300 bg-slate-100">DISPATCH NO.</th>
               <th className={cn("sticky top-0 z-20 py-2 px-1 text-center border-b-2 border-slate-300 bg-slate-200/70 text-slate-800", isAdmin ? "w-[105px]" : "w-[70px]")}>ACTION</th>
             </tr>
           </thead>
@@ -681,6 +681,37 @@ function ReturnsContent() {
                     {/* S.No */}
                     <td className="py-1.5 px-1 text-center font-mono font-bold text-slate-600 bg-slate-50 border-r border-b border-slate-300 text-[10.5px]">
                       {sNo}
+                    </td>
+
+                    {/* DISPATCH NO. */}
+                    <td className="py-1 px-1 text-center border-r border-b border-slate-300" onClick={(e) => e.stopPropagation()}>
+                      {dispatchNo ? (
+                        <span className="font-mono font-bold text-teal-700 text-[10.5px]">{dispatchNo}</span>
+                      ) : rtn.status === "Dispatched" ? (
+                        <span className="text-slate-400 text-[10px] italic">—</span>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={dispatchInputs[rtn.id] || ""}
+                            onChange={(e) => setDispatchInputs((prev) => ({ ...prev, [rtn.id]: e.target.value }))}
+                            placeholder="Enter no."
+                            className="w-full text-[10px] px-1.5 py-0.5 border border-slate-300 rounded outline-none focus:border-teal-500 font-mono text-slate-800 bg-slate-50"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleDispatchSubmit(rtn.id);
+                            }}
+                          />
+                          {dispatchInputs[rtn.id]?.trim() && (
+                            <button
+                              type="button"
+                              onClick={() => handleDispatchSubmit(rtn.id)}
+                              className="px-1.5 py-0.5 bg-teal-600 hover:bg-teal-700 text-white rounded text-[9px] font-bold whitespace-nowrap cursor-pointer transition-colors"
+                            >
+                              ✓
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     {/* RETURN ID */}
@@ -779,37 +810,6 @@ function ReturnsContent() {
                         />
                       ) : (
                         <span className="text-slate-400 text-xs">—</span>
-                      )}
-                    </td>
-
-                    {/* DISPATCH NO. */}
-                    <td className="py-1 px-1 text-center border-r border-b border-slate-300" onClick={(e) => e.stopPropagation()}>
-                      {dispatchNo ? (
-                        <span className="font-mono font-bold text-teal-700 text-[10.5px]">{dispatchNo}</span>
-                      ) : rtn.status === "Dispatched" ? (
-                        <span className="text-slate-400 text-[10px] italic">—</span>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="text"
-                            value={dispatchInputs[rtn.id] || ""}
-                            onChange={(e) => setDispatchInputs((prev) => ({ ...prev, [rtn.id]: e.target.value }))}
-                            placeholder="Enter no."
-                            className="w-full text-[10px] px-1.5 py-0.5 border border-slate-300 rounded outline-none focus:border-teal-500 font-mono text-slate-800 bg-slate-50"
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleDispatchSubmit(rtn.id);
-                            }}
-                          />
-                          {dispatchInputs[rtn.id]?.trim() && (
-                            <button
-                              type="button"
-                              onClick={() => handleDispatchSubmit(rtn.id)}
-                              className="px-1.5 py-0.5 bg-teal-600 hover:bg-teal-700 text-white rounded text-[9px] font-bold whitespace-nowrap cursor-pointer transition-colors"
-                            >
-                              ✓
-                            </button>
-                          )}
-                        </div>
                       )}
                     </td>
 
