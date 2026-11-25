@@ -66,10 +66,10 @@ export function TopBar({
       )}
 
       {/* Right Controls: Page Actions Slot + Date Filter Dropdown + Date Picker + Bell */}
-      <div className={cn("flex items-center gap-2 min-w-0 flex-1", title ? "justify-end" : "justify-between")}>
-        <div id="topbar-page-actions" className="flex items-center gap-2 min-w-0" />
+      <div className="flex items-center gap-2.5 min-w-0 flex-1 justify-between">
+        <div id="topbar-page-actions" className="flex items-center gap-2 min-w-0 flex-1 overflow-x-auto scrollbar-none" />
 
-        {/* Date Filter Dropdown & Calendar Selector (On all pages) */}
+        {/* Date Filter Dropdown & Calendar Selector (Always pinned to right corner) */}
         <div className="flex items-center gap-1.5 shrink-0">
           <select
             value={customDate ? "Custom" : dateFilter || "All"}

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, Suspense } from "react";
+import React, { useState, useMemo, useEffect, Suspense } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { useOrderFlow } from "@/lib/hooks";
@@ -62,6 +63,11 @@ function ReturnsContent() {
 
   const { user: authUser } = useAuth();
   const isAdmin = authUser?.role === "ADMIN" || user?.role === "ADMIN";
+  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setTopbarSlot(document.getElementById("topbar-page-actions"));
+  }, []);
 
   const handleDeleteReturn = (rtn: ReturnCase) => {
     if (!isAdmin) {
@@ -413,39 +419,49 @@ function ReturnsContent() {
 
   return (
     <div className="space-y-3.5 max-w-full mx-auto select-none">
-      {/* STATUS TABS */}
-      <div className="border-b border-slate-200 flex items-center gap-1 overflow-x-auto scrollbar-none pb-px">
-        {tabs.map((tab) => {
-          const isSelected = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id);
-                setPage(1);
-              }}
-              className={cn(
-                "px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap border-b-2 transition-all flex items-center gap-1.5 cursor-pointer",
-                isSelected
-                  ? "border-orange-500 text-orange-600 bg-orange-50/50 rounded-t-lg"
-                  : "border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300"
-              )}
-            >
-              <span>{tab.label}</span>
-              <span
-                className={cn(
-                  "px-1.5 py-0.2 rounded-full text-[10px] font-bold leading-tight",
-                  isSelected
-                    ? "bg-orange-600 text-white"
-                    : "bg-slate-100 text-slate-600"
-                )}
-              >
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {/* STATUS TABS (Portaled into TopBar) */}
+      {(() => {
+        const statusTabsBar = (
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none py-0.5">
+            {tabs.map((tab) => {
+              const isSelected = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setPage(1);
+                  }}
+                  className={cn(
+                    "px-2 py-1 text-[11px] font-semibold whitespace-nowrap rounded-lg border transition-all flex items-center gap-1 cursor-pointer shrink-0",
+                    isSelected
+                      ? "border-orange-500 text-orange-700 bg-orange-50 shadow-2xs"
+                      : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                  )}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    className={cn(
+                      "px-1.5 py-0.2 rounded-full text-[10px] font-bold leading-tight",
+                      isSelected
+                        ? "bg-orange-600 text-white"
+                        : "bg-slate-100 text-slate-600"
+                    )}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        );
+
+        return topbarSlot ? createPortal(statusTabsBar, topbarSlot) : (
+          <div className="border-b border-slate-200 pb-1">
+            {statusTabsBar}
+          </div>
+        );
+      })()}
 
       {/* SEARCH, FILTERS & ACTION BAR */}
       <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-2.5 text-xs">

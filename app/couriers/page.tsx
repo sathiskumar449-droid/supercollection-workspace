@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, Suspense, useRef } from "react";
+import React, { useState, useMemo, useEffect, Suspense, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { 
   Truck, 
@@ -444,6 +445,11 @@ function CourierHubContent() {
   // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
+  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setTopbarSlot(document.getElementById("topbar-page-actions"));
+  }, []);
 
   const totalPages = Math.ceil(displayedOrders.length / pageSize) || 1;
   const paginatedOrders = useMemo(() => {
@@ -615,120 +621,119 @@ function CourierHubContent() {
 
   return (
     <div className="space-y-4 max-w-full pb-16">
-      {/* TOP SECTION: Customer Mobile Number Input + Courier Partner Selector + Export Buttons */}
-      <div className="bg-white p-3.5 rounded-lg border border-slate-300 shadow-2xs flex flex-col lg:flex-row lg:items-end justify-between gap-3.5">
-        {/* Left: Customer Mobile Number Input */}
-        <div className="flex-1 max-w-sm">
-          <label 
-            htmlFor="customer-mobile-input" 
-            className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5"
-          >
-            Customer Mobile Number
-          </label>
-          <div className="relative">
-            <input
-              id="customer-mobile-input"
-              ref={mobileInputRef}
-              type="tel"
-              inputMode="numeric"
-              value={customerMobileInput}
-              onChange={(e) => handleCustomerMobileChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Enter customer mobile number"
-              className="w-full text-xs font-mono py-2 px-3 rounded-md border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 outline-none transition-all shadow-2xs"
-              autoFocus
-            />
-          </div>
-
-          {/* Small "No order found" message */}
-          {searchFeedback?.type === "error" && (
-            <p className="text-xs text-rose-600 font-medium mt-1.5 flex items-center gap-1 animate-in fade-in">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              <span>{searchFeedback.message}</span>
-            </p>
-          )}
-
-          {/* Success auto-pickup confirmation */}
-          {searchFeedback?.type === "success" && (
-            <p className="text-xs text-emerald-600 font-semibold mt-1.5 flex items-center gap-1 animate-in fade-in">
-              <Check className="w-3.5 h-3.5 shrink-0" />
-              <span>{searchFeedback.message}</span>
-            </p>
-          )}
-        </div>
-
-        {/* Right: Courier Partner Selector & Manifest Export Buttons */}
-        <div className="flex items-center flex-wrap gap-2.5 sm:gap-3 shrink-0">
-          {(!isCourierUser || !userCourierPartnerId) ? (
-            <div className="flex items-center gap-2 overflow-x-auto text-xs py-0.5">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0">
-                Courier Partner:
-              </span>
-
-              {activeCourierPartners.map((cp) => {
-                const isSelected = activePartnerCode === cp.code;
-                const count = partnerCounts[cp.code] || 0;
-                return (
-                  <button
-                    key={cp.id}
-                    onClick={() => {
-                      setAdminPartnerFilter(cp.code);
-                      setPage(1);
-                      if (typeof window !== "undefined") {
-                        const params = new URLSearchParams(window.location.search);
-                        params.set("partner", cp.code);
-                        window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
-                      }
-                    }}
-                    className={cn(
-                      "px-3.5 py-1.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-2 text-xs",
-                      isSelected
-                        ? "bg-orange-600 text-white shadow-xs ring-1 ring-orange-500"
-                        : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200"
-                    )}
-                  >
-                    <span>{cp.name}</span>
-                    <span
-                      className={cn(
-                        "px-1.5 py-0.2 rounded-full text-[10.5px] font-bold",
-                        isSelected
-                          ? "bg-white/20 text-white"
-                          : "bg-slate-100 text-slate-600 border border-slate-200"
-                      )}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
+      {/* TOP SECTION: Customer Mobile Number Input + Courier Partner Selector + Export Buttons (Portaled into TopBar) */}
+      {(() => {
+        const courierTopControls = (
+          <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              <input
+                id="customer-mobile-input"
+                ref={mobileInputRef}
+                type="tel"
+                inputMode="numeric"
+                value={customerMobileInput}
+                onChange={(e) => handleCustomerMobileChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Enter customer mobile number"
+                className="w-44 sm:w-56 text-xs font-mono py-1.5 px-2.5 rounded-lg border border-slate-300 bg-slate-50 focus:bg-white text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 outline-none transition-all"
+                autoFocus
+              />
             </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {(!isCourierUser || !userCourierPartnerId) ? (
+                <div className="flex items-center gap-1.5 overflow-x-auto text-xs py-0.5">
+                  <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider mr-0.5 shrink-0 hidden xl:inline">
+                    Courier:
+                  </span>
+
+                  {activeCourierPartners.map((cp) => {
+                    const isSelected = activePartnerCode === cp.code;
+                    const count = partnerCounts[cp.code] || 0;
+                    return (
+                      <button
+                        key={cp.id}
+                        onClick={() => {
+                          setAdminPartnerFilter(cp.code);
+                          setPage(1);
+                          if (typeof window !== "undefined") {
+                            const params = new URLSearchParams(window.location.search);
+                            params.set("partner", cp.code);
+                            window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+                          }
+                        }}
+                        className={cn(
+                          "px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 text-xs",
+                          isSelected
+                            ? "bg-orange-600 text-white shadow-xs ring-1 ring-orange-500"
+                            : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-200"
+                        )}
+                      >
+                        <span>{cp.name}</span>
+                        <span
+                          className={cn(
+                            "px-1.5 py-0.2 rounded-full text-[10px] font-bold",
+                            isSelected
+                              ? "bg-white/20 text-white"
+                              : "bg-slate-100 text-slate-600 border border-slate-200"
+                          )}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <span className="px-2.5 py-1 bg-orange-100 text-orange-800 border border-orange-200 rounded-lg text-xs font-bold">
+                  {currentPartner.name}
+                </span>
+              )}
+
+              <div className="flex items-center gap-1 shrink-0 border-l border-slate-200 pl-2">
+                <button
+                  onClick={handleExportExcel}
+                  className="inline-flex items-center justify-center p-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                  title="Export Excel"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleExportPdf}
+                  className="inline-flex items-center justify-center p-1.5 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                  title="Export PDF"
+                >
+                  <FileText className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+
+        return topbarSlot ? createPortal(courierTopControls, topbarSlot) : (
+          <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-2xs">
+            {courierTopControls}
+          </div>
+        );
+      })()}
+
+      {searchFeedback && (
+        <div
+          className={cn(
+            "px-3 py-2 rounded-lg border text-xs font-semibold flex items-center gap-1.5 animate-in fade-in",
+            searchFeedback.type === "error"
+              ? "bg-rose-50 border-rose-200 text-rose-700"
+              : "bg-emerald-50 border-emerald-200 text-emerald-700"
+          )}
+        >
+          {searchFeedback.type === "error" ? (
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
           ) : (
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
-              <span className="px-3 py-1.5 bg-orange-100 text-orange-800 border border-orange-200 rounded-lg">
-                {currentPartner.name}
-              </span>
-            </div>
+            <Check className="w-3.5 h-3.5 shrink-0" />
           )}
-
-          {/* Manifest Export Buttons */}
-          <div className="flex items-center gap-1.5 shrink-0 border-l border-slate-200 pl-2.5">
-            <button
-              onClick={handleExportExcel}
-              className="inline-flex items-center justify-center p-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-              title="Export Excel"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleExportPdf}
-              className="inline-flex items-center justify-center p-2 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-              title="Export PDF"
-            >
-              <FileText className="w-4 h-4" />
-            </button>
-          </div>
+          <span>{searchFeedback.message}</span>
         </div>
-      </div>
+      )}
 
       {/* Status Filter Sub-tabs & Search Input */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">

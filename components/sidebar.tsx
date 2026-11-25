@@ -164,8 +164,8 @@ export function Sidebar({
         </span>
       </div>
 
-      {/* Navigation Links: Stacked Icon on Top, Name Below - Fixed, Non-scrolling */}
-      <div className="flex-1 overflow-hidden py-1.5 px-1.5 space-y-1 flex flex-col justify-start">
+      {/* Navigation Links: Stacked Icon on Top, Name Below - Stretches to bottom */}
+      <div className="flex-1 overflow-hidden py-2 px-1.5 gap-1 flex flex-col justify-between">
         {navItems.map((item) => {
           if (!canAccess(item.id)) return null;
           const active = isActive(item.href, item.exact);
@@ -175,7 +175,7 @@ export function Sidebar({
               key={item.id}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center text-center py-1.5 px-1 rounded-lg transition-all relative group",
+                "flex-1 flex flex-col items-center justify-center text-center py-1.5 px-1 rounded-lg transition-all relative group",
                 active
                   ? "bg-orange-500 text-white font-semibold shadow-xs ring-1 ring-orange-400"
                   : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
