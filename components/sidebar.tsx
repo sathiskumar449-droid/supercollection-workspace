@@ -64,8 +64,6 @@ export function Sidebar({
         return ["ADMIN", "MANAGER", "DISPATCH_STAFF", "ORDER_STAFF", "PACKING_STAFF", "COURIER"].includes(user.role);
       case "sms":
         return ["ADMIN", "MANAGER", "DISPATCH_STAFF", "ORDER_STAFF", "PACKING_STAFF"].includes(user.role);
-      case "reports":
-        return ["ADMIN", "MANAGER"].includes(user.role);
       case "settings":
         return user.role === "ADMIN";
       default:
@@ -137,15 +135,6 @@ export function Sidebar({
       icon: RotateCcw,
       badge: badgeCounts.returnsCount && badgeCounts.returnsCount > 0 ? badgeCounts.returnsCount : undefined,
       badgeType: "warning",
-    },
-    {
-      id: "reports",
-      label: "Reports",
-      href: "/reports",
-      exact: false,
-      icon: BarChart3,
-      badge: undefined,
-      badgeType: "default",
     },
     {
       id: "settings",

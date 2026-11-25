@@ -119,12 +119,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "SMS" }],
       };
     }
-    if (pathname.startsWith("/reports")) {
-      return {
-        title: "Reports & KPIs",
-        breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "Reports & KPIs" }],
-      };
-    }
     if (pathname.startsWith("/settings")) {
       return {
         title: "Settings & Webhooks",
