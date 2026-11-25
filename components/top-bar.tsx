@@ -57,14 +57,16 @@ export function TopBar({
   return (
     <header className="sticky top-0 z-30 h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shadow-subtle gap-4">
       {/* Left: Navigation Title */}
-      <div className="flex items-center shrink-0 min-w-0">
-        <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-none">
-          {title}
-        </h1>
-      </div>
+      {title && (
+        <div className="flex items-center shrink-0 min-w-0">
+          <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-none">
+            {title}
+          </h1>
+        </div>
+      )}
 
       {/* Right Controls: Page Actions Slot + Date Filter Dropdown + Date Picker + Bell */}
-      <div className="flex items-center gap-2 min-w-0 justify-end flex-1">
+      <div className={cn("flex items-center gap-2 min-w-0 flex-1", title ? "justify-end" : "justify-between")}>
         <div id="topbar-page-actions" className="flex items-center gap-2 min-w-0" />
 
         {/* Date Filter Dropdown & Calendar Selector (On all pages) */}

@@ -936,7 +936,7 @@ function OrdersContent() {
 
       {/* Orders Table (Excel Spreadsheet Grid Style with S.No & Column Header Filters) */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden w-full min-h-[460px]">
-        <div className="table-scroll-container overflow-x-auto overflow-y-auto max-h-[calc(100vh-250px)] min-h-[380px] hidden md:block w-full relative">
+        <div className="table-scroll-container overflow-x-auto overflow-y-auto !max-h-[calc(100vh-165px)] min-h-[380px] hidden md:block w-full relative">
           <table className="w-full table-fixed text-left text-xs border-collapse border border-slate-300 min-w-[1200px]">
             <thead className="sticky top-0 z-20 bg-slate-100 text-slate-700 select-none whitespace-nowrap font-bold text-[10.5px] uppercase tracking-tight shadow-xs">
               <tr>

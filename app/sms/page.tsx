@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, Suspense } from "react";
+import React, { useState, useMemo, useEffect, Suspense } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { 
@@ -43,6 +44,11 @@ function SmsMonitoringContent() {
 
   const isCourierUser = user.role === "COURIER";
   const userCourierPartnerId = user.courierPartnerId;
+  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setTopbarSlot(document.getElementById("topbar-page-actions"));
+  }, []);
 
   // Filter out any unwanted courier partners (e.g. Professional Courier)
   const activeCourierPartners = useMemo(() => {
@@ -378,13 +384,13 @@ function SmsMonitoringContent() {
 
   return (
     <div className="space-y-4 max-w-full pb-16">
-      {/* TOP SECTION: Courier Partner Selector Bar (matching Courier Hub style) */}
-      {(!isCourierUser || !userCourierPartnerId) && (
-        <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 overflow-x-auto text-xs py-0.5 scrollbar-none">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0 flex items-center gap-1.5">
+      {/* TOP SECTION: Courier Partner Selector Bar (Portaled into TopBar) */}
+      {(!isCourierUser || !userCourierPartnerId) && (() => {
+        const partnerTabs = (
+          <div className="flex items-center gap-1.5 overflow-x-auto text-xs py-0.5 scrollbar-none">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0 flex items-center gap-1">
               <Truck className="w-3.5 h-3.5 text-slate-400" />
-              <span>Courier Partner:</span>
+              <span className="hidden lg:inline">Courier Partner:</span>
             </span>
 
             {/* "All" Courier Tab */}
@@ -392,7 +398,7 @@ function SmsMonitoringContent() {
               type="button"
               onClick={() => handleSelectCourierPartner("ALL")}
               className={cn(
-                "px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs",
+                "px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs",
                 courierFilter === "ALL"
                   ? "bg-orange-600 text-white shadow-xs ring-1 ring-orange-500"
                   : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-300"
@@ -421,7 +427,7 @@ function SmsMonitoringContent() {
                   type="button"
                   onClick={() => handleSelectCourierPartner(cp.code)}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs",
+                    "px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs",
                     isSelected
                       ? "bg-orange-600 text-white shadow-xs ring-1 ring-orange-500"
                       : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-300"
@@ -442,15 +448,14 @@ function SmsMonitoringContent() {
               );
             })}
           </div>
+        );
 
-          {/* Quick Partner Summary */}
-          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-            <span className="text-[11px] font-semibold text-slate-500 hidden md:inline">
-              Viewing: <strong className="text-slate-800">{currentPartnerName}</strong> ({totalSms} records)
-            </span>
+        return topbarSlot ? createPortal(partnerTabs, topbarSlot) : (
+          <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-2xs flex items-center justify-between gap-3">
+            {partnerTabs}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Metric Cards (Compact matching Courier page with themed border colors) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">

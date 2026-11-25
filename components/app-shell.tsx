@@ -115,8 +115,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
     if (pathname.startsWith("/sms")) {
       return {
-        title: "SMS Monitoring",
-        breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "SMS Monitoring" }],
+        title: "",
+        breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "SMS" }],
       };
     }
     if (pathname.startsWith("/reports")) {

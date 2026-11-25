@@ -77,7 +77,7 @@ body {
 .table-scroll-container {
   overflow-x: auto;
   overflow-y: auto;
-  max-height: calc(100vh - 250px);
+  max-height: calc(100vh - 185px);
   min-height: 380px;
   position: relative;
   -webkit-overflow-scrolling: touch;
