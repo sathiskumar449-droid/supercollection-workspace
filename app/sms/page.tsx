@@ -386,73 +386,116 @@ function SmsMonitoringContent() {
 
   return (
     <div className="space-y-4 max-w-full pb-16">
-      {/* TOP SECTION: Courier Partner Selector Bar (Portaled into TopBar) */}
-      {(!isCourierUser || !userCourierPartnerId) && (() => {
-        const partnerTabs = (
-          <div className="flex items-center gap-1.5 overflow-x-auto text-xs py-0.5 scrollbar-none">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0 flex items-center gap-1">
-              <Truck className="w-3.5 h-3.5 text-slate-400" />
-              <span className="hidden lg:inline">Courier Partner:</span>
-            </span>
+      {/* TOP SECTION: Courier Partner Tabs (left) + Search & Export (right) Portaled into TopBar */}
+      {(() => {
+        const smsTopControls = (
+          <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
+            {(!isCourierUser || !userCourierPartnerId) ? (
+              <div className="flex items-center gap-1.5 overflow-x-auto text-xs py-0.5 scrollbar-none">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-0.5 shrink-0 flex items-center gap-1">
+                  <Truck className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="hidden xl:inline">Courier:</span>
+                </span>
 
-            {/* "All" Courier Tab */}
-            <button
-              type="button"
-              onClick={() => handleSelectCourierPartner("ALL")}
-              className={cn(
-                "px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs",
-                courierFilter === "ALL"
-                  ? "bg-orange-600 text-white shadow-xs ring-1 ring-orange-500"
-                  : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-300"
-              )}
-            >
-              <span>All</span>
-              <span
-                className={cn(
-                  "px-1.5 py-0.2 rounded-full text-[10.5px] font-bold",
-                  courierFilter === "ALL"
-                    ? "bg-white/20 text-white"
-                    : "bg-slate-100 text-slate-600 border border-slate-200"
-                )}
-              >
-                {partnerCounts["ALL"] || 0}
-              </span>
-            </button>
-
-            {/* Individual Courier Partner Tabs (ST Courier, DTDC, India Post) */}
-            {activeCourierPartners.map((cp) => {
-              const isSelected = courierFilter === cp.code;
-              const count = partnerCounts[cp.code] || 0;
-              return (
+                {/* "All" Courier Tab */}
                 <button
-                  key={cp.id}
                   type="button"
-                  onClick={() => handleSelectCourierPartner(cp.code)}
+                  onClick={() => handleSelectCourierPartner("ALL")}
                   className={cn(
                     "px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs",
-                    isSelected
+                    courierFilter === "ALL"
                       ? "bg-orange-600 text-white shadow-xs ring-1 ring-orange-500"
                       : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-300"
                   )}
                 >
-                  <span>{cp.name}</span>
+                  <span>All</span>
                   <span
                     className={cn(
                       "px-1.5 py-0.2 rounded-full text-[10.5px] font-bold",
-                      isSelected
+                      courierFilter === "ALL"
                         ? "bg-white/20 text-white"
                         : "bg-slate-100 text-slate-600 border border-slate-200"
                     )}
                   >
-                    {count}
+                    {partnerCounts["ALL"] || 0}
                   </span>
                 </button>
-              );
-            })}
+
+                {/* Individual Courier Partner Tabs (ST Courier, DTDC, India Post) */}
+                {activeCourierPartners.map((cp) => {
+                  const isSelected = courierFilter === cp.code;
+                  const count = partnerCounts[cp.code] || 0;
+                  return (
+                    <button
+                      key={cp.id}
+                      type="button"
+                      onClick={() => handleSelectCourierPartner(cp.code)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 text-xs shadow-2xs",
+                        isSelected
+                          ? "bg-orange-600 text-white shadow-xs ring-1 ring-orange-500"
+                          : "bg-white text-slate-700 hover:bg-slate-100 border border-slate-300"
+                      )}
+                    >
+                      <span>{cp.name}</span>
+                      <span
+                        className={cn(
+                          "px-1.5 py-0.2 rounded-full text-[10.5px] font-bold",
+                          isSelected
+                            ? "bg-white/20 text-white"
+                            : "bg-slate-100 text-slate-600 border border-slate-200"
+                        )}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : <div />}
+
+            {/* Right: Search + Excel & PDF */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="relative w-44 sm:w-56">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search Mobile, Order #, LLR..."
+                  className="w-full pl-8 pr-6 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-orange-500 font-medium text-slate-800 placeholder-slate-400 transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              <button
+                onClick={handleExportExcel}
+                title={`Export ${currentPartnerName} SMS Format Excel (.xlsx)`}
+                className="inline-flex items-center justify-center p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleExportPdf}
+                title={`Export ${currentPartnerName} SMS Records to PDF`}
+                className="inline-flex items-center justify-center p-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer"
+              >
+                <FileText className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         );
 
-        return topbarSlot ? createPortal(partnerTabs, topbarSlot) : null;
+        return topbarSlot ? createPortal(smsTopControls, topbarSlot) : null;
       })()}
 
       {/* Metric Cards (Compact matching Courier page with themed border colors) */}
@@ -536,65 +579,44 @@ function SmsMonitoringContent() {
 
       {/* Main Table Card */}
       <div className="bg-white rounded-lg border border-slate-300 shadow-sm overflow-hidden">
-        {/* Controls Toolbar */}
-        <div className="p-3 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-          {/* 1st Position: Search Bar */}
-          <div className="relative w-full sm:w-72">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Mobile, Order #, LLR, Courier..."
-              className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-orange-500 font-medium text-slate-800 placeholder-slate-400 transition-all"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
-                title="Clear search"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </div>
+        {/* Active Filter Badges & Bulk Selection Toolbar (Only shown when active) */}
+        {(statusFilter !== "ALL" || courierFilter !== "ALL" || selectedIds.length > 0) && (
+          <div className="p-2.5 border-b border-slate-200 flex items-center gap-2.5 flex-wrap justify-between">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Active Status Filter Badge (if filtered from top metric cards) */}
+              {statusFilter !== "ALL" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-semibold border border-orange-200">
+                  <span>Filter: {statusFilter === "PENDING" ? "Waiting for SMS" : statusFilter === "SENT" ? "Sent" : "Failed"}</span>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter("ALL")}
+                    className="hover:text-red-700 cursor-pointer p-0.5"
+                    title="Clear status filter"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
 
-          {/* Right Side: Active Filter Badges + Selected Bulk Actions + Export Buttons */}
-          <div className="flex items-center gap-2.5 flex-wrap justify-end w-full sm:w-auto">
-            {/* Active Status Filter Badge (if filtered from top metric cards) */}
-            {statusFilter !== "ALL" && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-semibold border border-orange-200">
-                <span>Filter: {statusFilter === "PENDING" ? "Waiting for SMS" : statusFilter === "SENT" ? "Sent" : "Failed"}</span>
-                <button
-                  type="button"
-                  onClick={() => setStatusFilter("ALL")}
-                  className="hover:text-red-700 cursor-pointer p-0.5"
-                  title="Clear status filter"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-
-            {/* Active Courier Filter Badge (if non-ALL) */}
-            {courierFilter !== "ALL" && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-300">
-                <span>Courier: {currentPartnerName}</span>
-                <button
-                  type="button"
-                  onClick={() => handleSelectCourierPartner("ALL")}
-                  className="hover:text-red-700 cursor-pointer p-0.5"
-                  title="Clear courier filter"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
+              {/* Active Courier Filter Badge (if non-ALL) */}
+              {courierFilter !== "ALL" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-300">
+                  <span>Courier: {currentPartnerName}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectCourierPartner("ALL")}
+                    className="hover:text-red-700 cursor-pointer p-0.5"
+                    title="Clear courier filter"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+            </div>
 
             {/* Bulk Selection Actions (Only shown when rows are checked) */}
             {selectedIds.length > 0 && (
-              <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-lg animate-in fade-in">
+              <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-lg animate-in fade-in ml-auto">
                 <div className="flex items-center gap-1.5 font-bold text-orange-900 text-xs">
                   <CheckSquare className="w-3.5 h-3.5 text-orange-700" />
                   <span>{selectedIds.length} selected</span>
@@ -622,26 +644,8 @@ function SmsMonitoringContent() {
                 </button>
               </div>
             )}
-
-            {/* Export Actions (Excel .xlsx & PDF) */}
-            <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2">
-              <button
-                onClick={handleExportExcel}
-                title={`Export ${currentPartnerName} SMS Format Excel (.xlsx)`}
-                className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer group relative"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleExportPdf}
-                title={`Export ${currentPartnerName} SMS Records to PDF`}
-                className="inline-flex items-center justify-center p-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer"
-              >
-                <FileText className="w-4 h-4" />
-              </button>
-            </div>
           </div>
-        </div>
+        )}
 
         {/* SMS Excel Spreadsheet Table */}
         <div className="table-scroll-container w-full overflow-x-auto overflow-y-auto max-h-[calc(100vh-250px)] min-h-[380px] relative">
