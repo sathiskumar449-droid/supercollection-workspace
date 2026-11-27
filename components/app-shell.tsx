@@ -83,14 +83,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
     if (pathname.startsWith("/orders")) {
       return {
-        title: "All Orders",
-        breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "All Orders" }],
+        title: "Tracking",
+        breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "Tracking" }],
       };
     }
     if (pathname.startsWith("/fulfillment/packing")) {
       return {
-        title: "Packing Station",
-        breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "Packing Station" }],
+        title: "Orders",
+        breadcrumbs: [{ label: "SuperCollection Work Desk" }, { label: "Orders" }],
       };
     }
     if (pathname.startsWith("/returns")) {

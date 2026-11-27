@@ -88,7 +88,7 @@ export function Sidebar({
     },
     {
       id: "orders",
-      label: "Orders",
+      label: "Tracking",
       href: "/orders",
       exact: true,
       icon: ShoppingCart,
@@ -97,7 +97,7 @@ export function Sidebar({
     },
     {
       id: "packing",
-      label: "Packing",
+      label: "Orders",
       href: "/fulfillment/packing",
       exact: false,
       icon: Box,
